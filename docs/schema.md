@@ -570,7 +570,10 @@ events: {
          rows: ['metadata', 'internalNotes'],
       },
    ],
-   list: { columns: ['title', 'date', 'category', 'status'] },
+   list: {
+      columns: ['title', 'date', 'category', 'status'],
+      filters: ['category', 'featured', 'status'],
+   },
 }
 ```
 
@@ -591,6 +594,7 @@ Other admin-only options:
 | --- | --- | --- |
 | `icon` | entry | The icon in the sidebar and the page header. A Heroicons outline name, for example `calendar-days`. |
 | `list.columns` | collection | The default table columns, in order. `status` is available on collections with `drafts`. Without it, the table shows the first 4 fields. |
+| `list.filters` | collection | The [filter buttons](admin.md#filters) of the list, in order: single `select`, `boolean`, `many-to-one` or `one-to-one` `relation` fields, and `status` with `drafts`. Without it, the list offers every one of those fields that is a visible column; `[]` turns the filters off. |
 | `description` | field | A help text under the input. |
 | `placeholder` | field | The placeholder of text, textarea, email, number and select inputs. |
 
@@ -851,6 +855,8 @@ export default defineCmsConfig({
   only exception: it reads the default locale of the title).
 - `private` is not allowed inside `blocks`.
 - A relation `to` must reference an existing collection or content entry.
+- `list.filters` may only name single `select`, `boolean` and single `relation` fields, plus
+  `status` on an entry with drafts.
 - `columns` is only valid on the page entry and may only list fields that every page has;
   `relation` and `slug` fields of a page must be listed there, and pages cannot have many-to-many
   relations or a custom table.

@@ -21,14 +21,24 @@
       />
 
       <template #footer>
-         <CmsButton
-            v-if="!isNew"
-            label="Delete"
-            icon="trash"
-            variant="ghost"
-            color="error"
-            @click="remove"
-         />
+         <div v-if="!isNew" class="cms-actions">
+            <CmsButton
+               label="Delete"
+               icon="trash"
+               variant="ghost"
+               color="error"
+               :disabled="saving || loading"
+               @click="remove"
+            />
+            <CmsButton
+               label="Duplicate"
+               icon="document-duplicate"
+               variant="ghost"
+               color="neutral"
+               :disabled="saving || loading"
+               @click="duplicate"
+            />
+         </div>
          <span v-else />
          <div class="cms-actions">
             <CmsButton
@@ -57,6 +67,7 @@
 import type { CmsEntry } from '#nuxt-cms'
 import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
 import { computed, ref, watch } from '#imports'
+import { duplicateEntryValues } from '../../../shared/duplicate'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
@@ -69,11 +80,16 @@ const props = defineProps<{
    collection: string
    config: CmsEntry
    entryId: string | null
+   initial?: Record<string, unknown> | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
 
-const emit = defineEmits<{ saved: []; deleted: [] }>()
+const emit = defineEmits<{
+   saved: []
+   deleted: []
+   duplicate: [values: Record<string, unknown>]
+}>()
 
 const toast = useCmsToast()
 const confirmAction = useCmsConfirm()
@@ -106,7 +122,7 @@ const entryName = computed(() => {
 })
 
 const title = computed(() => {
-   if (isNew.value) return 'Add entry'
+   if (isNew.value) return props.initial ? 'Duplicate entry' : 'Add entry'
    return entryName.value || 'Untitled'
 })
 
@@ -149,6 +165,7 @@ async function load() {
    if (id === null) {
       loading.value = false
       setState(emptyState())
+      if (props.initial) formState.value = { ...emptyState(), ...pickFields(props.initial) }
       return
    }
    const isStale = () => request !== loadRequest || props.entryId !== id || !open.value
@@ -171,7 +188,7 @@ async function load() {
 }
 
 watch(
-   () => [open.value, props.entryId] as const,
+   () => [open.value, props.entryId, props.initial] as const,
    ([isOpen]) => {
       if (isOpen) load()
    },
@@ -207,6 +224,15 @@ async function save() {
    } finally {
       saving.value = false
    }
+}
+
+async function duplicate() {
+   if (
+      dirty.value &&
+      !(await confirmAction('You have unsaved changes. Duplicate the saved entry anyway?'))
+   )
+      return
+   emit('duplicate', duplicateEntryValues(props.config, JSON.parse(snapshot.value)))
 }
 
 async function remove() {

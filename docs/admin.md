@@ -71,7 +71,87 @@ label in the input, the table, the entry title, relation pickers and search resu
 value stays the option value.
 
 **Bulk actions.** Every row of a collection table has a checkbox. When rows are selected, the
-toolbar shows **Delete** and, on a collection with `drafts`, **Publish** and **Draft**.
+toolbar shows **Delete** and, on a collection with `drafts`, **Publish** and **Draft**. With one row
+selected it also shows **Duplicate**.
+
+**Duplicate.** **Duplicate** in the toolbar (one row selected), in the footer of the entry drawer,
+or in the `...` menu of the visual editor opens a new, unsaved entry filled with a copy of the
+values: translations, blocks, relations and media (the copy points at the same files, nothing is
+uploaded again). Nothing is written until you save. So that the save does not hit a unique index:
+
+- a `slug` gets the suffix `-copy-` plus four random characters (`spring-fair-copy-k3x9`; a copied
+  slug that already ends with such a suffix gets a new one instead of a second one);
+- a `one-to-one` relation is cleared;
+- a `text` title field gets ` (copy)` in every language that has a value;
+- on an entry with `drafts` the copy starts as a draft, and a content item also loses its publish
+  date.
+
+The drawer asks before it duplicates an entry with unsaved changes, and copies the saved version.
+In the visual editor the copy opens at `/cms/<entry>/new?duplicate=<id>`.
+
+### Filters
+
+Above the table of a collection or content entry, a row of filter buttons narrows the list. A
+filter exists for every single `select` (the button shows the option labels), `boolean` (Yes or
+No; No also matches an empty value), `many-to-one` or `one-to-one` relation (a searchable picker of
+the target entries) and, with drafts, the status (Draft or Published). Without
+[`list.filters`](schema.md#form-layout) the row offers the eligible fields that are visible columns
+of the table; `list.filters: ['subject', 'type']` picks the fields and their order instead,
+whatever the columns.
+
+Filters combine with AND, with the search box, the sort and the pagination. They live in the URL
+(`?filter.subject=math&filter.type=quiz`), so a reload, a bookmark or a shared link keeps them.
+**Clear filters** removes them all. The admin list API applies them on the server: it accepts only
+the fields that the list offers and only their allowed values (the option values of a select,
+`true` or `false`, `draft` or `published`, a relation id of up to 256 characters), answers `400`
+otherwise, and binds every value as a query parameter on SQLite, libSQL, D1 and Postgres.
+
+### Import and export
+
+The arrows button next to **New entry** opens the import and export menu of a collection or
+content entry.
+
+**Export** downloads the rows as a file named `<entry>-<yyyy-mm-dd>.<format>`: **Export all**, or,
+while a search or a filter is active, **Export filtered** for the current set. The order is the
+table order.
+
+- **JSON**, for every entry: `{ "collection", "exportedAt", "total", "items" }`. Each item holds
+  `id`, every field (private fields too), `status` with drafts, `createdAt` and `updatedAt`, in the
+  shape of the admin API: translatable values as `{ "<locale>": value }` maps, media as keys,
+  relations as ids and many-to-many relations as lists of ids, blocks as their list.
+- **CSV**, only when the entry has no `blocks` and no `many-to-many` field. The header is `id`, the
+  fields, `status` and the timestamps. A translatable field has one column per locale (`title.it`,
+  `title.de`). Booleans are `true` or `false`, `json` and multi-select values are JSON text, and an
+  empty cell is an empty value. The file is UTF-8 with a byte order mark, so spreadsheet apps read
+  the accents.
+
+**Import from file** takes a file in the same format (a JSON file can also be a plain array of
+items). The admin checks it before anything is written and shows a preview: how many rows are new
+and how many update an entry, and every row with a problem, with the field and the message. The
+checks are the ones of the entry form, so the field types, required fields, the number of blocks
+and the [`validate` hook](schema.md#validation-hooks) all apply, plus:
+
+- unknown CSV columns or JSON keys, and cells that are not a number, a boolean or JSON;
+- relation ids that do not exist (an id of a row of the same file counts for a relation to the same
+  collection);
+- media keys that are not in the media library: import references files, it never uploads them;
+- a value of a unique field (slug, one-to-one relation) used twice in the file or by another entry;
+- ids: `create only` mode refuses an id that already exists, while `create or update by id` updates
+  that entry (a missing field becomes empty, `status` is kept when the row has none). A row without
+  an id becomes a new entry with a new id; a row with an unknown id is created with that id, so
+  relations between exported files keep working.
+
+**Import** stays disabled until every row passes. All the rows are then written in one transaction
+on SQLite and Postgres and in one batch on libSQL and D1, so a failure leaves the collection
+untouched. New rows without a status are drafts. `createdAt` and `updatedAt` of the file are not
+imported. A relation to a row further down in the same file works for optional relations to the same
+collection, which are linked after every row is written.
+
+Limits: 5 MB and 2000 rows per file. The endpoints follow the rules of every admin endpoint (admin
+session, same-origin requests for writes): `GET /api/cms/export/<entry>?format=json|csv` with the
+`search`, `sort`, `order` and `filter.<field>` parameters of the list, and
+`POST /api/cms/import/<entry>?format=json|csv&mode=create|upsert&dryRun=true|false` with the file
+as the request body. Singles and pages have no import or export.
 
 ## Search
 

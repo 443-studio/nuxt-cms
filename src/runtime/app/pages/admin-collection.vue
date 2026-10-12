@@ -98,7 +98,7 @@
       <template v-else>
          <div class="cms-toolbar">
             <CmsInput
-               v-if="total || searchTerm"
+               v-if="total || narrowed"
                v-model="search"
                icon="magnifying-glass"
                placeholder="Search…"
@@ -132,6 +132,14 @@
                   />
                </template>
                <CmsButton
+                  v-if="selected.length === 1"
+                  label="Duplicate"
+                  icon="document-duplicate"
+                  variant="soft"
+                  :disabled="saving"
+                  @click="duplicateSelected"
+               />
+               <CmsButton
                   label="Delete"
                   icon="trash"
                   color="error"
@@ -140,9 +148,27 @@
                />
             </div>
             <div v-else :key="'default'" class="cms-toolbar-actions">
+               <CmsDropdownMenu :items="transferItems" :content="{ align: 'end' }">
+                  <CmsButton
+                     icon="arrows-up-down"
+                     variant="soft"
+                     color="neutral"
+                     :loading="exporting"
+                     aria-label="Import and export"
+                     title="Import and export"
+                  />
+               </CmsDropdownMenu>
                <CmsButton label="New entry" icon="plus" @click="openCreate" />
             </div>
          </div>
+
+         <CmsListFilters
+            v-if="filterKeys.length && (total || narrowed)"
+            v-model="filters"
+            :config="config"
+            :keys="filterKeys"
+            :relations="relations"
+         />
 
          <CmsTable
             v-if="rows.length"
@@ -168,11 +194,19 @@
          <CmsSpinner v-else-if="status === 'pending'" />
 
          <CmsEmptyState
-            v-else-if="searchTerm"
+            v-else-if="narrowed"
             icon="magnifying-glass"
             title="No matching entries"
             fill
-         />
+         >
+            <CmsButton
+               v-if="filterCount"
+               label="Clear filters"
+               icon="x-mark"
+               variant="soft"
+               @click="filters = {}"
+            />
+         </CmsEmptyState>
 
          <CmsEmptyState
             v-else
@@ -192,8 +226,17 @@
             :collection="name"
             :config="config"
             :entry-id="drawerEntryId"
+            :initial="drawerInitial"
             @saved="refresh"
             @deleted="onDrawerDeleted"
+            @duplicate="openDuplicate"
+         />
+
+         <CmsImportModal
+            v-model:open="importOpen"
+            :collection="name"
+            :config="config"
+            @imported="refresh"
          />
       </template>
    </div>
@@ -222,7 +265,17 @@ import {
    watch,
 } from '#imports'
 import cmsConfig from '#cms-config'
+import { duplicateEntryValues } from '../../shared/duplicate'
+import type { CmsListFilters } from '../../shared/list-filters'
+import {
+   entryListFilterKeys,
+   listFilterQuery,
+   parseListFilters,
+   withoutListFilterQuery,
+} from '../../shared/list-filters'
 import { readSearchFocus } from '../../shared/search'
+import type { CmsTransferFormat } from '../../shared/transfer'
+import { canTransferCsv, exportFileName } from '../../shared/transfer'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
@@ -234,7 +287,7 @@ definePageMeta({
    layout: 'cms-admin',
    middleware: 'cms-auth',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
-   key: (route) => route.fullPath,
+   key: (route) => `${route.path}${JSON.stringify(withoutListFilterQuery(route.query))}`,
 })
 
 const FORM_ID = 'cms-single-form'
@@ -295,11 +348,37 @@ watch(sort, () => {
    page.value = 1
 })
 
+const filters = computed<CmsListFilters>({
+   get: () => (isCollectionKind(config) ? parseListFilters(config, route.query).filters : {}),
+   set: (value) => {
+      void navigateTo(
+         { query: { ...withoutListFilterQuery(route.query), ...listFilterQuery(value) } },
+         { replace: true }
+      )
+   },
+})
+
+const filterQuery = computed(() => listFilterQuery(filters.value))
+const filterCount = computed(() => Object.keys(filterQuery.value).length)
+const narrowed = computed(() => !!searchTerm.value || filterCount.value > 0)
+
+watch(
+   () => JSON.stringify(filterQuery.value),
+   () => {
+      page.value = 1
+   }
+)
+
+const sortQuery = computed(() =>
+   sort.value ? { sort: sort.value.key, order: sort.value.order } : {}
+)
+
 const listQuery = computed(() => ({
    limit: PAGE_SIZE,
    offset: (page.value - 1) * PAGE_SIZE,
    ...(searchTerm.value ? { search: searchTerm.value } : {}),
-   ...(sort.value ? { sort: sort.value.key, order: sort.value.order } : {}),
+   ...sortQuery.value,
+   ...filterQuery.value,
 }))
 
 const { data, refresh, error, status } = await useFetch<ListResponse | Row | null>(endpoint, {
@@ -492,14 +571,23 @@ const columns = computed(() =>
    )
 )
 
+const filterKeys = computed(() => {
+   if (!isCollectionKind(config)) return []
+   const shown = entryListFilterKeys(config, entryListColumns(name, settings.value))
+   const active = Object.keys(filters.value).filter((key) => !shown.includes(key))
+   return [...shown, ...active]
+})
+
 const drawerOpen = ref(false)
 const drawerEntryId = ref<string | null>(null)
+const drawerInitial = ref<Row | null>(null)
 
 function onSelect(_event: Event, row: { original: Row }) {
    if (isContent) {
       void navigateTo(`/cms/${name}/${row.original.id}`)
       return
    }
+   drawerInitial.value = null
    drawerEntryId.value = String(row.original.id)
    drawerOpen.value = true
 }
@@ -509,9 +597,82 @@ function openCreate() {
       void navigateTo(`/cms/${name}/new`)
       return
    }
+   drawerInitial.value = null
    drawerEntryId.value = null
    drawerOpen.value = true
 }
+
+function openDuplicate(values: Row) {
+   drawerInitial.value = values
+   drawerEntryId.value = null
+   drawerOpen.value = true
+}
+
+async function duplicateSelected() {
+   const id = selected.value[0]
+   if (!id || saving.value) return
+   if (isContent) {
+      void navigateTo({ path: `/cms/${name}/new`, query: { duplicate: id } })
+      return
+   }
+   saving.value = true
+   try {
+      const entry = await cmsApi<Row>(`${endpoint}/${id}`)
+      selected.value = []
+      openDuplicate(duplicateEntryValues(config!, entry))
+   } catch (error) {
+      toast.add({ title: 'Could not load entry', description: errorMessage(error), color: 'error' })
+   } finally {
+      saving.value = false
+   }
+}
+
+const importOpen = ref(false)
+const exporting = ref(false)
+const csvAvailable = canTransferCsv(config)
+
+async function exportEntries(format: CmsTransferFormat, narrow: boolean) {
+   if (exporting.value) return
+   exporting.value = true
+   try {
+      const query = {
+         format,
+         ...sortQuery.value,
+         ...(narrow && searchTerm.value ? { search: searchTerm.value } : {}),
+         ...(narrow ? filterQuery.value : {}),
+      }
+      const blob = await $fetch<Blob>(`/api/cms/export/${name}`, { query, responseType: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = exportFileName(name, format)
+      link.click()
+      URL.revokeObjectURL(url)
+   } catch (error) {
+      toast.add({ title: 'Export failed', description: errorMessage(error), color: 'error' })
+   } finally {
+      exporting.value = false
+   }
+}
+
+const transferItems = computed(() => {
+   const formats: CmsTransferFormat[] = csvAvailable ? ['json', 'csv'] : ['json']
+   const exports = (narrow: boolean) =>
+      formats.map((format) => ({
+         label: `Export ${narrow ? 'filtered' : 'all'} as ${format.toUpperCase()}`,
+         onSelect: () => void exportEntries(format, narrow),
+      }))
+   return [
+      ...(narrowed.value ? exports(true) : []),
+      ...exports(false),
+      {
+         label: 'Import from file…',
+         onSelect: () => {
+            importOpen.value = true
+         },
+      },
+   ]
+})
 
 async function onDrawerDeleted() {
    if (rows.value.length === 1 && page.value > 1) page.value -= 1

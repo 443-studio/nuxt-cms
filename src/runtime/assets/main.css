@@ -4268,6 +4268,70 @@ textarea.cms-field {
    box-shadow: 0 0 0 3px var(--cms-accent-soft);
 }
 
+.cms-list-filters {
+   animation: cms-fade 300ms var(--cms-ease) backwards;
+}
+
+.cms-list-filter-panel {
+   width: 18rem;
+   padding: 0.75rem;
+}
+
+.cms-import-file {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: 0.75rem;
+}
+
+.cms-import-file-name {
+   min-width: 0;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+   font-size: 0.8125rem;
+   color: var(--ui-text-muted);
+}
+
+.cms-import-preview {
+   max-height: 20rem;
+}
+
+.cms-import-preview .cms-table td {
+   height: auto;
+   padding-block: 0.5rem;
+   vertical-align: top;
+}
+
+.cms-import-preview .cms-import-title {
+   max-width: 14rem;
+   overflow: hidden;
+   text-overflow: ellipsis;
+}
+
+.cms-import-list {
+   display: flex;
+   flex-direction: column;
+   gap: 0.125rem;
+   margin: 0;
+   padding: 0;
+   list-style: none;
+}
+
+.cms-import-issues {
+   white-space: normal;
+   color: var(--ui-error);
+   font-size: 0.75rem;
+}
+
+.cms-import-ok {
+   display: inline-flex;
+   align-items: center;
+   gap: 0.25rem;
+   color: var(--ui-success);
+   font-size: 0.75rem;
+}
+
 .cms-th-label {
    display: inline-flex;
    align-items: center;

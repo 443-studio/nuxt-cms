@@ -7,7 +7,7 @@ import { useMediaIndex } from './media-index'
 import type { MediaLookup } from './media-references'
 import { assertKnownMedia, mediaKeysInTable, mediaReferences } from './media-references'
 
-async function mediaLookup(): Promise<MediaLookup | null> {
+export async function mediaLookup(): Promise<MediaLookup | null> {
    const { media } = useRuntimeConfig().cms as { media: { storage: MediaStorageMode } }
    if (media.storage !== 'local') {
       return (keys) => mediaKeysInTable(useDb() as never, cms_media as SQLiteTable, keys)

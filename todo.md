@@ -17,5 +17,5 @@ Features deliberately postponed while aligning with Strapi. Revisit when the cor
 - **Media library pagination** — the gallery loads all cms_media rows at once; fine at mini-CMS scale, paginate if libraries grow.
 - **GraphQL e2e tests** — @nuxt/test-utils against in-memory sqlite. Unit suite (validateConfig, schema codegen both dialects, zod validators, SDL, upload mime) added 2026-07-06 with `pnpm test` wired into CI and release.
 - **Draft preview** — signed preview token (or admin session) that lets GraphQL return drafts, so editors can see unpublished content on the site.
-- **Seed / import-export** — JSON export/import per collection for reproducible dev data, backups, and sqlite↔postgres moves.
+- **Seed / import-export for the rest**: collections and content entries have JSON and CSV import/export in the admin. Still missing: singles, pages, the media files themselves, and a scripted dump/restore of the whole database for reproducible dev data, backups and sqlite↔postgres moves.
 - **Localized fields and blocks localization inside blocks** — block fields are non-localizable in v1.

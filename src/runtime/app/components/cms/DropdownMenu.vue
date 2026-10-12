@@ -12,11 +12,7 @@
             @click="onClick(item, $event)"
          >
             <span>{{ item.label }}</span>
-            <CmsIcon
-               v-if="item.type === 'checkbox' && item.checked"
-               name="check"
-               class="cms-menu-check size-3.5"
-            />
+            <CmsIcon v-if="item.checked" name="check" class="cms-menu-check size-3.5" />
          </button>
       </div>
    </div>

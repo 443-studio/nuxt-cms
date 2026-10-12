@@ -1109,6 +1109,17 @@ export default defineNuxtModule<ModuleOptions>({
          handler: resolver.resolve('./runtime/server/api/settings.delete'),
       })
 
+      addServerHandler({
+         route: '/api/cms/export/:collection',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/collection-export.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/import/:collection',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/collection-import.post'),
+      })
+
       const api = '/api/cms/admin/:collection'
       addServerHandler({
          route: api,

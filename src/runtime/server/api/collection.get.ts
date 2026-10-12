@@ -1,11 +1,10 @@
-import type { SQL } from 'drizzle-orm'
-import { asc, count, desc, inArray, or, sql } from 'drizzle-orm'
+import { count } from 'drizzle-orm'
 import { defineEventHandler, getValidatedQuery } from 'h3'
 import { z } from 'zod'
 import { cmsDialect, useDb } from '#cms-db'
-import { pageRoutes, selectValuesMatching } from '../../shared/index'
-import { searchLikePattern } from '../../shared/search'
+import { pageRoutes } from '../../shared/index'
 import { decodeRows, getRegistryEntry, idColumn, tableColumns } from '../utils/registry'
+import { listOrderBy, listWhere, readListFilters } from '../utils/list-query'
 import { readPages } from '../utils/page-storage'
 import { attachManyToMany, relationTitles } from '../utils/relations'
 import { requireAdmin } from '../utils/require-admin'
@@ -62,19 +61,10 @@ export default defineEventHandler(async (event) => {
       entry.titleField && Object.hasOwn(columns, entry.titleField)
          ? columns[entry.titleField]
          : undefined
-
-   let where: SQL | undefined
-   if (search) {
-      const column = titleColumn ?? idColumn(table)
-      const text = cmsDialect === 'postgres' ? sql`cast(${column} as text)` : sql`${column}`
-      where = sql`lower(${text}) like ${searchLikePattern(search.toLowerCase())} escape '\\'`
-      const titleField = entry.titleField ? entry.fields[entry.titleField] : undefined
-      const labelled =
-         titleColumn && titleField?.type === 'select'
-            ? selectValuesMatching(titleField, search)
-            : []
-      if (labelled.length) where = or(where, inArray(column, labelled))
-   }
+   const where = listWhere(cmsDialect, entry, table, {
+      search,
+      filters: readListFilters(event, entry),
+   })
 
    const selection = light
       ? Object.fromEntries([
@@ -86,15 +76,9 @@ export default defineEventHandler(async (event) => {
         ])
       : undefined
 
-   const sortColumn = sort && Object.hasOwn(columns, sort) ? columns[sort] : undefined
-   const orderBy = sortColumn ?? columns.createdAt ?? idColumn(table)
-   const direction = sortColumn && order === 'asc' ? asc : desc
-   const tiebreaker = idColumn(table)
    const base = selection ? db.select(selection).from(table) : db.select().from(table)
    const items = (await (where ? base.where(where) : base)
-      .orderBy(
-         ...(orderBy === tiebreaker ? [direction(orderBy)] : [direction(orderBy), desc(tiebreaker)])
-      )
+      .orderBy(...listOrderBy(table, sort, order))
       .limit(limit)
       .offset(offset)) as Record<string, unknown>[]
 

@@ -83,7 +83,10 @@
          />
          <CmsDropdownMenu
             v-if="!isNew"
-            :items="[{ label: 'Delete', onSelect: remove }]"
+            :items="[
+               { label: 'Duplicate', onSelect: duplicate },
+               { label: 'Delete', onSelect: remove },
+            ]"
             :content="{ align: 'end' }"
          >
             <CmsButton
@@ -122,6 +125,7 @@ import {
    watch,
 } from '#imports'
 import cmsConfig from '#cms-config'
+import { duplicateEntryValues } from '../../shared/duplicate'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsRuntime } from '../composables/cms-runtime'
@@ -160,12 +164,21 @@ function pickFields(row: Record<string, unknown>) {
    return Object.fromEntries(formKeys.map((key) => [key, row[key] ?? null]))
 }
 
-const formState = ref<Record<string, unknown>>(
-   Object.fromEntries(formKeys.map((key) => [key, key === 'status' ? 'draft' : null]))
+const blankState = Object.fromEntries(
+   formKeys.map((key) => [key, key === 'status' ? 'draft' : null])
 )
 
-if (!isNew) {
-   const { data, error } = await useFetch<Record<string, unknown> | null>(`${endpoint}/${id}`)
+const formState = ref<Record<string, unknown>>({ ...blankState })
+
+const duplicateOf =
+   isNew && typeof route.query.duplicate === 'string' && route.query.duplicate
+      ? route.query.duplicate
+      : null
+
+const sourceId = isNew ? duplicateOf : id
+
+if (sourceId) {
+   const { data, error } = await useFetch<Record<string, unknown> | null>(`${endpoint}/${sourceId}`)
    if (error.value || !data.value) {
       const statusCode = error.value?.statusCode ?? 404
       throw createError({
@@ -174,10 +187,10 @@ if (!isNew) {
          fatal: true,
       })
    }
-   formState.value = pickFields(data.value)
+   formState.value = duplicateOf ? duplicateEntryValues(config, data.value) : pickFields(data.value)
 }
 
-const snapshot = ref(JSON.stringify(formState.value))
+const snapshot = ref(JSON.stringify(duplicateOf ? blankState : formState.value))
 const dirty = computed(() => JSON.stringify(formState.value) !== snapshot.value)
 
 const titleText = computed(() => {
@@ -234,6 +247,7 @@ watch(dirty, (value) => {
 
 onMounted(() => {
    mounted.value = true
+   if (dirty.value) window.addEventListener('beforeunload', onBeforeUnload)
 })
 
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
@@ -304,6 +318,10 @@ async function schedule() {
       new Date(scheduleDraft.value).getTime() > Date.now() ? 'scheduled' : 'published'
    )
    if (saved) scheduleOpen.value = false
+}
+
+function duplicate() {
+   void navigateTo({ path: `/cms/${name}/new`, query: { duplicate: id } })
 }
 
 async function remove() {

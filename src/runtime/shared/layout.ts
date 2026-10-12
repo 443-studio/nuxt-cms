@@ -26,6 +26,7 @@ export interface CmsFormLayout {
 
 export interface CmsListInput {
    columns?: string[]
+   filters?: string[]
 }
 
 export interface CmsEntrySettings {
@@ -192,14 +193,52 @@ export function layoutErrors(
    return errors
 }
 
+export function isListFilterField(field: FieldConfig): boolean {
+   if (field.type === 'boolean') return true
+   if (field.type === 'select') return !field.multiple
+   if (field.type === 'relation') return field.cardinality !== 'many-to-many'
+   return false
+}
+
+export function listFilterKeys(
+   fields: Record<string, FieldConfig>,
+   list: CmsListInput | undefined,
+   extra: string[] = [],
+   columns?: string[]
+): string[] {
+   const eligible = [
+      ...Object.keys(fields).filter((key) => isListFilterField(fields[key]!)),
+      ...extra.filter((key) => !Object.hasOwn(fields, key)),
+   ]
+   if (Array.isArray(list?.filters))
+      return [...new Set(list.filters.filter((key) => eligible.includes(key)))]
+   return columns ? eligible.filter((key) => columns.includes(key)) : eligible
+}
+
 export function listErrors(
    at: string,
    fields: Record<string, FieldConfig>,
    list: CmsListInput | undefined,
    extra: string[] = []
 ): string[] {
-   if (!list?.columns) return []
-   return list.columns
-      .filter((key) => !Object.hasOwn(fields, key) && !extra.includes(key))
-      .map((key) => `${at}: list.columns names '${key}', which is not a declared field`)
+   const errors: string[] = []
+   for (const key of list?.columns ?? []) {
+      if (!Object.hasOwn(fields, key) && !extra.includes(key))
+         errors.push(`${at}: list.columns names '${key}', which is not a declared field`)
+   }
+   if (list?.filters === undefined) return errors
+   if (!Array.isArray(list.filters)) {
+      errors.push(`${at}: list.filters must be an array of field names`)
+      return errors
+   }
+   for (const key of list.filters) {
+      const field = Object.hasOwn(fields, key) ? fields[key] : undefined
+      if (!field && extra.includes(key)) continue
+      if (!field) errors.push(`${at}: list.filters names '${key}', which is not a declared field`)
+      else if (!isListFilterField(field))
+         errors.push(
+            `${at}: list.filters names '${key}', which is not a single select, boolean or single relation field`
+         )
+   }
+   return errors
 }
