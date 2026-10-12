@@ -1,6 +1,34 @@
 # Changelog
 
 
+## v0.4.3
+
+[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.2...v0.4.3)
+
+### 🚀 Enhancements
+
+- Add select option labels, validate hooks and blocks min/max ([eb7932a](https://github.com/xleddyl/nuxt-cms/commit/eb7932a))
+- Add duplicate entry, list filters and collection import/export ([8ec93b8](https://github.com/xleddyl/nuxt-cms/commit/8ec93b8))
+
+### 🩹 Fixes
+
+- Type the reference of a self relation in the generated drizzle schema ([4ca735f](https://github.com/xleddyl/nuxt-cms/commit/4ca735f))
+- Accept any JSON value in json fields inside blocks ([d111bdf](https://github.com/xleddyl/nuxt-cms/commit/d111bdf))
+
+### 📖 Documentation
+
+- Rewrite the readme, fill doc gaps and refresh the screenshots in light mode ([db0ae4d](https://github.com/xleddyl/nuxt-cms/commit/db0ae4d))
+- Retake the screenshots with the new demo content ([498d4ee](https://github.com/xleddyl/nuxt-cms/commit/498d4ee))
+
+### 🏡 Chore
+
+- **playground:** Add a blog, authors and every remaining field and module option ([df136da](https://github.com/xleddyl/nuxt-cms/commit/df136da))
+- **playground:** Regenerate migrations so every relation keeps its delete rule ([4ce8ca9](https://github.com/xleddyl/nuxt-cms/commit/4ce8ca9))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.4.2
 
 [compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.1...v0.4.2)
