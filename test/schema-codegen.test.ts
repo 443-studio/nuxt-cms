@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderSchemaFile } from '../src/schema-codegen'
-import { sampleConfig } from './fixtures'
+import { labelledSelectConfig, sampleConfig } from './fixtures'
 
 describe('renderSchemaFile', () => {
    it('renders a sqlite schema', () => {
@@ -106,5 +106,13 @@ describe('renderSchemaFile', () => {
    it('routes imports through the resolver', () => {
       const out = renderSchemaFile(sampleConfig(), 'sqlite', (s) => `/abs/${s}`)
       expect(out).toContain("from '/abs/drizzle-orm/sqlite-core'")
+   })
+
+   it('stores a select with labels in the same columns', () => {
+      for (const dialect of ['sqlite', 'postgres'] as const) {
+         expect(renderSchemaFile(labelledSelectConfig(true), dialect)).toBe(
+            renderSchemaFile(labelledSelectConfig(false), dialect)
+         )
+      }
    })
 })

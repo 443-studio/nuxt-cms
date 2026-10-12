@@ -1,6 +1,19 @@
 import { z } from 'zod'
-import type { CmsEntry, CmsI18n, FieldConfig } from './index'
-import { BLOCK_HIDDEN_KEY, declaresHiddenField, isFieldVisible, isTranslatableField } from './index'
+import type {
+   CmsEntry,
+   CmsI18n,
+   CmsValidateContext,
+   CmsValidateResult,
+   CmsValidationLevel,
+   FieldConfig,
+} from './index'
+import {
+   BLOCK_HIDDEN_KEY,
+   declaresHiddenField,
+   isFieldVisible,
+   isTranslatableField,
+   selectOptionValues,
+} from './index'
 
 export const objectKeySchema = z
    .string()
@@ -16,6 +29,8 @@ export interface ValidationMessages {
    invalidSlug: string
    unknownLocale: string
    requiredLocale: (locale: string) => string
+   minBlocks: (min: number) => string
+   maxBlocks: (max: number) => string
 }
 
 const DEFAULT_MESSAGES: ValidationMessages = {
@@ -26,6 +41,8 @@ const DEFAULT_MESSAGES: ValidationMessages = {
    invalidSlug: 'Invalid slug (lowercase letters, numbers, dashes)',
    unknownLocale: 'Unknown locale key',
    requiredLocale: (locale) => `Required field (locale '${locale}')`,
+   minBlocks: (min) => `Add at least ${min} ${min === 1 ? 'block' : 'blocks'}`,
+   maxBlocks: (max) => `Add at most ${max} ${max === 1 ? 'block' : 'blocks'}`,
 }
 
 const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -58,7 +75,7 @@ function scalarSchema(field: FieldConfig, m: ValidationMessages): z.ZodType {
       case 'slug':
          return z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, m.invalidSlug)
       case 'select':
-         return z.enum(field.options as [string, ...string[]])
+         return z.enum(selectOptionValues(field) as [string, ...string[]])
       case 'media':
          return objectKeySchema
       case 'json':
@@ -114,6 +131,107 @@ function blocksSchema(field: FieldConfig, i18n: CmsI18n, m: ValidationMessages) 
    return z.array(z.discriminatedUnion('type', variants as never))
 }
 
+export function blocksCountMessage(
+   field: Pick<FieldConfig, 'min' | 'max'>,
+   count: number,
+   messages?: Partial<ValidationMessages>
+): string | null {
+   const m: ValidationMessages = { ...DEFAULT_MESSAGES, ...messages }
+   if (field.max !== undefined && count > field.max) return m.maxBlocks(field.max)
+   if (field.min !== undefined && count > 0 && count < field.min) return m.minBlocks(field.min)
+   return null
+}
+
+function boundedBlocks<T extends z.ZodType<unknown[]>>(
+   list: T,
+   field: FieldConfig,
+   m: ValidationMessages
+): T {
+   if (field.min === undefined && field.max === undefined) return list
+   return list.superRefine((items, ctx) => {
+      const message = blocksCountMessage(field, items.length, m)
+      if (message) ctx.addIssue({ code: 'custom', message })
+   })
+}
+
+export interface EntryValidationIssue {
+   path: (string | number)[]
+   message: string
+   level: CmsValidationLevel
+}
+
+type ValidatedEntry = Pick<CmsEntry, 'fields'> & Partial<Pick<CmsEntry, 'validate'>>
+
+function hookIssues(result: CmsValidateResult) {
+   if (!Array.isArray(result)) return []
+   return result.filter(
+      (issue): issue is { field?: string; message: string; level?: CmsValidationLevel } =>
+         !!issue && typeof issue === 'object' && typeof issue.message === 'string'
+   )
+}
+
+function hasValidateHooks(entry: ValidatedEntry): boolean {
+   if (entry.validate) return true
+   return Object.values(entry.fields).some(
+      (field) =>
+         field.type === 'blocks' &&
+         Object.values(field.blocks ?? {}).some((block) => block.validate)
+   )
+}
+
+export function entryValidationIssues(
+   entry: ValidatedEntry,
+   values: Record<string, unknown>,
+   i18n: CmsI18n,
+   path?: string
+): EntryValidationIssue[] {
+   const context: CmsValidateContext = {
+      locales: i18n.locales,
+      defaultLocale: i18n.defaultLocale,
+      ...(path ? { path } : {}),
+   }
+   const issues: EntryValidationIssue[] = []
+   if (entry.validate) {
+      for (const issue of hookIssues(entry.validate(values, context))) {
+         issues.push({
+            path: issue.field ? [issue.field] : [],
+            message: issue.message,
+            level: issue.level === 'warning' ? 'warning' : 'error',
+         })
+      }
+   }
+   for (const [key, field] of Object.entries(entry.fields)) {
+      const list = values[key]
+      if (field.type !== 'blocks' || !Array.isArray(list)) continue
+      list.forEach((item: unknown, index) => {
+         if (!item || typeof item !== 'object') return
+         const block = field.blocks?.[String((item as Record<string, unknown>).type)]
+         if (!block?.validate) return
+         const result = block.validate(item as Record<string, unknown>, { ...context, index })
+         for (const issue of hookIssues(result)) {
+            issues.push({
+               path: issue.field ? [key, index, issue.field] : [key, index],
+               message: issue.message,
+               level: issue.level === 'warning' ? 'warning' : 'error',
+            })
+         }
+      })
+   }
+   return issues
+}
+
+export function entryValidationWarnings(
+   entry: ValidatedEntry,
+   values: Record<string, unknown>,
+   i18n: CmsI18n,
+   path?: string
+): EntryValidationIssue[] {
+   if (!hasValidateHooks(entry)) return []
+   return entryValidationIssues(entry, values, i18n, path).filter(
+      (issue) => issue.level === 'warning'
+   )
+}
+
 function isEmptyValue(field: FieldConfig, value: unknown, defaultLocale: string): boolean {
    if (value == null) return true
    if (Array.isArray(value)) return !value.length
@@ -126,16 +244,23 @@ function isEmptyValue(field: FieldConfig, value: unknown, defaultLocale: string)
 }
 
 export function buildEntrySchema(
-   entry: Pick<CmsEntry, 'fields'> & { drafts?: boolean },
+   entry: ValidatedEntry & { drafts?: boolean; path?: string },
    i18n: CmsI18n,
    messages?: Partial<ValidationMessages>
 ) {
    const m: ValidationMessages = { ...DEFAULT_MESSAGES, ...messages }
    const shape: Record<string, z.ZodType> = {}
    const conditional: [string, FieldConfig][] = []
+   const conditionalBounds: [string, FieldConfig][] = []
    for (const [key, declared] of Object.entries(entry.fields)) {
       const field = declared.showIf ? { ...declared, required: false } : declared
       if (declared.showIf && declared.required) conditional.push([key, declared])
+      if (
+         declared.showIf &&
+         declared.type === 'blocks' &&
+         (declared.min !== undefined || declared.max !== undefined)
+      )
+         conditionalBounds.push([key, declared])
       if (field.type === 'relation' && field.cardinality === 'many-to-many') {
          const list = z.array(z.string().min(1))
          shape[key] = field.required
@@ -144,7 +269,7 @@ export function buildEntrySchema(
          continue
       }
       if (field.type === 'select' && field.multiple) {
-         const list = z.array(z.enum(field.options as [string, ...string[]]))
+         const list = z.array(z.enum(selectOptionValues(field) as [string, ...string[]]))
          shape[key] = field.required
             ? list.min(1, m.required)
             : list.nullish().transform((v) => v ?? [])
@@ -152,9 +277,9 @@ export function buildEntrySchema(
       }
       if (field.type === 'blocks') {
          const list = blocksSchema(field, i18n, m)
-         shape[key] = field.required
-            ? list.min(1, m.required)
-            : list.nullish().transform((v) => v ?? null)
+         const base = field.required ? list.min(1, m.required) : list
+         const bounded = declared.showIf ? base : boundedBlocks(base, field, m)
+         shape[key] = field.required ? bounded : bounded.nullish().transform((v) => v ?? null)
          continue
       }
       if (isTranslatableField(field) && i18n.locales.length) {
@@ -178,14 +303,26 @@ export function buildEntrySchema(
    }
 
    const schema = z.object(shape)
-   if (!conditional.length) return schema
+   const hooks = hasValidateHooks(entry)
+   if (!conditional.length && !conditionalBounds.length && !hooks) return schema
 
-   return schema.superRefine((values, ctx) => {
+   return schema.superRefine((parsed, ctx) => {
+      const values = parsed as Record<string, unknown>
       for (const [key, field] of conditional) {
-         if (!isFieldVisible(field, values as Record<string, unknown>)) continue
-         if (!isEmptyValue(field, (values as Record<string, unknown>)[key], i18n.defaultLocale))
-            continue
+         if (!isFieldVisible(field, values)) continue
+         if (!isEmptyValue(field, values[key], i18n.defaultLocale)) continue
          ctx.addIssue({ code: 'custom', path: [key], message: m.required })
+      }
+      for (const [key, field] of conditionalBounds) {
+         const list = values[key]
+         if (!isFieldVisible(field, values) || !Array.isArray(list)) continue
+         const message = blocksCountMessage(field, list.length, m)
+         if (message) ctx.addIssue({ code: 'custom', path: [key], message })
+      }
+      if (!hooks) return
+      for (const issue of entryValidationIssues(entry, values, i18n, entry.path)) {
+         if (issue.level === 'error')
+            ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
       }
    })
 }

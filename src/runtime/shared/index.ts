@@ -249,6 +249,88 @@ export interface BlockConfig {
    icon?: string
    description?: string
    fields: Record<string, FieldConfig>
+   validate?: CmsBlockValidate
+}
+
+export type CmsValidationLevel = 'error' | 'warning'
+
+export interface CmsValidationIssue {
+   field?: string
+   message: string
+   level?: CmsValidationLevel
+}
+
+export interface CmsValidateContext {
+   locales: string[]
+   defaultLocale: string
+   path?: string
+}
+
+export interface CmsBlockValidateContext extends CmsValidateContext {
+   index: number
+}
+
+export type CmsValidateResult = readonly CmsValidationIssue[] | null | undefined | void
+
+export type CmsValidate = (
+   values: Record<string, unknown>,
+   context: CmsValidateContext
+) => CmsValidateResult
+
+export type CmsBlockValidate = (
+   values: Record<string, unknown>,
+   context: CmsBlockValidateContext
+) => CmsValidateResult
+
+export interface SelectOption {
+   value: string
+   label: string
+}
+
+export type SelectOptionInput = string | { readonly value: string; readonly label: string }
+
+export type CmsSelectOptionValue<O> = O extends string
+   ? O
+   : O extends { readonly value: infer V extends string }
+     ? V
+     : never
+
+export type CmsSelectValue<F extends { readonly options: readonly unknown[] }> =
+   CmsSelectOptionValue<F['options'][number]>
+
+export function selectOptions(field: Pick<FieldConfig, 'options'>): SelectOption[] {
+   return (field.options ?? []).map((option) =>
+      typeof option === 'string'
+         ? { value: option, label: option }
+         : {
+              value: String(option?.value ?? ''),
+              label: String(option?.label ?? option?.value ?? ''),
+           }
+   )
+}
+
+export function selectOptionValues(field: Pick<FieldConfig, 'options'>): string[] {
+   return selectOptions(field).map((option) => option.value)
+}
+
+export function selectOptionLabel(field: Pick<FieldConfig, 'options'>, value: unknown): string {
+   const text = String(value)
+   return selectOptions(field).find((option) => option.value === text)?.label ?? text
+}
+
+export function selectValuesMatching(field: Pick<FieldConfig, 'options'>, term: string): string[] {
+   const needle = term.trim().toLowerCase()
+   if (!needle) return []
+   return selectOptions(field)
+      .filter((option) => option.label !== option.value)
+      .filter((option) => option.label.toLowerCase().includes(needle))
+      .map((option) => option.value)
+}
+
+export function selectDisplayValue(field: Pick<FieldConfig, 'options'>, value: unknown): string {
+   if (value == null) return ''
+   if (Array.isArray(value)) return value.map((item) => selectOptionLabel(field, item)).join(', ')
+   return selectOptionLabel(field, value)
 }
 
 export type ConditionValue = string | number | boolean
@@ -275,10 +357,12 @@ export interface FieldConfig {
    textarea?: boolean
    integer?: boolean
    translatable?: boolean
-   options?: string[]
+   options?: readonly SelectOptionInput[]
    multiple?: boolean
    from?: string
    blocks?: Record<string, BlockConfig>
+   min?: number
+   max?: number
    mediaType?: MediaType | MediaType[]
    accept?: string[]
    mobile?: boolean
@@ -337,6 +421,12 @@ function parseJsonObject(raw: string): Record<string, string> | null {
       return null
    }
    return null
+}
+
+export function defaultLocaleValue(value: unknown, defaultLocale: string): string | null {
+   const values = decodeTranslatableValue(value, defaultLocale)
+   const text = values?.[defaultLocale]
+   return typeof text === 'string' ? text : null
 }
 
 export function decodeTranslatableValue(
@@ -430,6 +520,10 @@ export function hasTranslatableBlockFields(field: FieldConfig): boolean {
    )
 }
 
+export function canAddBlock(field: Pick<FieldConfig, 'max'>, count: number): boolean {
+   return field.max === undefined || count < field.max
+}
+
 export const BLOCK_HIDDEN_KEY = 'hidden'
 
 export function declaresHiddenField(block: BlockConfig | undefined): boolean {
@@ -512,6 +606,7 @@ export interface CmsEntry {
    blocks?: Record<string, BlockConfig>
    preview?: CmsPreviewOptions
    declared?: CmsContentDeclared
+   validate?: CmsValidate
 }
 
 export interface CmsPreviewOptions {
@@ -924,7 +1019,7 @@ export interface SlugFieldInput extends FieldInputBase {
 
 export interface SelectFieldInput extends FieldInputBase {
    type: 'select'
-   options: string[]
+   options: readonly SelectOptionInput[]
    multiple?: boolean
 }
 
@@ -967,11 +1062,14 @@ export interface BlockInput {
    icon?: string
    description?: string
    fields: Record<string, BlockFieldInput>
+   validate?: CmsBlockValidate
 }
 
 export interface BlocksFieldInput extends FieldInputBase {
    type: 'blocks'
    blocks: Record<string, BlockInput>
+   min?: number
+   max?: number
 }
 
 export type CmsFieldInput =
@@ -998,6 +1096,7 @@ interface CmsEntryInputBase {
    drafts?: boolean
    tabs?: CmsTab[]
    fields: Record<string, CmsFieldInput>
+   validate?: CmsValidate
 }
 
 export interface CmsCollectionInput extends CmsEntryInputBase {
@@ -1035,6 +1134,7 @@ export interface CmsContentInput {
    layout?: CmsLayoutBlock[]
    list?: CmsListInput
    preview?: CmsPreviewOptions
+   validate?: CmsValidate
    titleField?: never
    drafts?: never
 }

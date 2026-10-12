@@ -9,6 +9,7 @@ import {
    mediaTypeFilter,
    pageFields,
    pageRoutes,
+   selectOptionValues,
 } from './runtime/shared/index'
 
 function mediaTsType(field: FieldConfig): string {
@@ -25,7 +26,9 @@ function scalarTsType(field: FieldConfig): string {
       case 'json':
          return 'unknown'
       case 'select':
-         return field.options!.map((o) => JSON.stringify(o)).join(' | ')
+         return selectOptionValues(field)
+            .map((o) => JSON.stringify(o))
+            .join(' | ')
       default:
          return 'string'
    }
@@ -44,7 +47,9 @@ function fieldTsType(
    }
    if (field.type === 'media') return `${mediaTsType(field)} | null`
    if (field.type === 'select' && field.multiple) {
-      const union = field.options!.map((o) => JSON.stringify(o)).join(' | ')
+      const union = selectOptionValues(field)
+         .map((o) => JSON.stringify(o))
+         .join(' | ')
       return `(${union})[]`
    }
    if (field.type === 'blocks') {

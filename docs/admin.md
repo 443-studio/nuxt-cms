@@ -43,6 +43,10 @@ block that declares its own `boolean` field named `hidden` uses that field inste
 A `media` field is a tile of the same shape, with the preview, the file name, replace and remove.
 An empty one is a dashed box that opens the media library.
 
+**Number of blocks.** On a field with [`min` or `max`](schema.md#number-of-blocks) the grid shows
+the allowed count under it. Once the field holds `max` blocks, the add tile and **Duplicate** are
+disabled, and so are the palette, the `+` buttons and **Duplicate** of the visual editor.
+
 **Order.** Drag a tile onto another one to move it there. The target tile is outlined while you
 drag. For a keyboard, focus the grip at the bottom left of a tile and press the left or right arrow
 key; the block editor also carries two move buttons, which is the way on a touch screen.
@@ -55,6 +59,16 @@ The X on a tile removes it, and a drag changes the order. No editor opens.
 also shows **Open visual editor**. It opens the [visual editor](#visual-editor) over the form, on
 that field only, with the Block panel. **Done** goes back to the form; the changes are already in
 the form and are saved with it.
+
+**Validation.** Save checks the form first: required fields, formats, the number of blocks and the
+[`validate` hooks](schema.md#validation-hooks) of the config. An error shows under its field, or
+at the top of the form when it names no field, and the form opens the tab of the first one. A
+warning from a hook shows in the same places, in amber, while you edit, and does not stop the save.
+The admin API runs the same checks again.
+
+**Select fields.** A select whose options have [labels](schema.md#select-option-labels) shows the
+label in the input, the table, the entry title, relation pickers and search results; the stored
+value stays the option value.
 
 **Bulk actions.** Every row of a collection table has a checkbox. When rows are selected, the
 toolbar shows **Delete** and, on a collection with `drafts`, **Publish** and **Draft**.
@@ -110,9 +124,11 @@ drawn in the canvas: it stays in the block list with an eye icon, where **Show**
 down arrow to move the block; Escape clears the selection. In the block list, Alt with the up or
 down arrow moves the focused block. The block panel also has move up and move down buttons.
 
-**Validation.** Save and Publish check the whole item first. The first error opens its tab, selects
-the block that holds it and switches to the default language when the field is translatable; a dot
-marks every tab with an error. Leaving with unsaved changes asks for a confirmation.
+**Validation.** Save and Publish check the whole item first, `validate` hooks included. The first
+error opens its tab, selects the block that holds it and switches to the default language when the
+field is translatable; a dot marks every tab with an error. An error or a warning that names no
+field shows at the top of the inspector, and one that names a block shows above the fields of that
+block. Leaving with unsaved changes asks for a confirmation.
 
 ### Preview page
 

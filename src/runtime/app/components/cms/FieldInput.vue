@@ -65,7 +65,7 @@
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
-import { isTranslatableField } from '#nuxt-cms'
+import { isTranslatableField, selectOptions } from '#nuxt-cms'
 import { computed } from '#imports'
 
 const props = defineProps<{
@@ -80,7 +80,7 @@ const model = defineModel<unknown>({ required: true })
 
 const selectItems = computed(() => [
    ...(props.field.required || props.field.multiple ? [] : [{ label: '—', value: null }]),
-   ...(props.field.options ?? []).map((option) => ({ label: option, value: option })),
+   ...selectOptions(props.field).map(({ value, label }) => ({ label, value })),
 ])
 
 function proxy<T>(fromModel: (v: unknown) => T, toModel: (v: T) => unknown = (v) => v) {

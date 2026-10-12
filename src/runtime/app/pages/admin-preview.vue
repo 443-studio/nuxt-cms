@@ -3,7 +3,7 @@
       <template v-if="state && field">
          <component :is="wrapper" v-if="wrapper && item" :item="item" :locale="state.locale">
             <CmsBlocks :blocks="blocks" :entry="blockEntry" :field="state.field" annotate />
-            <div v-if="!visibleCount" class="cms-preview-empty">
+            <div v-if="!visibleCount && canAdd" class="cms-preview-empty">
                <button
                   type="button"
                   class="cms-preview-empty-button"
@@ -17,7 +17,7 @@
          </component>
          <template v-else>
             <CmsBlocks :blocks="blocks" :entry="blockEntry" :field="state.field" annotate />
-            <div v-if="!visibleCount" class="cms-preview-empty">
+            <div v-if="!visibleCount && canAdd" class="cms-preview-empty">
                <button
                   type="button"
                   class="cms-preview-empty-button"
@@ -46,7 +46,7 @@
 <script setup lang="ts">
 import type { CmsBlockEntryName } from '#cms-types'
 import type { CmsConfig } from '#nuxt-cms'
-import { entryFieldsFor, isHiddenBlock } from '#nuxt-cms'
+import { canAddBlock, entryFieldsFor, isHiddenBlock } from '#nuxt-cms'
 import {
    computed,
    definePageMeta,
@@ -110,6 +110,10 @@ const blocks = computed<CmsBlockItem[]>(() =>
 )
 
 const visibleCount = computed(() => blocks.value.filter((block) => !isHiddenBlock(block)).length)
+
+const canAdd = computed(
+   () => !!state.value && !!field.value && canAddBlock(field.value, state.value.blocks.length)
+)
 
 const item = computed(() =>
    state.value?.item && entry.value?.kind === 'content'

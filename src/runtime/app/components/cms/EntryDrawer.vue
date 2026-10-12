@@ -55,7 +55,7 @@
 
 <script setup lang="ts">
 import type { CmsEntry } from '#nuxt-cms'
-import { isTranslatableField } from '#nuxt-cms'
+import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
 import { computed, ref, watch } from '#imports'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsRuntime } from '../../composables/cms-runtime'
@@ -101,6 +101,7 @@ const entryName = computed(() => {
       const record = value as Record<string, string>
       return record[contentI18n.defaultLocale] ?? Object.values(record)[0] ?? ''
    }
+   if (field.type === 'select') return selectDisplayValue(field, value)
    return String(value)
 })
 

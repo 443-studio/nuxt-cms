@@ -4,6 +4,7 @@
       ref="form"
       :state="state"
       :schema="schema"
+      :warnings="warnings"
       @submit="emit('submit')"
       @error="onError"
    >
@@ -105,7 +106,14 @@
 </template>
 
 <script setup lang="ts">
-import type { CmsEntry, CmsFormLayout, CmsLayoutSection, CmsTab, FieldConfig } from '#nuxt-cms'
+import type {
+   CmsConfig,
+   CmsEntry,
+   CmsFormLayout,
+   CmsLayoutSection,
+   CmsTab,
+   FieldConfig,
+} from '#nuxt-cms'
 import {
    fieldTab,
    hasTranslatableBlockFields,
@@ -115,8 +123,9 @@ import {
    slugSourceValue,
 } from '#nuxt-cms'
 import { computed, nextTick, onMounted, ref, watch } from '#imports'
+import cmsConfig from '#cms-config'
 import type { CmsSearchFocus } from '../../../shared/search'
-import { buildEntrySchema } from '../../../shared/validation'
+import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
@@ -132,6 +141,7 @@ const props = withDefaults(
       formId?: string
       footer?: boolean
       focus?: CmsSearchFocus | null
+      path?: string
    }>(),
    { footer: true }
 )
@@ -230,9 +240,25 @@ function setLocale(key: string, locale: string) {
    activeLocale.value = { ...activeLocale.value, [key]: locale }
 }
 
-const schema = computed(() =>
-   buildEntrySchema({ fields: props.fields, drafts: props.drafts }, i18n)
+const validate = computed(() =>
+   props.entryName ? (cmsConfig as CmsConfig)[props.entryName]?.validate : undefined
 )
+
+const schema = computed(() =>
+   buildEntrySchema(
+      { fields: props.fields, drafts: props.drafts, validate: validate.value, path: props.path },
+      i18n
+   )
+)
+
+function warnings(values: Record<string, unknown>) {
+   return entryValidationWarnings(
+      { fields: props.fields, validate: validate.value },
+      values,
+      i18n,
+      props.path
+   )
+}
 
 const published = computed({
    get: () => state.value.status === 'published',

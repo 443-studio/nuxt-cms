@@ -12,12 +12,15 @@
       <p v-if="error" class="cms-form-error">
          <CmsIcon name="exclamation-circle" class="size-3.5 shrink-0" />{{ error }}
       </p>
+      <p v-else-if="warning" class="cms-form-warning">
+         <CmsIcon name="exclamation-triangle" class="size-3.5 shrink-0" />{{ warning }}
+      </p>
    </div>
 </template>
 
 <script setup lang="ts">
 import { computed, inject } from '#imports'
-import { CMS_FORM_ERRORS } from '../../utils/ui'
+import { CMS_FORM_ERRORS, CMS_FORM_WARNINGS } from '../../utils/ui'
 
 const props = defineProps<{
    label?: string
@@ -29,5 +32,9 @@ const props = defineProps<{
 
 const errors = inject(CMS_FORM_ERRORS, null)
 
+const warnings = inject(CMS_FORM_WARNINGS, null)
+
 const error = computed(() => (props.name && errors ? errors[props.name] : undefined))
+
+const warning = computed(() => (props.name && warnings ? warnings.value[props.name] : undefined))
 </script>

@@ -320,17 +320,45 @@ Every field has `label: string` and optional `required?: boolean` and `private?:
 | `datetime` | none                                                                                | String, ISO 8601 UTC |
 | `email`    | none                                                                               | String              |
 | `slug`     | `from: '<fieldKey>'` (required; auto-generated from that text field)                | String (unique)     |
-| `select`   | `options: string[]` (required, unique), `multiple?: boolean`                        | String (enum) or `[String!]!` |
+| `select`   | `options: (string \| { value, label })[]` (required, unique values), `multiple?: boolean` | String (enum) or `[String!]!` |
 | `json`     | none                                                                               | JSON                |
 | `media`    | `mediaType?: T \| T[]` where `T` is `'image' \| 'video' \| 'file'`, `accept?: string[]`, `translatable?: boolean`, `mobile?: boolean` | CmsMedia object     |
 | `relation` | see [Relations](#relations)                                                         | related entry / list |
-| `blocks`   | `blocks: Record<name, { label, fields }>` (required)                                | array of typed blocks |
+| `blocks`   | `blocks: Record<name, { label, fields, validate? }>` (required), `min?: number`, `max?: number` | array of typed blocks |
 
 A `datetime` field stores an instant as an ISO 8601 string in UTC (`2026-05-01T08:30:00.000Z`). The
 API accepts any ISO 8601 date and time with a time zone (`Z` or `+02:00`) and stores it in UTC; a
 value without a time zone is rejected. The admin shows a date and time picker in the browser's time
 zone. It filters and sorts as a `StringFilter`, and the fixed format keeps the string order equal to
 the time order.
+
+## Select option labels
+
+An option of a `select` field is a string, or an object with the stored `value` and the `label`
+shown in the admin. The two forms can be mixed:
+
+```ts
+visibility: {
+   label: 'Visibility',
+   type: 'select',
+   options: [
+      'public',
+      { value: 'members', label: 'Club members' },
+      { value: 'hidden', label: 'Hidden from the site' },
+   ],
+}
+```
+
+- **The value is what is stored and served.** The database column, the GraphQL field, the
+  filters, the generated `#cms-types` union and the validation all use `value`. Changing a label
+  needs no migration; changing a value does.
+- **The admin shows the label**: in the select input, in the table cells, in the title of an entry
+  whose `titleField` is the select, in relation pickers and relation columns, and in the search
+  results. The admin search also finds a select by the label of its value.
+- `showIf` refers to values: `showIf: { field: 'visibility', eq: 'members' }`.
+- Values must be unique non-empty strings and every label a non-empty string, or the build fails.
+- `CmsSelectValue<typeof field>` from `#nuxt-cms` gives the union of the values of a field declared
+  `as const` (or with `options: [...] as const`).
 
 ## Multi-select fields
 
@@ -387,6 +415,24 @@ body: {
    },
 }
 ```
+
+### Number of blocks
+
+`min` and `max` limit how many blocks a `blocks` field holds:
+
+```ts
+gallery: { label: 'Gallery', type: 'blocks', min: 2, max: 8, blocks: { ... } }
+```
+
+- `max` is always enforced. In the admin the add button, the duplicate action and the `+` of the
+  visual editor are disabled once the field is full.
+- `min` is enforced as soon as the field has a block. An empty field stays valid unless it is
+  `required`, so `required: true, min: 2` asks for at least two blocks.
+- Both are checked by the admin form and by the admin API (400), with the `minBlocks` and
+  `maxBlocks` messages of `ValidationMessages` ("Add at least 2 blocks", "Add at most 8 blocks").
+  On a field with `showIf` they apply only while the field is visible.
+- `min` is an integer of 0 or more, `max` an integer of 1 or more, and `min` cannot exceed `max`.
+  They are only valid on `blocks` fields. The schema, the column and the query shape do not change.
 
 Block fields accept every field type **except** `slug`, `relation`, `blocks`, and multi-select
 (`select` with `multiple: true`). They can be `translatable` (see below) but not `private`: mark the
@@ -580,6 +626,76 @@ photo: { label: 'Photo', type: 'media', showIf: { field: 'type', eq: 'image' } }
   time, so a typo fails the build instead of silently hiding the field forever.
 - The `titleField` cannot be conditional, and `showIf` is not supported inside `blocks`.
 
+## Validation hooks
+
+`validate` on a collection, single, page or content entry adds your own rules to the entry form.
+It receives the values of the entry and returns a list of issues:
+
+```ts
+import type { CmsValidationIssue } from '#nuxt-cms'
+import { defaultLocaleValue, defineCmsConfig } from '#nuxt-cms'
+
+export default defineCmsConfig({
+   events: {
+      id: 'events',
+      label: 'Events',
+      kind: 'collection',
+      titleField: 'title',
+      fields: { /* ... */ },
+      validate: (values, { defaultLocale }) => {
+         const issues: CmsValidationIssue[] = []
+         if (typeof values.price === 'number' && values.price < 0)
+            issues.push({ field: 'price', message: 'The price cannot be negative' })
+         if (!defaultLocaleValue(values.description, defaultLocale))
+            issues.push({ message: 'The event has no description yet', level: 'warning' })
+         return issues
+      },
+   },
+})
+```
+
+An issue is `{ field?, message, level? }`:
+
+- `level: 'error'` (the default) blocks the save. With `field` the message shows under that field
+  (and the form opens its tab); without it, at the top of the form.
+- `level: 'warning'` never blocks the save. The admin shows it under the field, or at the top of
+  the form, while you edit.
+
+The second argument is `{ locales, defaultLocale, path? }`: `path` is the path of the page being
+saved on a `page` entry. A translatable value is a `{ locale: text }` map, and
+`defaultLocaleValue(value, defaultLocale)` from `#nuxt-cms` reads its text in the default locale (a
+plain string, from a field that is not translatable, is returned as it is).
+
+A block can have its own `validate`, with the values of one block item and `{ ..., index }`. Its
+`field` names a field of the block, and the message shows on the `blocks` field (in the visual
+editor, on the field of the selected block):
+
+```ts
+blocks: {
+   session: {
+      label: 'Session',
+      fields: { minutes: { label: 'Minutes', type: 'number' } },
+      validate: (values) =>
+         typeof values.minutes === 'number' && values.minutes <= 0
+            ? [{ field: 'minutes', message: 'A session lasts at least one minute' }]
+            : [],
+   },
+}
+```
+
+**Where it runs.** `cms.config.ts` is not serialized: the module imports the module itself, through
+the `#cms-config` alias, in the admin client and in the Nitro server. So the same function checks
+the form before the request and the admin API (`POST` and `PUT` of an entry, a single, a page or a
+content item) checks the body again and answers `400` on an error issue. Warnings are admin-only.
+The hook therefore runs in the browser too, which sets three rules:
+
+- It must be synchronous and pure: no database, no `fetch`, no server-only import in
+  `cms.config.ts`.
+- It runs after the field types are checked, on the parsed values (`null` for an empty field, ISO
+  dates in UTC), and also while other fields are still invalid (a required field left empty is
+  `null`). Guard every value you read.
+- It sees the whole entry, hidden conditional fields included.
+
 ## Private fields
 
 `private: true` keeps a field out of the **public GraphQL API**. The column is still created, the
@@ -722,7 +838,11 @@ export default defineCmsConfig({
   a non-empty string.
 - `titleField` is required on collections, must reference a declared field, and that field must be a
   `text`, `slug`, `email`, `number`, `date`, `datetime` or single `select`.
-- `select` needs a non-empty array of unique `options`.
+- `select` needs a non-empty array of `options`: non-empty strings or `{ value, label }` objects
+  with a non-empty `value` and `label`, and no value repeated.
+- `min` and `max` are only valid on `blocks` fields: `min` an integer of 0 or more, `max` an
+  integer of 1 or more, `min` not greater than `max`.
+- `validate` on an entry or a block must be a function.
 - Multi-select (`select` with `multiple: true`) is not allowed inside `blocks` and is excluded from filters and sorting.
 - `translatable` is only valid on `text`, `richtext` and `media`, at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
 - `showIf` must reference another declared field of a comparable type, cannot be used on the `titleField` or inside `blocks`, and needs exactly one of `eq` / `in`.

@@ -19,6 +19,7 @@ import {
    pageFieldsTableName,
    pageMediaTableName,
    pageRoutes,
+   selectOptionValues,
 } from './runtime/shared/index'
 
 export type Dialect = 'sqlite' | 'postgres'
@@ -203,6 +204,8 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
          errors.push(`${at}: list needs kind 'collection' or 'content'`)
       if (entry.icon !== undefined && (typeof entry.icon !== 'string' || !entry.icon))
          errors.push(`${at}: icon must be a non-empty string`)
+      if (entry.validate !== undefined && typeof entry.validate !== 'function')
+         errors.push(`${at}: validate must be a function`)
       const columnNames = new Set<string>()
       for (const [key, field] of Object.entries(allFields)) {
          const fat = `${at}, field '${key}'`
@@ -230,12 +233,7 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
             else if (allFields[mobileKey] && allFields[mobileKey]!.mobileOf !== key)
                errors.push(`${fat}: mobile needs the key '${mobileKey}', which is already declared`)
          }
-         if (field.type === 'select') {
-            if (!field.options?.length)
-               errors.push(`${fat}: select requires a non-empty options array`)
-            else if (new Set(field.options).size !== field.options.length)
-               errors.push(`${fat}: select options must be unique`)
-         }
+         if (field.type === 'select') errors.push(...selectOptionErrors(fat, field))
          if (field.showIf) {
             if (entry.titleField === key)
                errors.push(`${fat}: the titleField cannot be conditional`)
@@ -270,7 +268,8 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                if (condition.in && condition.eq !== undefined)
                   errors.push(`${cat}: showIf accepts either 'eq' or 'in', not both`)
                if (target.type === 'select') {
-                  const unknown = values.filter((value) => !target.options?.includes(String(value)))
+                  const options = selectOptionValues(target)
+                  const unknown = values.filter((value) => !options.includes(String(value)))
                   if (unknown.length)
                      errors.push(
                         `${cat}: ${unknown
@@ -291,8 +290,11 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
             )
                errors.push(`${fat}: slug source '${field.from}' cannot be translatable`)
          }
+         if (field.type !== 'blocks' && (field.min !== undefined || field.max !== undefined))
+            errors.push(`${fat}: min and max are only supported on blocks fields`)
          if (field.type === 'blocks') {
             if (field.translatable) errors.push(`${fat}: blocks fields cannot be translatable`)
+            errors.push(...blocksCountErrors(fat, field))
             if (!field.blocks || !Object.keys(field.blocks).length) {
                errors.push(`${fat}: blocks requires a non-empty blocks map`)
             }
@@ -330,9 +332,8 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                      errors.push(`${bfat}: showIf is not supported inside blocks`)
                   if ((blockField as FieldConfig).mobile)
                      errors.push(`${bfat}: mobile is not supported inside blocks`)
-                  if (blockField.type === 'select' && !blockField.options?.length) {
-                     errors.push(`${bfat}: select requires a non-empty options array`)
-                  }
+                  if (blockField.type === 'select')
+                     errors.push(...selectOptionErrors(bfat, blockField))
                   if (blockField.type === 'select' && blockField.multiple) {
                      errors.push(`${bfat}: multiple select is not supported inside blocks`)
                   }
@@ -432,8 +433,52 @@ function contentErrors(at: string, entry: CmsEntry): string[] {
    return errors
 }
 
+function selectOptionErrors(at: string, field: FieldConfig): string[] {
+   const errors: string[] = []
+   if (!Array.isArray(field.options) || !field.options.length)
+      return [`${at}: select requires a non-empty options array`]
+   const values = new Set<string>()
+   for (const option of field.options) {
+      if (typeof option === 'string') {
+         if (!option) errors.push(`${at}: select options cannot be empty strings`)
+         else if (values.has(option)) errors.push(`${at}: select option '${option}' is duplicated`)
+         values.add(option)
+         continue
+      }
+      if (!option || typeof option !== 'object') {
+         errors.push(`${at}: select options must be strings or { value, label } objects`)
+         continue
+      }
+      const { value, label } = option as { value?: unknown; label?: unknown }
+      if (typeof value !== 'string' || !value) {
+         errors.push(`${at}: every select option object needs a non-empty string value`)
+         continue
+      }
+      if (values.has(value)) errors.push(`${at}: select option '${value}' is duplicated`)
+      values.add(value)
+      if (typeof label !== 'string' || !label.trim())
+         errors.push(`${at}: select option '${value}' needs a non-empty label`)
+   }
+   return errors
+}
+
+function blocksCountErrors(at: string, field: FieldConfig): string[] {
+   const errors: string[] = []
+   const isCount = (value: unknown, least: number) =>
+      typeof value === 'number' && Number.isInteger(value) && value >= least
+   if (field.min !== undefined && !isCount(field.min, 0))
+      errors.push(`${at}: min must be an integer of 0 or more`)
+   if (field.max !== undefined && !isCount(field.max, 1))
+      errors.push(`${at}: max must be an integer of 1 or more`)
+   if (isCount(field.min, 0) && isCount(field.max, 1) && field.min! > field.max!)
+      errors.push(`${at}: min (${field.min}) cannot be greater than max (${field.max})`)
+   return errors
+}
+
 function blockMetaErrors(at: string, block: BlockConfig): string[] {
    const errors: string[] = []
+   if (block.validate !== undefined && typeof block.validate !== 'function')
+      errors.push(`${at}: validate must be a function`)
    if (block.component !== undefined) {
       if (typeof block.component !== 'string' || !block.component.trim())
          errors.push(`${at}: component must be a non-empty string`)

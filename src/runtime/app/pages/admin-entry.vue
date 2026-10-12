@@ -28,6 +28,7 @@
             :form-id="FORM_ID"
             :loading="saving"
             :focus="focus"
+            :path="pageRoute?.path"
             @submit="save"
             @error="revertStatus"
          />

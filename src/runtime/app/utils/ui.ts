@@ -1,8 +1,11 @@
-import type { InjectionKey, Reactive } from 'vue'
+import type { InjectionKey, Reactive, Ref } from 'vue'
 import type { FieldConfig, FieldType } from '#nuxt-cms'
 
 export const CMS_FORM_ERRORS: InjectionKey<Reactive<Record<string, string>>> =
    Symbol('cms-form-errors')
+
+export const CMS_FORM_WARNINGS: InjectionKey<Readonly<Ref<Record<string, string>>>> =
+   Symbol('cms-form-warnings')
 
 export function errorMessage(error: unknown): string | undefined {
    const err = error as { data?: { message?: string }; message?: string }

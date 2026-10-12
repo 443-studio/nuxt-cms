@@ -1,4 +1,5 @@
-import { defineCmsBlocks, defineCmsConfig } from '#nuxt-cms'
+import type { CmsValidationIssue } from '#nuxt-cms'
+import { defaultLocaleValue, defineCmsBlocks, defineCmsConfig } from '#nuxt-cms'
 
 const sections = defineCmsBlocks({
    text: {
@@ -256,7 +257,11 @@ export default defineCmsConfig({
          visibility: {
             label: 'Visibility',
             type: 'select',
-            options: ['public', 'members', 'hidden'],
+            options: [
+               { value: 'public', label: 'Everyone' },
+               { value: 'members', label: 'Club members' },
+               { value: 'hidden', label: 'Hidden' },
+            ],
          },
          species: {
             label: 'Species',
@@ -310,6 +315,7 @@ export default defineCmsConfig({
             label: 'Body',
             type: 'blocks',
             tab: 'media',
+            max: 12,
             blocks: {
                hero: {
                   label: 'Hero',
@@ -354,6 +360,10 @@ export default defineCmsConfig({
                      handout: { label: 'Handout', type: 'media', mediaType: 'file' },
                      extra: { label: 'Extra', type: 'json' },
                   },
+                  validate: (values) =>
+                     typeof values.minutes === 'number' && values.minutes <= 0
+                        ? [{ field: 'minutes', message: 'A session lasts at least one minute' }]
+                        : [],
                },
             },
          },
@@ -392,6 +402,20 @@ export default defineCmsConfig({
          },
       ],
       list: { columns: ['title', 'date', 'category', 'featured', 'status'] },
+      validate: (values, { defaultLocale }) => {
+         const issues: CmsValidationIssue[] = []
+         if (typeof values.price === 'number' && values.price < 0)
+            issues.push({ field: 'price', message: 'The price cannot be negative' })
+         if (values.featured && !values.poster)
+            issues.push({
+               field: 'poster',
+               message: 'Featured events look better with a poster',
+               level: 'warning',
+            })
+         if (!defaultLocaleValue(values.description, defaultLocale))
+            issues.push({ message: 'The event has no description yet', level: 'warning' })
+         return issues
+      },
    },
 
    news: {

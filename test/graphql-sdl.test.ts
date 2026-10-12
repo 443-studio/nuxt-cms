@@ -1,7 +1,7 @@
 import { buildSchema, graphql, parse, validate } from 'graphql'
 import { describe, expect, it } from 'vitest'
 import { renderGraphqlSdl } from '../src/runtime/shared/graphql-sdl'
-import { sampleConfig } from './fixtures'
+import { labelledSelectConfig, sampleConfig } from './fixtures'
 
 describe('renderGraphqlSdl', () => {
    const sdl = renderGraphqlSdl(sampleConfig())
@@ -179,5 +179,14 @@ describe('renderGraphqlSdl', () => {
       const out = renderGraphqlSdl(config)
       expect(() => buildSchema(out)).not.toThrow()
       expect(out.match(/type Categories \{[^}]*\}/)![0]).not.toContain('name')
+   })
+
+   it('renders a select with labels as it renders one without', () => {
+      const out = renderGraphqlSdl(labelledSelectConfig(true))
+      expect(() => buildSchema(out)).not.toThrow()
+      expect(out).toBe(renderGraphqlSdl(labelledSelectConfig(false)))
+      expect(out).toContain('visibility: String')
+      expect(out).toContain('species: [String!]!')
+      expect(out).not.toContain('Black bass')
    })
 })

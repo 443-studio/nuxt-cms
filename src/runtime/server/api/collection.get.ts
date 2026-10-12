@@ -1,9 +1,9 @@
 import type { SQL } from 'drizzle-orm'
-import { asc, count, desc, sql } from 'drizzle-orm'
+import { asc, count, desc, inArray, or, sql } from 'drizzle-orm'
 import { defineEventHandler, getValidatedQuery } from 'h3'
 import { z } from 'zod'
 import { cmsDialect, useDb } from '#cms-db'
-import { pageRoutes } from '../../shared/index'
+import { pageRoutes, selectValuesMatching } from '../../shared/index'
 import { searchLikePattern } from '../../shared/search'
 import { decodeRows, getRegistryEntry, idColumn, tableColumns } from '../utils/registry'
 import { readPages } from '../utils/page-storage'
@@ -68,6 +68,12 @@ export default defineEventHandler(async (event) => {
       const column = titleColumn ?? idColumn(table)
       const text = cmsDialect === 'postgres' ? sql`cast(${column} as text)` : sql`${column}`
       where = sql`lower(${text}) like ${searchLikePattern(search.toLowerCase())} escape '\\'`
+      const titleField = entry.titleField ? entry.fields[entry.titleField] : undefined
+      const labelled =
+         titleColumn && titleField?.type === 'select'
+            ? selectValuesMatching(titleField, search)
+            : []
+      if (labelled.length) where = or(where, inArray(column, labelled))
    }
 
    const selection = light

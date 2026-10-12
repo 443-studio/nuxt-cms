@@ -12,6 +12,8 @@ import {
    pageFieldsTableName,
    pageMediaTableName,
    pageRouteOf,
+   selectOptionLabel,
+   selectValuesMatching,
 } from '../../shared/index'
 import type { CmsSearchHit, CmsSearchResponse, CmsSearchSnippet } from '../../shared/search'
 import {
@@ -101,8 +103,15 @@ function fieldTexts(field: FieldConfig, value: unknown, defaultLocale: string): 
          .filter((pair): pair is [string, string] => typeof pair[1] === 'string' && !!pair[1])
          .map(([locale, text]) => ({ locale, text: plainText(field, text) }))
    }
-   if (isMultiSelect(field) && Array.isArray(value)) {
-      return [{ locale: null, text: value.map(String).join(', ') }]
+   if (field.type === 'select') {
+      const values = Array.isArray(value) ? value : [value]
+      const text = values
+         .map((item) => {
+            const label = selectOptionLabel(field, item)
+            return label === String(item) ? label : `${label} (${String(item)})`
+         })
+         .join(', ')
+      return [{ locale: null, text }]
    }
    if (typeof value === 'string') return [{ locale: null, text: plainText(field, value) }]
    return [{ locale: null, text: JSON.stringify(value) }]
@@ -155,6 +164,8 @@ function titleOf(entry: CmsEntry, row: Row, defaultLocale: string): string | nul
    if (entry.kind === 'single' || !entry.titleField) return null
    const value = row[entry.titleField]
    if (value == null) return null
+   const titleField = entry.fields[entry.titleField]
+   if (titleField?.type === 'select') return selectOptionLabel(titleField, value) || null
    if (typeof value === 'object') {
       const values = value as Record<string, unknown>
       const text = [values[defaultLocale], ...Object.values(values)].find(
@@ -167,9 +178,17 @@ function titleOf(entry: CmsEntry, row: Row, defaultLocale: string): string | nul
 
 async function tableRows(context: SearchContext, entry: CmsEntry, table: SQLiteTable) {
    const columns = columnsOf(table)
-   const conditions = Object.entries(entry.fields)
-      .filter(([key, field]) => isSearchableField(field) && Object.hasOwn(columns, key))
-      .map(([key]) => searchLikeCondition(context.dialect, columns[key]!, context.pattern))
+   const searchable = Object.entries(entry.fields).filter(
+      ([key, field]) => isSearchableField(field) && Object.hasOwn(columns, key)
+   )
+   const conditions = searchable.map(([key]) =>
+      searchLikeCondition(context.dialect, columns[key]!, context.pattern)
+   )
+   for (const [key, field] of searchable) {
+      if (field.type !== 'select' || isMultiSelect(field)) continue
+      const values = selectValuesMatching(field, context.term)
+      if (values.length) conditions.push(inArray(columns[key]!, values))
+   }
    if (!conditions.length) return []
    const query = context.db
       .select()

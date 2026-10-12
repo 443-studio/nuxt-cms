@@ -208,6 +208,7 @@ import {
    isTranslatableMediaField,
    pageParentPath,
    pickTranslatedMedia,
+   selectDisplayValue,
 } from '#nuxt-cms'
 import {
    computed,
@@ -433,7 +434,12 @@ function relationLabel(field: FieldConfig, key: string, id: unknown): string {
    if (title == null || title === '') return `#${id}`
    const target = (cmsConfig as CmsConfig)[field.to!]
    const titleField = target?.titleField ? target.fields[target.titleField] : undefined
-   const label = titleField && isTranslatableField(titleField) ? localized(title) : String(title)
+   const label =
+      titleField && isTranslatableField(titleField)
+         ? localized(title)
+         : titleField?.type === 'select'
+           ? selectDisplayValue(titleField, title)
+           : String(title)
    return label || `#${id}`
 }
 
@@ -452,6 +458,8 @@ function displayValue(field: FieldConfig, key: string, value: unknown): string {
          return truncate(JSON.stringify(value))
       case 'datetime':
          return formatDateTime(value)
+      case 'select':
+         return truncate(selectDisplayValue(field, value))
       case 'blocks':
          return `${(value as unknown[]).length} ▤`
       case 'relation': {

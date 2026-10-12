@@ -22,7 +22,7 @@
 
 <script setup lang="ts">
 import type { CmsConfig } from '#nuxt-cms'
-import { isTranslatableField } from '#nuxt-cms'
+import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { useCmsRuntime } from '../../composables/cms-runtime'
@@ -114,6 +114,8 @@ function optionLabel(row: Row): string {
       const raw = record[contentI18n.defaultLocale] ?? Object.values(record)[0] ?? ''
       return raw || `#${row.id}`
    }
+   if (value != null && titleFieldConfig?.type === 'select')
+      return selectDisplayValue(titleFieldConfig, value) || `#${row.id}`
    return String(value ?? `#${row.id}`)
 }
 

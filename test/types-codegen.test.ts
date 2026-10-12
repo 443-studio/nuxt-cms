@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderTypesFile } from '../src/types-codegen'
-import { sampleConfig } from './fixtures'
+import { labelledSelectConfig, sampleConfig } from './fixtures'
 
 describe('renderTypesFile', () => {
    const out = renderTypesFile(sampleConfig())
@@ -66,5 +66,13 @@ describe('renderTypesFile', () => {
          mediaType: ['image', 'video'],
       }
       expect(renderTypesFile(config)).toContain("image: CmsMedia<'image' | 'video'> | null")
+   })
+
+   it('types a select with labels by its values', () => {
+      const out = renderTypesFile(labelledSelectConfig(true))
+      expect(out).toContain('visibility: "public" | "hidden" | null')
+      expect(out).toContain('species: ("bass" | "trout")[]')
+      expect(out).toContain('tone: "calm" | null')
+      expect(out).not.toContain('Black bass')
    })
 })

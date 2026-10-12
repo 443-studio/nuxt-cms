@@ -100,17 +100,26 @@
             </div>
          </div>
 
-         <CmsDropdownMenu v-if="addItems.length > 1" :items="addItems">
+         <CmsDropdownMenu v-if="canAdd && addItems.length > 1" :items="addItems">
             <button type="button" class="cms-block-add">
                <CmsIcon name="plus" class="size-5" />
                <span>Add</span>
             </button>
          </CmsDropdownMenu>
-         <button v-else type="button" class="cms-block-add" @click="addFirst">
+         <button
+            v-else
+            type="button"
+            class="cms-block-add"
+            :disabled="!canAdd"
+            :title="canAdd ? undefined : countHint"
+            @click="addFirst"
+         >
             <CmsIcon name="plus" class="size-5" />
             <span>{{ mediaOnly ? addMediaLabel : 'Add' }}</span>
          </button>
       </div>
+
+      <p v-if="countHint" class="cms-form-description">{{ countHint }}</p>
 
       <CmsButton
          v-if="visual"
@@ -204,6 +213,7 @@
                         icon="document-duplicate"
                         variant="soft"
                         color="neutral"
+                        :disabled="!canAdd"
                         @click="duplicateCurrent"
                      />
                      <CmsButton
@@ -235,6 +245,7 @@
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
 import {
+   canAddBlock,
    declaresHiddenField,
    isHiddenBlock,
    isTranslatableMediaField,
@@ -265,6 +276,22 @@ const mediaKeys = useCmsMediaKeys()
 
 const blocks = computed(() => props.field.blocks ?? {})
 const items = computed(() => (Array.isArray(model.value) ? model.value : []))
+
+const canAdd = computed(() => canAddBlock(props.field, items.value.length))
+
+function blockCount(count: number) {
+   return `${count} ${count === 1 ? 'block' : 'blocks'}`
+}
+
+const countHint = computed(() => {
+   const min = props.field.min || undefined
+   const max = props.field.max
+   if (min !== undefined && max !== undefined)
+      return min === max ? `Exactly ${blockCount(min)}.` : `From ${min} to ${blockCount(max)}.`
+   if (max !== undefined) return `At most ${blockCount(max)}.`
+   if (min !== undefined) return `At least ${blockCount(min)}.`
+   return ''
+})
 
 const mediaOnly = computed(() => {
    const types = Object.entries(blocks.value)
@@ -314,7 +341,7 @@ const pickerFolder = useState<string | null>('cms-media-picker-folder', () => nu
 
 function addMedia(media: { key: string }) {
    const target = mediaOnly.value
-   if (!target) return
+   if (!target || !canAdd.value) return
    mediaKeys.remember(media.key)
    model.value = [...items.value, { type: target.type, [target.key]: media.key }]
    pickerOpen.value = false
@@ -412,7 +439,7 @@ function updateField(index: number, key: string, value: unknown) {
 
 function add(type: string) {
    const block = blocks.value[type]
-   if (!block) return
+   if (!block || !canAdd.value) return
    const empty = Object.fromEntries(Object.keys(block.fields).map((k) => [k, null]))
    const index = items.value.length
    model.value = [...items.value, { type, ...empty }]
@@ -439,6 +466,7 @@ function onPreviewClick(index: number) {
 }
 
 function addFirst() {
+   if (!canAdd.value) return
    if (mediaOnly.value) {
       pickerOpen.value = true
       return
@@ -454,7 +482,7 @@ function remove(index: number) {
 
 function duplicate(index: number) {
    const current = items.value[index]
-   if (!current) return
+   if (!current || !canAdd.value) return
    const copy = JSON.parse(JSON.stringify(current)) as Record<string, unknown>
    const next = [...items.value]
    next.splice(index + 1, 0, copy)

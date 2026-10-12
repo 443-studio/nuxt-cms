@@ -72,7 +72,7 @@ export function getRegistryEntry(event: H3Event): {
 
 export function buildValidator(entry: CmsEntry, path?: string) {
    const fields = path ? pageFields(entry, path) : entry.fields
-   return buildEntrySchema({ ...entry, fields }, getContentI18n())
+   return buildEntrySchema({ ...entry, fields, path }, getContentI18n())
 }
 
 export function requirePageRoute(entry: CmsEntry, key: string): CmsPageRoute {

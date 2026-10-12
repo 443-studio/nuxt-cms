@@ -113,3 +113,16 @@ export function contentConfig(): CmsConfig {
    } as CmsConfig[string]
    return config
 }
+
+export function labelledSelectConfig(labelled: boolean): CmsConfig {
+   const option = (value: string, label: string) => (labelled ? { value, label } : value)
+   const config = sampleConfig()
+   config.events!.fields.visibility!.options = ['public', option('hidden', 'Hidden')]
+   config.events!.fields.species!.options = [option('bass', 'Black bass'), 'trout']
+   config.events!.fields.body!.blocks!.quote!.fields.tone = {
+      label: 'Tone',
+      type: 'select',
+      options: [option('calm', 'Calm')],
+   }
+   return config
+}

@@ -54,6 +54,7 @@
                class="cms-preview-tool"
                aria-label="Duplicate"
                title="Duplicate"
+               :disabled="!canAdd"
                @click="emit('message', { type: 'duplicate', index: box.index })"
             >
                <CmsIcon name="document-duplicate" />
@@ -105,6 +106,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '#imports'
 import type { FieldConfig } from '../../shared/index'
+import { canAddBlock } from '../../shared/index'
 import type { CmsPreviewFrameMessage } from '../../shared/preview'
 import { canHideBlock, insertionIndex, moveTargetForInsertion } from '../../shared/preview'
 
@@ -189,7 +191,10 @@ function toolbarStyle(box: Box) {
 
 const INSERT_MARGIN = 14
 
+const canAdd = computed(() => canAddBlock(props.field, props.total))
+
 const insertSlots = computed(() => {
+   if (!canAdd.value) return []
    const list = boxes.value
    const near = new Set([hovered.value, props.selected])
    const maxY = viewportHeight.value - INSERT_MARGIN

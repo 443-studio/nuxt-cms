@@ -80,6 +80,10 @@
                role="tabpanel"
                :aria-labelledby="tabList.length > 1 ? `cms-editor-tab-${activeTab}` : undefined"
             >
+               <CmsAlert v-if="errors[ROOT_KEY]" color="error">{{ errors[ROOT_KEY] }}</CmsAlert>
+               <CmsAlert v-for="message in rootWarnings" :key="message" color="warning">
+                  {{ message }}
+               </CmsAlert>
                <template v-if="activeTab === 'block'">
                   <template v-if="selectedItem && selected !== null">
                      <div class="cms-editor-block-head">
@@ -129,6 +133,7 @@
                            variant="soft"
                            color="neutral"
                            label="Duplicate"
+                           :disabled="!canAdd"
                            @click="duplicate(selected)"
                         />
                         <CmsButton
@@ -150,6 +155,14 @@
                            @click="remove(selected)"
                         />
                      </div>
+                     <p v-if="errors[`${fieldKey}.${selected}`]" class="cms-form-error">
+                        <CmsIcon name="exclamation-circle" class="size-3.5 shrink-0" />
+                        {{ errors[`${fieldKey}.${selected}`] }}
+                     </p>
+                     <p v-else-if="warnings[`${fieldKey}.${selected}`]" class="cms-form-warning">
+                        <CmsIcon name="exclamation-triangle" class="size-3.5 shrink-0" />
+                        {{ warnings[`${fieldKey}.${selected}`] }}
+                     </p>
                      <div class="cms-editor-fields">
                         <CmsFormField
                            v-for="(blockField, blockKey) in selectedBlock?.fields ?? {}"
@@ -177,6 +190,10 @@
                         <CmsIcon name="exclamation-circle" class="size-3.5 shrink-0" />
                         {{ errors[fieldKey] }}
                      </p>
+                     <p v-else-if="warnings[fieldKey]" class="cms-form-warning">
+                        <CmsIcon name="exclamation-triangle" class="size-3.5 shrink-0" />
+                        {{ warnings[fieldKey] }}
+                     </p>
                      <div v-if="blocks.length" class="cms-editor-section">
                         <span class="cms-label">{{ blocksField.label }}</span>
                         <CmsBlockOutline
@@ -188,13 +205,14 @@
                            @move="move"
                         />
                      </div>
-                     <div class="cms-editor-section">
+                     <div v-if="canAdd" class="cms-editor-section">
                         <span class="cms-label">Add a block</span>
                         <CmsBlockPalette
                            :blocks="blocksField.blocks ?? {}"
                            @pick="(type: string) => insert(blocks.length, type)"
                         />
                      </div>
+                     <p v-else class="cms-form-description">{{ maxReached }}</p>
                   </template>
                </template>
 
@@ -240,8 +258,14 @@
 </template>
 
 <script setup lang="ts">
-import type { FieldConfig, MediaItem } from '#nuxt-cms'
-import { isFieldVisible, isHiddenBlock, isTranslatableField, slugSourceValue } from '#nuxt-cms'
+import type { CmsConfig, FieldConfig, MediaItem } from '#nuxt-cms'
+import {
+   canAddBlock,
+   isFieldVisible,
+   isHiddenBlock,
+   isTranslatableField,
+   slugSourceValue,
+} from '#nuxt-cms'
 import {
    computed,
    onBeforeUnmount,
@@ -252,8 +276,10 @@ import {
    shallowRef,
    watch,
 } from '#imports'
+import cmsConfig from '#cms-config'
 import type { CmsSearchFocus } from '../../../shared/search'
-import { buildEntrySchema } from '../../../shared/validation'
+import type { EntryValidationIssue } from '../../../shared/validation'
+import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
 import type {
    CmsBlockValue,
    CmsPreviewFrameMessage,
@@ -280,7 +306,9 @@ import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
-import { CMS_FORM_ERRORS, fieldIcon } from '../../utils/ui'
+import { CMS_FORM_ERRORS, CMS_FORM_WARNINGS, fieldIcon } from '../../utils/ui'
+
+const ROOT_KEY = ''
 
 const SEO_KEYS = ['seoTitle', 'seoDescription', 'seoImage']
 
@@ -319,6 +347,13 @@ const blocksField = computed(() => props.fields[props.fieldKey]!)
 const blocks = computed<CmsBlockValue[]>(() => {
    const value = state.value[props.fieldKey]
    return Array.isArray(value) ? (value as CmsBlockValue[]) : []
+})
+
+const canAdd = computed(() => canAddBlock(blocksField.value, blocks.value.length))
+
+const maxReached = computed(() => {
+   const max = blocksField.value.max ?? 0
+   return `This field holds at most ${max} ${max === 1 ? 'block' : 'blocks'}.`
 })
 
 const selectedItem = computed(() =>
@@ -397,7 +432,7 @@ function blockConfigAt(index: number) {
 
 function insert(index: number, type: string) {
    const block = blocksField.value.blocks?.[type]
-   if (!block) return
+   if (!block || !canAdd.value) return
    const at = Math.min(Math.max(index, 0), blocks.value.length)
    setBlocks(insertBlock(blocks.value, at, emptyBlock(type, block)))
    select(at)
@@ -409,6 +444,7 @@ function insertFromPalette(type: string) {
 }
 
 function openPalette(index: number) {
+   if (!canAdd.value) return
    paletteIndex.value = index
    paletteOpen.value = true
 }
@@ -425,6 +461,7 @@ function moveSelected(delta: number) {
 }
 
 function duplicate(index: number) {
+   if (!canAdd.value) return
    setBlocks(duplicateBlock(blocks.value, index))
    select(index + 1)
 }
@@ -546,11 +583,31 @@ onBeforeUnmount(() => {
 const errors = reactive<Record<string, string>>({})
 provide(CMS_FORM_ERRORS, errors)
 
+const validateHook = computed(() =>
+   props.content ? (cmsConfig as CmsConfig)[props.entryName]?.validate : undefined
+)
+
 const schema = computed(() =>
-   buildEntrySchema({ fields: props.fields, drafts: props.content }, i18n)
+   buildEntrySchema(
+      { fields: props.fields, drafts: props.content, validate: validateHook.value },
+      i18n
+   )
 )
 
 let submitted = false
+
+function issueKeys(path: readonly PropertyKey[]): string[] {
+   const [key, index, blockKey] = path
+   if (key === undefined) return [ROOT_KEY]
+   const keys = [String(key)]
+   if (String(key) === props.fieldKey && typeof index === 'number')
+      keys.push(
+         blockKey === undefined
+            ? `${String(key)}.${index}`
+            : `${String(key)}.${index}.${String(blockKey)}`
+      )
+   return keys
+}
 
 function collectErrors() {
    for (const key of Object.keys(errors)) delete errors[key]
@@ -558,14 +615,35 @@ function collectErrors() {
    if (result.success) return []
    const issues = result.error.issues
    for (const issue of issues) {
-      const [key, index, blockKey] = issue.path
-      if (key === undefined) continue
-      errors[String(key)] ??= issue.message
-      if (String(key) === props.fieldKey && typeof index === 'number' && blockKey !== undefined)
-         errors[`${String(key)}.${index}.${String(blockKey)}`] ??= issue.message
+      for (const key of issueKeys(issue.path)) errors[key] ??= issue.message
    }
    return issues
 }
+
+const warningList = computed<EntryValidationIssue[]>(() =>
+   entryValidationWarnings(
+      { fields: props.fields, validate: validateHook.value },
+      state.value,
+      i18n
+   )
+)
+
+const warnings = computed(() => {
+   const grouped: Record<string, string> = {}
+   for (const issue of warningList.value) {
+      for (const key of issueKeys(issue.path)) {
+         if (key !== ROOT_KEY) grouped[key] ??= issue.message
+      }
+   }
+   return grouped
+})
+provide(CMS_FORM_WARNINGS, warnings)
+
+const rootWarnings = computed(() => [
+   ...new Set(
+      warningList.value.filter((issue) => !issue.path.length).map((issue) => issue.message)
+   ),
+])
 
 function tabOfKey(key: string) {
    if (key === props.fieldKey) return 'block'
@@ -573,7 +651,9 @@ function tabOfKey(key: string) {
 }
 
 function tabHasError(tab: string) {
-   return Object.keys(errors).some((key) => tabOfKey(key.split('.')[0]!) === tab)
+   return Object.keys(errors).some(
+      (key) => key !== ROOT_KEY && tabOfKey(key.split('.')[0]!) === tab
+   )
 }
 
 function validate(): boolean {

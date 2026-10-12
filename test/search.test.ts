@@ -121,7 +121,11 @@ function searchConfig(): CmsConfig {
             title: { label: 'Title', type: 'text', required: true },
             slug: { label: 'Slug', type: 'slug', from: 'title' },
             description: { label: 'Description', type: 'richtext', translatable: true },
-            visibility: { label: 'Visibility', type: 'select', options: ['public', 'hidden'] },
+            visibility: {
+               label: 'Visibility',
+               type: 'select',
+               options: ['public', { value: 'hidden', label: 'Members only' }],
+            },
             contactEmail: { label: 'Contact email', type: 'email', tab: 'extra' },
             notes: { label: 'Internal notes', type: 'text', private: true, tab: 'extra' },
             seats: { label: 'Seats', type: 'number' },
@@ -480,6 +484,12 @@ describe('value search', () => {
          title: 'Season opening',
          fieldLabel: 'Body › Text › Body text',
       })
+   })
+
+   it('finds a select by the label of its value and shows the label in the snippet', async () => {
+      const [hit] = values(await search('members on'))
+      expect(hit).toMatchObject({ id: 'spring', field: 'visibility' })
+      expect(snippetText(hit!)).toBe('[Members on]ly (hidden)')
    })
 
    it('searches selects, slugs, emails, private fields and media alt texts', async () => {

@@ -2,7 +2,7 @@ import { inArray } from 'drizzle-orm'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
 import type { CmsEntry, FieldConfig, MediaUsage } from '../../shared/index'
-import { PAGE_PATH_FIELD, pageFields, pageRouteOf } from '../../shared/index'
+import { PAGE_PATH_FIELD, pageFields, pageRouteOf, selectOptionLabel } from '../../shared/index'
 
 export interface MediaReference {
    field: string
@@ -58,6 +58,9 @@ function titleOf(entry: CmsEntry, row: Record<string, unknown>): string | null {
       return pageRouteOf(entry, String(row.id))?.label ?? (typeof path === 'string' ? path : null)
    }
    const value = entry.titleField ? row[entry.titleField] : undefined
+   const titleField = entry.titleField ? entry.fields[entry.titleField] : undefined
+   if (typeof value === 'string' && titleField?.type === 'select')
+      return selectOptionLabel(titleField, value) || null
    if (typeof value === 'string') return value || null
    if (value && typeof value === 'object') {
       const first = Object.values(value).find(

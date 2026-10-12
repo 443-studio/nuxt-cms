@@ -68,6 +68,112 @@ describe('validateConfig', () => {
       expect(errors.some((e) => e.includes('non-empty options'))).toBe(true)
    })
 
+   it('accepts select options with labels, mixed with plain strings', () => {
+      const config = sampleConfig()
+      config.events!.fields.visibility!.options = ['public', { value: 'hidden', label: 'Hidden' }]
+      config.events!.fields.body!.blocks!.quote!.fields.tone = {
+         label: 'Tone',
+         type: 'select',
+         options: [{ value: 'calm', label: 'Calm' }],
+      }
+      expect(validateConfig(config, I18N)).toEqual([])
+   })
+
+   it('rejects duplicate select values, labelled or not', () => {
+      const config = sampleConfig()
+      config.events!.fields.visibility!.options = ['public', { value: 'public', label: 'Public' }]
+      const errors = validateConfig(config, I18N)
+      expect(errors.some((e) => e.includes("select option 'public' is duplicated"))).toBe(true)
+   })
+
+   it('rejects a select option with an empty label or value', () => {
+      const config = sampleConfig()
+      config.events!.fields.visibility!.options = [
+         { value: 'public', label: ' ' },
+         { value: '', label: 'Nothing' },
+         '',
+      ]
+      const errors = validateConfig(config, I18N)
+      expect(errors.some((e) => e.includes("select option 'public' needs a non-empty label"))).toBe(
+         true
+      )
+      expect(errors.some((e) => e.includes('needs a non-empty string value'))).toBe(true)
+      expect(errors.some((e) => e.includes('cannot be empty strings'))).toBe(true)
+   })
+
+   it('rejects malformed select options inside blocks', () => {
+      const config = sampleConfig()
+      config.events!.fields.body!.blocks!.quote!.fields.tone = {
+         label: 'Tone',
+         type: 'select',
+         options: ['calm', 'calm', 42] as unknown as string[],
+      }
+      const errors = validateConfig(config, I18N)
+      expect(errors.some((e) => e.includes("field 'tone'") && e.includes('duplicated'))).toBe(true)
+      expect(
+         errors.some((e) => e.includes('select options must be strings or { value, label }'))
+      ).toBe(true)
+   })
+
+   it('checks showIf values against the select values, not the labels', () => {
+      const config = sampleConfig()
+      config.events!.fields.visibility!.options = ['public', { value: 'hidden', label: 'Hidden' }]
+      config.events!.fields.contactEmail!.showIf = { field: 'visibility', eq: 'hidden' }
+      expect(validateConfig(config, I18N)).toEqual([])
+      config.events!.fields.contactEmail!.showIf = { field: 'visibility', eq: 'Hidden' }
+      const errors = validateConfig(config, I18N)
+      expect(errors.some((e) => e.includes("'Hidden' not in the options of 'visibility'"))).toBe(
+         true
+      )
+   })
+
+   it('accepts min and max on a blocks field', () => {
+      const config = sampleConfig()
+      Object.assign(config.events!.fields.body!, { min: 1, max: 3 })
+      expect(validateConfig(config, I18N)).toEqual([])
+   })
+
+   it('rejects min greater than max', () => {
+      const config = sampleConfig()
+      Object.assign(config.events!.fields.body!, { min: 4, max: 3 })
+      const errors = validateConfig(config, I18N)
+      expect(errors.some((e) => e.includes('min (4) cannot be greater than max (3)'))).toBe(true)
+   })
+
+   it('rejects negative, fractional or zero block counts', () => {
+      const config = sampleConfig()
+      Object.assign(config.events!.fields.body!, { min: -1, max: 0 })
+      const errors = validateConfig(config, I18N)
+      expect(errors.some((e) => e.includes('min must be an integer of 0 or more'))).toBe(true)
+      expect(errors.some((e) => e.includes('max must be an integer of 1 or more'))).toBe(true)
+      Object.assign(config.events!.fields.body!, { min: 1.5, max: undefined })
+      expect(validateConfig(config, I18N).some((e) => e.includes('min must be an integer'))).toBe(
+         true
+      )
+   })
+
+   it('rejects min and max on a field that is not blocks', () => {
+      const config = sampleConfig()
+      config.events!.fields.seats!.max = 3
+      const errors = validateConfig(config, I18N)
+      expect(errors.some((e) => e.includes('min and max are only supported on blocks'))).toBe(true)
+   })
+
+   it('accepts validate functions on entries and blocks', () => {
+      const config = sampleConfig()
+      config.events!.validate = () => []
+      config.events!.fields.body!.blocks!.hero!.validate = () => []
+      expect(validateConfig(config, I18N)).toEqual([])
+   })
+
+   it('rejects a validate option that is not a function', () => {
+      const config = sampleConfig()
+      config.events!.validate = 'nope' as never
+      config.events!.fields.body!.blocks!.hero!.validate = {} as never
+      const errors = validateConfig(config, I18N)
+      expect(errors.filter((e) => e.includes('validate must be a function')).length).toBe(2)
+   })
+
    it('rejects slug sourced from a non-text field', () => {
       const config = sampleConfig()
       config.events!.fields.slug = { label: 'Slug', type: 'slug', from: 'seats' }
