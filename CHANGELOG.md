@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.7.0
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.6.0...v0.7.0)
+
+### 💅 Refactors
+
+- Merge the admin styles into one cms.css on the library tokens and drop the --cms and --ui token layer ([93d62cc](https://github.com/443-studio/nuxt-cms/commit/93d62cc))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.6.0
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.5.1...v0.6.0)
