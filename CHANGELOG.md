@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.6.0
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.5.1...v0.6.0)
+
+### 🚀 Enhancements
+
+- Update @xleddyl/443-components-vue to 0.6.0 and move the repository to 443-studio ([3f2b05d](https://github.com/443-studio/nuxt-cms/commit/3f2b05d))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.5.1
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.5.0...v0.5.1)
