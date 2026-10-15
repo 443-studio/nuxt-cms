@@ -1,2 +1,54 @@
 @import 'tailwindcss';
 @source '../../';
+
+.site {
+   min-height: 100dvh;
+   background: var(--k-canvas);
+}
+
+.site-display {
+   font-weight: 650;
+   letter-spacing: -0.025em;
+   color: var(--k-text);
+}
+
+.site-label {
+   font-size: 0.75rem;
+   font-weight: 500;
+   line-height: 1.4;
+   color: var(--k-text-muted);
+}
+
+.site-card {
+   border: 1px solid var(--k-line);
+   border-radius: var(--k-radius-lg);
+   background: var(--k-surface);
+}
+
+.site-empty {
+   border: 1px solid var(--k-line);
+   border-radius: var(--k-radius-lg);
+   background: var(--k-surface);
+}
+
+.site-pill {
+   display: inline-flex;
+   align-items: center;
+   height: 1.5rem;
+   padding: 0 0.625rem;
+   border: 1px solid var(--k-line);
+   border-radius: var(--k-radius-full);
+   font-size: 0.75rem;
+   font-weight: 500;
+   color: var(--k-text-toned);
+}
+
+.site-pill.is-active {
+   border-color: var(--k-accent-line);
+   background: var(--k-accent-soft);
+   color: var(--k-accent-text);
+}
+
+.site-rise {
+   animation: k-rise 420ms var(--k-ease-out) both;
+}

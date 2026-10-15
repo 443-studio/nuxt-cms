@@ -3,16 +3,16 @@
       <CmsBlocks :blocks="item.body" />
       <template #footer>
          <div class="mx-auto w-full max-w-3xl px-6 pb-14">
-            <NuxtLink to="/news" class="cms-label">all news</NuxtLink>
+            <NuxtLink to="/news" class="site-label">all news</NuxtLink>
          </div>
       </template>
    </NewsArticle>
-   <div v-else class="cms-scope cms-canvas min-h-screen">
+   <KRoot v-else class="site">
       <div class="mx-auto w-full max-w-3xl px-6 py-14">
-         <h1 class="cms-display text-4xl font-bold">Not found</h1>
-         <NuxtLink to="/news" class="cms-label mt-6 inline-block">all news</NuxtLink>
+         <h1 class="site-display text-4xl font-bold">Not found</h1>
+         <NuxtLink to="/news" class="site-label mt-6 inline-block">all news</NuxtLink>
       </div>
-   </div>
+   </KRoot>
 </template>
 
 <script setup lang="ts">

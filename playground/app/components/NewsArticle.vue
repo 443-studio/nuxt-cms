@@ -1,10 +1,10 @@
 <template>
-   <div class="cms-scope cms-canvas min-h-screen">
+   <KRoot class="site">
       <article class="py-14">
          <header class="mx-auto w-full max-w-3xl px-6">
-            <span class="cms-label">{{ item.publishedAt?.slice(0, 10) }}</span>
-            <h1 class="cms-display mt-2 text-4xl font-bold">{{ item.title }}</h1>
-            <p v-if="item.excerpt" class="mt-4 text-(--ui-text-muted)">{{ item.excerpt }}</p>
+            <span class="site-label">{{ item.publishedAt?.slice(0, 10) }}</span>
+            <h1 class="site-display mt-2 text-4xl font-bold">{{ item.title }}</h1>
+            <p v-if="item.excerpt" class="mt-4 text-(--k-text-muted)">{{ item.excerpt }}</p>
          </header>
          <figure v-if="item.cover?.url" class="mx-auto mt-8 w-full max-w-5xl px-6">
             <img
@@ -16,7 +16,7 @@
          <slot />
       </article>
       <slot name="footer" />
-   </div>
+   </KRoot>
 </template>
 
 <script setup lang="ts">

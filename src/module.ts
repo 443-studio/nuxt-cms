@@ -908,10 +908,7 @@ export default defineNuxtModule<ModuleOptions>({
       nuxt.options.css.push(
          resolveImport('@fontsource-variable/geist/index.css'),
          resolveImport('@fontsource-variable/geist-mono/index.css'),
-         resolver.resolve('./runtime/assets/main.css'),
-         resolver.resolve('./runtime/assets/shell.css'),
-         resolver.resolve('./runtime/assets/media.css'),
-         resolver.resolve('./runtime/assets/editor.css')
+         resolver.resolve('./runtime/assets/cms.css')
       )
 
       nuxt.hook('app:templates', (app) => {

@@ -8,7 +8,7 @@
          :height="image.height ?? undefined"
          class="w-full rounded-xl object-cover"
       />
-      <figcaption v-if="caption" class="cms-label mt-3 text-center">{{ caption }}</figcaption>
+      <figcaption v-if="caption" class="site-label mt-3 text-center">{{ caption }}</figcaption>
    </figure>
 </template>
 

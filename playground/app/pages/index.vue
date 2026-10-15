@@ -1,37 +1,37 @@
 <template>
-   <div class="cms-scope cms-canvas min-h-screen">
+   <KRoot class="site">
       <div class="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10 sm:py-14">
-         <section class="cms-rise" style="animation-delay: 60ms">
-            <h1 class="cms-display max-w-3xl text-4xl font-bold text-balance sm:text-6xl">
+         <section class="site-rise" style="animation-delay: 60ms">
+            <h1 class="site-display max-w-3xl text-4xl font-bold text-balance sm:text-6xl">
                {{ home?.heroTitle ?? 'Content, served from your own server' }}
             </h1>
 
-            <p class="mt-4 max-w-xl text-base text-(--ui-text-muted) sm:text-lg">
+            <p class="mt-4 max-w-xl text-base text-(--k-text-muted) sm:text-lg">
                {{
                   home?.heroSubtitle ??
                   'Everything on this page is fetched from the CMS GraphQL endpoint.'
                }}
             </p>
-            <p v-if="home?.launchDate" class="cms-label mt-6">
+            <p v-if="home?.launchDate" class="site-label mt-6">
                launching {{ formatDate(home.launchDate) }}
             </p>
          </section>
 
          <section
-            class="cms-rise mt-14 flex flex-wrap items-center gap-x-10 gap-y-4 border-y border-(--cms-line) py-5"
+            class="site-rise mt-14 flex flex-wrap items-center gap-x-10 gap-y-4 border-y border-(--k-line) py-5"
             style="animation-delay: 120ms"
          >
             <div v-for="stat in stats" :key="stat.label" class="flex items-baseline gap-2.5">
-               <span class="cms-display text-2xl font-semibold text-(--ui-text-highlighted)">
+               <span class="site-display text-2xl font-semibold text-(--k-text)">
                   {{ stat.value }}
                </span>
-               <span class="cms-label">{{ stat.label }}</span>
+               <span class="site-label">{{ stat.label }}</span>
             </div>
-            <NuxtLink to="/news" class="cms-label ml-auto">news</NuxtLink>
-            <NuxtLink to="/blog" class="cms-label">blog</NuxtLink>
+            <NuxtLink to="/news" class="site-label ml-auto">news</NuxtLink>
+            <NuxtLink to="/blog" class="site-label">blog</NuxtLink>
             <NuxtLink
                to="/cms"
-               class="inline-flex items-center gap-2 rounded-lg border border-(--cms-line-strong) px-4 py-1.5 text-sm font-medium text-(--ui-text-highlighted) transition-colors hover:bg-(--ui-bg-elevated)"
+               class="inline-flex items-center gap-2 rounded-lg border border-(--k-line-strong) px-4 py-1.5 text-sm font-medium text-(--k-text) transition-colors hover:bg-(--k-subtle)"
             >
                <CmsIcon name="cog-6-tooth" class="size-4" />
                Open admin
@@ -41,15 +41,15 @@
          <CmsBlocks :blocks="home?.sections" />
 
          <section class="mt-14 flex-1">
-            <h2 class="cms-label cms-rise" style="animation-delay: 180ms">upcoming events</h2>
+            <h2 class="site-label site-rise" style="animation-delay: 180ms">upcoming events</h2>
 
             <div
                v-if="!events.length"
-               class="cms-empty cms-rise mt-6 flex flex-col items-center gap-3 px-6 py-16 text-center"
+               class="site-empty site-rise mt-6 flex flex-col items-center gap-3 px-6 py-16 text-center"
                style="animation-delay: 220ms"
             >
-               <CmsIcon name="calendar" class="size-6 text-(--ui-text-dimmed)" />
-               <p class="text-sm text-(--ui-text-muted)">
+               <CmsIcon name="calendar" class="size-6 text-(--k-text-dimmed)" />
+               <p class="text-sm text-(--k-text-muted)">
                   No published events yet. Create one in the admin and it will show up here.
                </p>
             </div>
@@ -58,12 +58,12 @@
                <article
                   v-for="(event, index) in events"
                   :key="event.id"
-                  class="cms-card cms-rise group flex flex-col overflow-hidden"
+                  class="site-card site-rise group flex flex-col overflow-hidden"
                   :class="{ 'sm:col-span-2 sm:flex-row': event.featured }"
                   :style="{ animationDelay: `${220 + index * 70}ms` }"
                >
                   <div
-                     class="relative aspect-[5/2] shrink-0 overflow-hidden bg-(--cms-field)"
+                     class="relative aspect-[5/2] shrink-0 overflow-hidden bg-(--k-field)"
                      :class="event.featured ? 'sm:aspect-auto sm:w-2/5' : ''"
                   >
                      <img
@@ -74,51 +74,52 @@
                      />
                      <span
                         v-else
-                        class="cms-display absolute inset-0 flex items-center justify-center text-5xl font-bold text-(--cms-fern) opacity-30"
+                        class="site-display absolute inset-0 flex items-center justify-center text-5xl font-bold text-(--k-accent-text) opacity-30"
                      >
                         {{ event.title.slice(0, 1).toUpperCase() }}
                      </span>
-                     <span
+                     <KBadge
                         v-if="event.featured"
-                        class="cms-badge is-published absolute top-3 left-3 bg-(--cms-surface)"
-                     >
-                        featured
-                     </span>
+                        label="featured"
+                        tone="success"
+                        dot
+                        class="absolute top-3 left-3"
+                     />
                   </div>
 
                   <div class="flex flex-1 flex-col gap-3 p-5">
                      <div class="flex items-center justify-between gap-3">
-                        <time :datetime="event.date" class="cms-label text-(--cms-fern)">
+                        <time :datetime="event.date" class="site-label text-(--k-accent-text)">
                            {{ formatDate(event.date) }}
                         </time>
-                        <span v-if="event.seats != null" class="cms-label">
+                        <span v-if="event.seats != null" class="site-label">
                            {{ event.seats }} seats
                         </span>
                      </div>
                      <h3
-                        class="cms-display text-xl font-semibold text-(--ui-text-highlighted)"
+                        class="site-display text-xl font-semibold text-(--k-text)"
                         :class="{ 'sm:text-2xl': event.featured }"
                      >
                         {{ event.title }}
                      </h3>
                      <p
                         v-if="excerpt(event.description)"
-                        class="line-clamp-2 text-sm text-(--ui-text-muted)"
+                        class="line-clamp-2 text-sm text-(--k-text-muted)"
                      >
                         {{ excerpt(event.description) }}
                      </p>
                      <div class="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
-                        <span v-if="event.category" class="cms-pill is-active">
+                        <span v-if="event.category" class="site-pill is-active">
                            {{ event.category.name }}
                         </span>
-                        <span v-for="tag in event.tags" :key="tag.id" class="cms-pill">
+                        <span v-for="tag in event.tags" :key="tag.id" class="site-pill">
                            {{ tag.name }}
                         </span>
                         <a
                            v-if="event.brochure?.url"
                            :href="event.brochure.url"
                            target="_blank"
-                           class="cms-pill"
+                           class="site-pill"
                         >
                            brochure
                         </a>
@@ -128,7 +129,7 @@
             </div>
          </section>
       </div>
-   </div>
+   </KRoot>
 </template>
 
 <script setup lang="ts">

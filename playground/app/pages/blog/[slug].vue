@@ -3,19 +3,19 @@
       <CmsBlocks :blocks="post.body" />
       <template #footer>
          <div class="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 pb-14">
-            <p v-if="post.author" class="text-sm text-(--ui-text-muted)">
+            <p v-if="post.author" class="text-sm text-(--k-text-muted)">
                Written by {{ post.author.name }}
             </p>
-            <NuxtLink to="/blog" class="cms-label">all posts</NuxtLink>
+            <NuxtLink to="/blog" class="site-label">all posts</NuxtLink>
          </div>
       </template>
    </BlogPost>
-   <div v-else class="cms-scope cms-canvas min-h-screen">
+   <KRoot v-else class="site">
       <div class="mx-auto w-full max-w-3xl px-6 py-14">
-         <h1 class="cms-display text-4xl font-bold">Not found</h1>
-         <NuxtLink to="/blog" class="cms-label mt-6 inline-block">all posts</NuxtLink>
+         <h1 class="site-display text-4xl font-bold">Not found</h1>
+         <NuxtLink to="/blog" class="site-label mt-6 inline-block">all posts</NuxtLink>
       </div>
-   </div>
+   </KRoot>
 </template>
 
 <script setup lang="ts">
