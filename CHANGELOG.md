@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.5.1
+
+[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.5.0...v0.5.1)
+
+### 🩹 Fixes
+
+- Update @xleddyl/443-components-vue to 0.5.0 for smoother drawers, tighter headings and longer action toasts ([929339c](https://github.com/xleddyl/nuxt-cms/commit/929339c))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.5.0
 
 [compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.4...v0.5.0)
