@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.5.0
+
+[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.4...v0.5.0)
+
+### 🚀 Enhancements
+
+- Build the admin UI on @xleddyl/443-components-vue and stop injecting Tailwind into host apps ([552c3ab](https://github.com/xleddyl/nuxt-cms/commit/552c3ab))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.4.4
 
 [compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.3...v0.4.4)
