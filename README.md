@@ -1,7 +1,7 @@
 # nuxt-cms
 
 [![npm version](https://img.shields.io/npm/v/%40xleddyl%2Fnuxt-cms)](https://www.npmjs.com/package/@xleddyl/nuxt-cms)
-[![CI](https://github.com/xleddyl/nuxt-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/xleddyl/nuxt-cms/actions/workflows/ci.yml)
+[![CI](https://github.com/443-studio/nuxt-cms/actions/workflows/ci.yml/badge.svg)](https://github.com/443-studio/nuxt-cms/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/%40xleddyl%2Fnuxt-cms)](LICENSE)
 
 nuxt-cms is a Nuxt module that adds a CMS to your Nuxt app. The CMS runs in the Nitro server of the app. You deploy one app, with no external CMS service.

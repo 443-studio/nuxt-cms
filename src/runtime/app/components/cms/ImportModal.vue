@@ -48,14 +48,19 @@
 
          <KSpinner v-if="checking" />
 
-         <KAlert v-else-if="fileErrors.length" tone="danger" title="The file cannot be imported">
+         <KAlert
+            v-else-if="fileErrors.length"
+            tone="danger"
+            role="alert"
+            title="The file cannot be imported"
+         >
             <ul class="cms-import-list">
                <li v-for="message in fileErrors" :key="message">{{ message }}</li>
             </ul>
          </KAlert>
 
          <template v-else-if="preview">
-            <KAlert :tone="invalidCount ? 'warning' : 'success'" :title="summary" />
+            <KAlert :tone="invalidCount ? 'warning' : 'success'" role="status" :title="summary" />
             <KTable
                :rows="shownRows"
                :columns="PREVIEW_COLUMNS"

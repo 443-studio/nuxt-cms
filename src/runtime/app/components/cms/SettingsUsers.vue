@@ -2,6 +2,7 @@
    <KAlert
       v-if="created"
       tone="accent"
+      role="status"
       :icon="cmsIcon('key')"
       :title="created.title"
       class="cms-credentials-alert"

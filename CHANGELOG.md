@@ -3,11 +3,11 @@
 
 ## v0.5.1
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.5.0...v0.5.1)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.5.0...v0.5.1)
 
 ### 🩹 Fixes
 
-- Update @xleddyl/443-components-vue to 0.5.0 for smoother drawers, tighter headings and longer action toasts ([929339c](https://github.com/xleddyl/nuxt-cms/commit/929339c))
+- Update @xleddyl/443-components-vue to 0.5.0 for smoother drawers, tighter headings and longer action toasts ([929339c](https://github.com/443-studio/nuxt-cms/commit/929339c))
 
 ### ❤️ Contributors
 
@@ -15,11 +15,11 @@
 
 ## v0.5.0
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.4...v0.5.0)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.4.4...v0.5.0)
 
 ### 🚀 Enhancements
 
-- Build the admin UI on @xleddyl/443-components-vue and stop injecting Tailwind into host apps ([552c3ab](https://github.com/xleddyl/nuxt-cms/commit/552c3ab))
+- Build the admin UI on @xleddyl/443-components-vue and stop injecting Tailwind into host apps ([552c3ab](https://github.com/443-studio/nuxt-cms/commit/552c3ab))
 
 ### ❤️ Contributors
 
@@ -27,11 +27,11 @@
 
 ## v0.4.4
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.3...v0.4.4)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.4.3...v0.4.4)
 
 ### 🏡 Chore
 
-- Share the release script with the other packages ([2bdd159](https://github.com/xleddyl/nuxt-cms/commit/2bdd159))
+- Share the release script with the other packages ([2bdd159](https://github.com/443-studio/nuxt-cms/commit/2bdd159))
 
 ### ❤️ Contributors
 
@@ -39,27 +39,27 @@
 
 ## v0.4.3
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.2...v0.4.3)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.4.2...v0.4.3)
 
 ### 🚀 Enhancements
 
-- Add select option labels, validate hooks and blocks min/max ([eb7932a](https://github.com/xleddyl/nuxt-cms/commit/eb7932a))
-- Add duplicate entry, list filters and collection import/export ([8ec93b8](https://github.com/xleddyl/nuxt-cms/commit/8ec93b8))
+- Add select option labels, validate hooks and blocks min/max ([eb7932a](https://github.com/443-studio/nuxt-cms/commit/eb7932a))
+- Add duplicate entry, list filters and collection import/export ([8ec93b8](https://github.com/443-studio/nuxt-cms/commit/8ec93b8))
 
 ### 🩹 Fixes
 
-- Type the reference of a self relation in the generated drizzle schema ([4ca735f](https://github.com/xleddyl/nuxt-cms/commit/4ca735f))
-- Accept any JSON value in json fields inside blocks ([d111bdf](https://github.com/xleddyl/nuxt-cms/commit/d111bdf))
+- Type the reference of a self relation in the generated drizzle schema ([4ca735f](https://github.com/443-studio/nuxt-cms/commit/4ca735f))
+- Accept any JSON value in json fields inside blocks ([d111bdf](https://github.com/443-studio/nuxt-cms/commit/d111bdf))
 
 ### 📖 Documentation
 
-- Rewrite the readme, fill doc gaps and refresh the screenshots in light mode ([db0ae4d](https://github.com/xleddyl/nuxt-cms/commit/db0ae4d))
-- Retake the screenshots with the new demo content ([498d4ee](https://github.com/xleddyl/nuxt-cms/commit/498d4ee))
+- Rewrite the readme, fill doc gaps and refresh the screenshots in light mode ([db0ae4d](https://github.com/443-studio/nuxt-cms/commit/db0ae4d))
+- Retake the screenshots with the new demo content ([498d4ee](https://github.com/443-studio/nuxt-cms/commit/498d4ee))
 
 ### 🏡 Chore
 
-- **playground:** Add a blog, authors and every remaining field and module option ([df136da](https://github.com/xleddyl/nuxt-cms/commit/df136da))
-- **playground:** Regenerate migrations so every relation keeps its delete rule ([4ce8ca9](https://github.com/xleddyl/nuxt-cms/commit/4ce8ca9))
+- **playground:** Add a blog, authors and every remaining field and module option ([df136da](https://github.com/443-studio/nuxt-cms/commit/df136da))
+- **playground:** Regenerate migrations so every relation keeps its delete rule ([4ce8ca9](https://github.com/443-studio/nuxt-cms/commit/4ce8ca9))
 
 ### ❤️ Contributors
 
@@ -67,11 +67,11 @@
 
 ## v0.4.2
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.1...v0.4.2)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.4.1...v0.4.2)
 
 ### 🩹 Fixes
 
-- Return block subfields as nullable so missing values never drop the whole list ([a249c35](https://github.com/xleddyl/nuxt-cms/commit/a249c35))
+- Return block subfields as nullable so missing values never drop the whole list ([a249c35](https://github.com/443-studio/nuxt-cms/commit/a249c35))
 
 ### ❤️ Contributors
 
@@ -79,11 +79,11 @@
 
 ## v0.4.1
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.0...v0.4.1)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.4.0...v0.4.1)
 
 ### 🩹 Fixes
 
-- Never write database credentials into the generated drizzle config ([907941e](https://github.com/xleddyl/nuxt-cms/commit/907941e))
+- Never write database credentials into the generated drizzle config ([907941e](https://github.com/443-studio/nuxt-cms/commit/907941e))
 
 ### ❤️ Contributors
 
@@ -91,11 +91,11 @@
 
 ## v0.4.0
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.3.0...v0.4.0)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.3.0...v0.4.0)
 
 ### 🚀 Enhancements
 
-- **admin:** Configurable brand title, subtitle and logo ([d51e4ac](https://github.com/xleddyl/nuxt-cms/commit/d51e4ac))
+- **admin:** Configurable brand title, subtitle and logo ([d51e4ac](https://github.com/443-studio/nuxt-cms/commit/d51e4ac))
 
 ### ❤️ Contributors
 
@@ -103,15 +103,15 @@
 
 ## v0.3.0
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.2.3...v0.3.0)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.2.3...v0.3.0)
 
 ### 🚀 Enhancements
 
-- **admin:** Global search and media download ([2cbef57](https://github.com/xleddyl/nuxt-cms/commit/2cbef57))
+- **admin:** Global search and media download ([2cbef57](https://github.com/443-studio/nuxt-cms/commit/2cbef57))
 
 ### 🏡 Chore
 
-- Release script bumps the exact semver level on 0.x versions ([141860b](https://github.com/xleddyl/nuxt-cms/commit/141860b))
+- Release script bumps the exact semver level on 0.x versions ([141860b](https://github.com/443-studio/nuxt-cms/commit/141860b))
 
 ### ❤️ Contributors
 
@@ -119,12 +119,12 @@
 
 ## v0.2.3
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.2.2...v0.2.3)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.2.2...v0.2.3)
 
 ### 🚀 Enhancements
 
-- Content entries with scheduled publishing, datetime field and block components ([925e335](https://github.com/xleddyl/nuxt-cms/commit/925e335))
-- **admin:** Visual block editor with live preview page ([77910d5](https://github.com/xleddyl/nuxt-cms/commit/77910d5))
+- Content entries with scheduled publishing, datetime field and block components ([925e335](https://github.com/443-studio/nuxt-cms/commit/925e335))
+- **admin:** Visual block editor with live preview page ([77910d5](https://github.com/443-studio/nuxt-cms/commit/77910d5))
 
 ### ❤️ Contributors
 
@@ -132,24 +132,24 @@
 
 ## v0.2.2
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.2.1...v0.2.2)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.2.1...v0.2.2)
 
 ### 🚀 Enhancements
 
-- **admin:** Show where each media file is used and warn before deleting used media ([100cc50](https://github.com/xleddyl/nuxt-cms/commit/100cc50))
+- **admin:** Show where each media file is used and warn before deleting used media ([100cc50](https://github.com/443-studio/nuxt-cms/commit/100cc50))
 
 ### 🩹 Fixes
 
-- **auth:** Lock login for 5 minutes after 5 failed attempts per IP or email ([f0d5242](https://github.com/xleddyl/nuxt-cms/commit/f0d5242))
-- Make multi-statement writes atomic on every driver and store ISO timestamps ([4b596c5](https://github.com/xleddyl/nuxt-cms/commit/4b596c5))
+- **auth:** Lock login for 5 minutes after 5 failed attempts per IP or email ([f0d5242](https://github.com/443-studio/nuxt-cms/commit/f0d5242))
+- Make multi-statement writes atomic on every driver and store ISO timestamps ([4b596c5](https://github.com/443-studio/nuxt-cms/commit/4b596c5))
 
 ### 🏡 Chore
 
-- Remove code comments ([1b73353](https://github.com/xleddyl/nuxt-cms/commit/1b73353))
+- Remove code comments ([1b73353](https://github.com/443-studio/nuxt-cms/commit/1b73353))
 
 ### 🎨 Styles
 
-- **admin:** Flatten the brand mark and drop the login grid and purple gradients ([cb08f99](https://github.com/xleddyl/nuxt-cms/commit/cb08f99))
+- **admin:** Flatten the brand mark and drop the login grid and purple gradients ([cb08f99](https://github.com/443-studio/nuxt-cms/commit/cb08f99))
 
 ### ❤️ Contributors
 
@@ -157,21 +157,21 @@
 
 ## v0.2.1
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.2.0...v0.2.1)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.2.0...v0.2.1)
 
 ### 🩹 Fixes
 
-- Show the real light and dark colors in the theme previews ([e36c16d](https://github.com/xleddyl/nuxt-cms/commit/e36c16d))
-- **server:** Harden uploads, GraphQL depth checks, folder queries and Postgres search ([df3f9ad](https://github.com/xleddyl/nuxt-cms/commit/df3f9ad))
-- **admin:** Close only the top overlay on Escape, ignore stale loads and remove unused code ([dfaa676](https://github.com/xleddyl/nuxt-cms/commit/dfaa676))
+- Show the real light and dark colors in the theme previews ([e36c16d](https://github.com/443-studio/nuxt-cms/commit/e36c16d))
+- **server:** Harden uploads, GraphQL depth checks, folder queries and Postgres search ([df3f9ad](https://github.com/443-studio/nuxt-cms/commit/df3f9ad))
+- **admin:** Close only the top overlay on Escape, ignore stale loads and remove unused code ([dfaa676](https://github.com/443-studio/nuxt-cms/commit/dfaa676))
 
 ### 📖 Documentation
 
-- Document filesystem storage and the client upload limit, drop the i18n claim ([e3f4067](https://github.com/xleddyl/nuxt-cms/commit/e3f4067))
+- Document filesystem storage and the client upload limit, drop the i18n claim ([e3f4067](https://github.com/443-studio/nuxt-cms/commit/e3f4067))
 
 ### 🏡 Chore
 
-- Skip generated migration metadata in prettier ([de686c3](https://github.com/xleddyl/nuxt-cms/commit/de686c3))
+- Skip generated migration metadata in prettier ([de686c3](https://github.com/443-studio/nuxt-cms/commit/de686c3))
 
 ### ❤️ Contributors
 
@@ -179,32 +179,32 @@
 
 ## v0.2.0
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.61...v0.2.0)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.61...v0.2.0)
 
 ### 🚀 Enhancements
 
-- Upload whole folders to the media library, with their subfolders ([87f8471](https://github.com/xleddyl/nuxt-cms/commit/87f8471))
-- **admin:** Redesign the panel with a light and dark theme and a settings modal ([b611592](https://github.com/xleddyl/nuxt-cms/commit/b611592))
-- **admin:** Select table rows to delete, publish or unpublish them in bulk ([3bdf5d5](https://github.com/xleddyl/nuxt-cms/commit/3bdf5d5))
-- **admin:** Edit single-media blocks fields as a media list with add, remove and drag ([a1f7ea2](https://github.com/xleddyl/nuxt-cms/commit/a1f7ea2))
-- Configure form layouts, table columns and icons, and let admins change them in settings ([81d727e](https://github.com/xleddyl/nuxt-cms/commit/81d727e))
-- Add admin accounts that the super admin creates from settings ([c79a417](https://github.com/xleddyl/nuxt-cms/commit/c79a417))
+- Upload whole folders to the media library, with their subfolders ([87f8471](https://github.com/443-studio/nuxt-cms/commit/87f8471))
+- **admin:** Redesign the panel with a light and dark theme and a settings modal ([b611592](https://github.com/443-studio/nuxt-cms/commit/b611592))
+- **admin:** Select table rows to delete, publish or unpublish them in bulk ([3bdf5d5](https://github.com/443-studio/nuxt-cms/commit/3bdf5d5))
+- **admin:** Edit single-media blocks fields as a media list with add, remove and drag ([a1f7ea2](https://github.com/443-studio/nuxt-cms/commit/a1f7ea2))
+- Configure form layouts, table columns and icons, and let admins change them in settings ([81d727e](https://github.com/443-studio/nuxt-cms/commit/81d727e))
+- Add admin accounts that the super admin creates from settings ([c79a417](https://github.com/443-studio/nuxt-cms/commit/c79a417))
 
 ### 🩹 Fixes
 
-- Show the required message when a required field is empty ([da224da](https://github.com/xleddyl/nuxt-cms/commit/da224da))
+- Show the required message when a required field is empty ([da224da](https://github.com/443-studio/nuxt-cms/commit/da224da))
 
 ### 📖 Documentation
 
-- Document form layouts, settings and admin accounts ([4eb1a20](https://github.com/xleddyl/nuxt-cms/commit/4eb1a20))
+- Document form layouts, settings and admin accounts ([4eb1a20](https://github.com/443-studio/nuxt-cms/commit/4eb1a20))
 
 ### 🏡 Chore
 
-- **playground:** Cover every CMS option and move to a local sqlite database ([f980c82](https://github.com/xleddyl/nuxt-cms/commit/f980c82))
+- **playground:** Cover every CMS option and move to a local sqlite database ([f980c82](https://github.com/443-studio/nuxt-cms/commit/f980c82))
 
 ### 🤖 CI
 
-- Move actions to the node 24 runtime and fix the release notes input ([cdc5e60](https://github.com/xleddyl/nuxt-cms/commit/cdc5e60))
+- Move actions to the node 24 runtime and fix the release notes input ([cdc5e60](https://github.com/443-studio/nuxt-cms/commit/cdc5e60))
 
 ### ❤️ Contributors
 
@@ -212,11 +212,11 @@
 
 ## v0.1.61
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.60...v0.1.61)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.60...v0.1.61)
 
 ### 🚀 Enhancements
 
-- Overhaul the media library with nested folders, search, bulk actions and a detail panel ([595344c](https://github.com/xleddyl/nuxt-cms/commit/595344c))
+- Overhaul the media library with nested folders, search, bulk actions and a detail panel ([595344c](https://github.com/443-studio/nuxt-cms/commit/595344c))
 
 ### ❤️ Contributors
 
@@ -224,11 +224,11 @@
 
 ## v0.1.60
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.59...v0.1.60)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.59...v0.1.60)
 
 ### 🚀 Enhancements
 
-- Add a mobile variant option to media fields ([318a808](https://github.com/xleddyl/nuxt-cms/commit/318a808))
+- Add a mobile variant option to media fields ([318a808](https://github.com/443-studio/nuxt-cms/commit/318a808))
 
 ### ❤️ Contributors
 
@@ -236,11 +236,11 @@
 
 ## v0.1.59
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.58...v0.1.59)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.58...v0.1.59)
 
 ### 🚀 Enhancements
 
-- Add filesystem media storage served by the module ([c1417c3](https://github.com/xleddyl/nuxt-cms/commit/c1417c3))
+- Add filesystem media storage served by the module ([c1417c3](https://github.com/443-studio/nuxt-cms/commit/c1417c3))
 
 ### ❤️ Contributors
 
@@ -248,11 +248,11 @@
 
 ## v0.1.58
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.57...v0.1.58)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.57...v0.1.58)
 
 ### 🩹 Fixes
 
-- Apply libsql migrations in one atomic batch instead of an interactive transaction ([a9481a7](https://github.com/xleddyl/nuxt-cms/commit/a9481a7))
+- Apply libsql migrations in one atomic batch instead of an interactive transaction ([a9481a7](https://github.com/443-studio/nuxt-cms/commit/a9481a7))
 
 ### ❤️ Contributors
 
@@ -260,18 +260,18 @@
 
 ## v0.1.57
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.56...v0.1.57)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.56...v0.1.57)
 
 ### 🚀 Enhancements
 
-- Optional row storage for page entries ([f276517](https://github.com/xleddyl/nuxt-cms/commit/f276517))
-- Reject page media that is not in the media library and flag it in the admin ([17c641a](https://github.com/xleddyl/nuxt-cms/commit/17c641a))
-- Send the graphql queries of one tick in one request ([8b37653](https://github.com/xleddyl/nuxt-cms/commit/8b37653))
-- ⚠️  Store every page entry as rows and drop the storage option ([70ab771](https://github.com/xleddyl/nuxt-cms/commit/70ab771))
+- Optional row storage for page entries ([f276517](https://github.com/443-studio/nuxt-cms/commit/f276517))
+- Reject page media that is not in the media library and flag it in the admin ([17c641a](https://github.com/443-studio/nuxt-cms/commit/17c641a))
+- Send the graphql queries of one tick in one request ([8b37653](https://github.com/443-studio/nuxt-cms/commit/8b37653))
+- ⚠️  Store every page entry as rows and drop the storage option ([70ab771](https://github.com/443-studio/nuxt-cms/commit/70ab771))
 
 #### ⚠️ Breaking Changes
 
-- ⚠️  Store every page entry as rows and drop the storage option ([70ab771](https://github.com/xleddyl/nuxt-cms/commit/70ab771))
+- ⚠️  Store every page entry as rows and drop the storage option ([70ab771](https://github.com/443-studio/nuxt-cms/commit/70ab771))
 
 ### ❤️ Contributors
 
@@ -279,11 +279,11 @@
 
 ## v0.1.56
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.55...v0.1.56)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.55...v0.1.56)
 
 ### 🩹 Fixes
 
-- Share one async data option type with the disabled stub ([54c746c](https://github.com/xleddyl/nuxt-cms/commit/54c746c))
+- Share one async data option type with the disabled stub ([54c746c](https://github.com/443-studio/nuxt-cms/commit/54c746c))
 
 ### ❤️ Contributors
 
@@ -291,11 +291,11 @@
 
 ## v0.1.55
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.54...v0.1.55)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.54...v0.1.55)
 
 ### 🚀 Enhancements
 
-- Pass getCachedData through to useAsyncData ([97653b3](https://github.com/xleddyl/nuxt-cms/commit/97653b3))
+- Pass getCachedData through to useAsyncData ([97653b3](https://github.com/443-studio/nuxt-cms/commit/97653b3))
 
 ### ❤️ Contributors
 
@@ -303,11 +303,11 @@
 
 ## v0.1.54
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.53...v0.1.54)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.53...v0.1.54)
 
 ### 🚀 Enhancements
 
-- Split the admin form into tabs ([6192251](https://github.com/xleddyl/nuxt-cms/commit/6192251))
+- Split the admin form into tabs ([6192251](https://github.com/443-studio/nuxt-cms/commit/6192251))
 
 ### ❤️ Contributors
 
@@ -315,11 +315,11 @@
 
 ## v0.1.53
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.52...v0.1.53)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.52...v0.1.53)
 
 ### 🩹 Fixes
 
-- Let the libsql and d1 drivers read the sqlite migrations folder ([ccc87af](https://github.com/xleddyl/nuxt-cms/commit/ccc87af))
+- Let the libsql and d1 drivers read the sqlite migrations folder ([ccc87af](https://github.com/443-studio/nuxt-cms/commit/ccc87af))
 
 ### ❤️ Contributors
 
@@ -327,11 +327,11 @@
 
 ## v0.1.52
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.51...v0.1.52)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.51...v0.1.52)
 
 ### 🩹 Fixes
 
-- Emit the cms config wrapper as plain javascript so nitro can bundle it ([053d767](https://github.com/xleddyl/nuxt-cms/commit/053d767))
+- Emit the cms config wrapper as plain javascript so nitro can bundle it ([053d767](https://github.com/443-studio/nuxt-cms/commit/053d767))
 
 ### ❤️ Contributors
 
@@ -339,11 +339,11 @@
 
 ## v0.1.51
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.50...v0.1.51)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.50...v0.1.51)
 
 ### 🚀 Enhancements
 
-- Name a block tile by its media file instead of the block type ([2d4dd0e](https://github.com/xleddyl/nuxt-cms/commit/2d4dd0e))
+- Name a block tile by its media file instead of the block type ([2d4dd0e](https://github.com/443-studio/nuxt-cms/commit/2d4dd0e))
 
 ### ❤️ Contributors
 
@@ -351,11 +351,11 @@
 
 ## v0.1.50
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.49...v0.1.50)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.49...v0.1.50)
 
 ### 🚀 Enhancements
 
-- Show date and time of the last save on a page row, smaller breadcrumb chevrons ([d889482](https://github.com/xleddyl/nuxt-cms/commit/d889482))
+- Show date and time of the last save on a page row, smaller breadcrumb chevrons ([d889482](https://github.com/443-studio/nuxt-cms/commit/d889482))
 
 ### ❤️ Contributors
 
@@ -363,11 +363,11 @@
 
 ## v0.1.49
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.48...v0.1.49)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.48...v0.1.49)
 
 ### 🚀 Enhancements
 
-- Media fields as compact tiles, last save date in the page tree, branch arrow mirrored ([be723e7](https://github.com/xleddyl/nuxt-cms/commit/be723e7))
+- Media fields as compact tiles, last save date in the page tree, branch arrow mirrored ([be723e7](https://github.com/443-studio/nuxt-cms/commit/be723e7))
 
 ### ❤️ Contributors
 
@@ -375,11 +375,11 @@
 
 ## v0.1.48
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.47...v0.1.48)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.47...v0.1.48)
 
 ### 🚀 Enhancements
 
-- Reorder the blocks of a grid by dragging a tile instead of the arrow buttons ([e4c3114](https://github.com/xleddyl/nuxt-cms/commit/e4c3114))
+- Reorder the blocks of a grid by dragging a tile instead of the arrow buttons ([e4c3114](https://github.com/443-studio/nuxt-cms/commit/e4c3114))
 
 ### ❤️ Contributors
 
@@ -387,11 +387,11 @@
 
 ## v0.1.47
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.46...v0.1.47)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.46...v0.1.47)
 
 ### 🚀 Enhancements
 
-- Pages as a tree with a breadcrumb, blocks edited as a grid, real media folders in s3 mode ([1ce15be](https://github.com/xleddyl/nuxt-cms/commit/1ce15be))
+- Pages as a tree with a breadcrumb, blocks edited as a grid, real media folders in s3 mode ([1ce15be](https://github.com/443-studio/nuxt-cms/commit/1ce15be))
 
 ### ❤️ Contributors
 
@@ -399,11 +399,11 @@
 
 ## v0.1.46
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.45...v0.1.46)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.45...v0.1.46)
 
 ### 🩹 Fixes
 
-- Keep the page route discovery inside runtime so the seed entry builds ([a5603ed](https://github.com/xleddyl/nuxt-cms/commit/a5603ed))
+- Keep the page route discovery inside runtime so the seed entry builds ([a5603ed](https://github.com/443-studio/nuxt-cms/commit/a5603ed))
 
 ### ❤️ Contributors
 
@@ -411,11 +411,11 @@
 
 ## v0.1.45
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.44...v0.1.45)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.44...v0.1.45)
 
 ### 🚀 Enhancements
 
-- Expose resolveCmsPages so scripts can read the page routes of a config ([d539a2f](https://github.com/xleddyl/nuxt-cms/commit/d539a2f))
+- Expose resolveCmsPages so scripts can read the page routes of a config ([d539a2f](https://github.com/443-studio/nuxt-cms/commit/d539a2f))
 
 ### ❤️ Contributors
 
@@ -423,11 +423,11 @@
 
 ## v0.1.44
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.43...v0.1.44)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.43...v0.1.44)
 
 ### 🚀 Enhancements
 
-- An override can remove a shared field from one page with null ([7c1ecb7](https://github.com/xleddyl/nuxt-cms/commit/7c1ecb7))
+- An override can remove a shared field from one page with null ([7c1ecb7](https://github.com/443-studio/nuxt-cms/commit/7c1ecb7))
 
 ### ❤️ Contributors
 
@@ -435,11 +435,11 @@
 
 ## v0.1.43
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.42...v0.1.43)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.42...v0.1.43)
 
 ### 🚀 Enhancements
 
-- Add the page entry kind with one row per route, a typed useCmsPage and a pages section in the admin ([2fd323e](https://github.com/xleddyl/nuxt-cms/commit/2fd323e))
+- Add the page entry kind with one row per route, a typed useCmsPage and a pages section in the admin ([2fd323e](https://github.com/443-studio/nuxt-cms/commit/2fd323e))
 
 ### ❤️ Contributors
 
@@ -447,11 +447,11 @@
 
 ## v0.1.42
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.41...v0.1.42)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.41...v0.1.42)
 
 ### 🚀 Enhancements
 
-- Add typed useCmsSingle and useCmsCollection, generate types and queries also when the cms is disabled ([428b8d1](https://github.com/xleddyl/nuxt-cms/commit/428b8d1))
+- Add typed useCmsSingle and useCmsCollection, generate types and queries also when the cms is disabled ([428b8d1](https://github.com/443-studio/nuxt-cms/commit/428b8d1))
 
 ### ❤️ Contributors
 
@@ -459,11 +459,11 @@
 
 ## v0.1.41
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.40...v0.1.41)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.40...v0.1.41)
 
 ### 🚀 Enhancements
 
-- Query blocks through a generated interface and pass async data options to useCms ([0f532f8](https://github.com/xleddyl/nuxt-cms/commit/0f532f8))
+- Query blocks through a generated interface and pass async data options to useCms ([0f532f8](https://github.com/443-studio/nuxt-cms/commit/0f532f8))
 
 ### ❤️ Contributors
 
@@ -471,11 +471,11 @@
 
 ## v0.1.40
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.39...v0.1.40)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.39...v0.1.40)
 
 ### 🚀 Enhancements
 
-- Media fields accept lists of types and read video dimensions ([6a23a3b](https://github.com/xleddyl/nuxt-cms/commit/6a23a3b))
+- Media fields accept lists of types and read video dimensions ([6a23a3b](https://github.com/443-studio/nuxt-cms/commit/6a23a3b))
 
 ### ❤️ Contributors
 
@@ -483,23 +483,23 @@
 
 ## v0.1.39
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.38...v0.1.39)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.38...v0.1.39)
 
 ## v0.1.38
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.37...v0.1.38)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.37...v0.1.38)
 
 ## v0.1.37
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.36...v0.1.37)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.36...v0.1.37)
 
 ### 🚀 Enhancements
 
-- Bundle migrations at build time and add cloudflare d1 driver ([acb8b9a](https://github.com/xleddyl/nuxt-cms/commit/acb8b9a))
+- Bundle migrations at build time and add cloudflare d1 driver ([acb8b9a](https://github.com/443-studio/nuxt-cms/commit/acb8b9a))
 
 ### 📖 Documentation
 
-- Document per-driver client packages in readme and getting started ([faa4da7](https://github.com/xleddyl/nuxt-cms/commit/faa4da7))
+- Document per-driver client packages in readme and getting started ([faa4da7](https://github.com/443-studio/nuxt-cms/commit/faa4da7))
 
 ### ❤️ Contributors
 
@@ -507,11 +507,11 @@
 
 ## v0.1.36
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.35...v0.1.36)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.35...v0.1.36)
 
 ### 📖 Documentation
 
-- Add readme badges and admin panel screenshots ([420318f](https://github.com/xleddyl/nuxt-cms/commit/420318f))
+- Add readme badges and admin panel screenshots ([420318f](https://github.com/443-studio/nuxt-cms/commit/420318f))
 
 ### ❤️ Contributors
 
@@ -519,11 +519,11 @@
 
 ## v0.1.35
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.34...v0.1.35)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.34...v0.1.35)
 
 ### 🩹 Fixes
 
-- Conditional required fields must stay nullable in schema and graphql ([cd04ed7](https://github.com/xleddyl/nuxt-cms/commit/cd04ed7))
+- Conditional required fields must stay nullable in schema and graphql ([cd04ed7](https://github.com/443-studio/nuxt-cms/commit/cd04ed7))
 
 ### ❤️ Contributors
 
@@ -531,11 +531,11 @@
 
 ## v0.1.34
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.33...v0.1.34)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.33...v0.1.34)
 
 ### 🚀 Enhancements
 
-- Conditional field visibility with showIf ([3940672](https://github.com/xleddyl/nuxt-cms/commit/3940672))
+- Conditional field visibility with showIf ([3940672](https://github.com/443-studio/nuxt-cms/commit/3940672))
 
 ### ❤️ Contributors
 
@@ -543,11 +543,11 @@
 
 ## v0.1.33
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.32...v0.1.33)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.32...v0.1.33)
 
 ### 🚀 Enhancements
 
-- Translatable fields inside blocks ([d40ffce](https://github.com/xleddyl/nuxt-cms/commit/d40ffce))
+- Translatable fields inside blocks ([d40ffce](https://github.com/443-studio/nuxt-cms/commit/d40ffce))
 
 ### ❤️ Contributors
 
@@ -555,11 +555,11 @@
 
 ## v0.1.32
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.31...v0.1.32)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.31...v0.1.32)
 
 ### 🚀 Enhancements
 
-- Private fields kept out of the public graphql api ([afc2ff1](https://github.com/xleddyl/nuxt-cms/commit/afc2ff1))
+- Private fields kept out of the public graphql api ([afc2ff1](https://github.com/443-studio/nuxt-cms/commit/afc2ff1))
 
 ### ❤️ Contributors
 
@@ -567,11 +567,11 @@
 
 ## v0.1.31
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.30...v0.1.31)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.30...v0.1.31)
 
 ### 🚀 Enhancements
 
-- Local media library reads from disk or build manifest instead of syncing cms_media ([a5d29d0](https://github.com/xleddyl/nuxt-cms/commit/a5d29d0))
+- Local media library reads from disk or build manifest instead of syncing cms_media ([a5d29d0](https://github.com/443-studio/nuxt-cms/commit/a5d29d0))
 
 ### ❤️ Contributors
 
@@ -579,15 +579,15 @@
 
 ## v0.1.30
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.29...v0.1.30)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.29...v0.1.30)
 
 ### 🚀 Enhancements
 
-- Build-time media manifest so local media syncs on serverless hosts ([8bf90fb](https://github.com/xleddyl/nuxt-cms/commit/8bf90fb))
+- Build-time media manifest so local media syncs on serverless hosts ([8bf90fb](https://github.com/443-studio/nuxt-cms/commit/8bf90fb))
 
 ### 🏡 Chore
 
-- Skip changelogen github release step ([e4f2efc](https://github.com/xleddyl/nuxt-cms/commit/e4f2efc))
+- Skip changelogen github release step ([e4f2efc](https://github.com/443-studio/nuxt-cms/commit/e4f2efc))
 
 ### ❤️ Contributors
 
@@ -595,15 +595,15 @@
 
 ## v0.1.29
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.28...v0.1.29)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.28...v0.1.29)
 
 ### 🚀 Enhancements
 
-- Translatable media fields and configurable upload size limit ([3e4c0f9](https://github.com/xleddyl/nuxt-cms/commit/3e4c0f9))
+- Translatable media fields and configurable upload size limit ([3e4c0f9](https://github.com/443-studio/nuxt-cms/commit/3e4c0f9))
 
 ### 🏡 Chore
 
-- Docs ([382b8a0](https://github.com/xleddyl/nuxt-cms/commit/382b8a0))
+- Docs ([382b8a0](https://github.com/443-studio/nuxt-cms/commit/382b8a0))
 
 ### ❤️ Contributors
 
@@ -611,11 +611,11 @@
 
 ## v0.1.28
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.27...v0.1.28)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.27...v0.1.28)
 
 ### 🚀 Enhancements
 
-- Redesign the admin panel with a dark minimal theme ([7dc8322](https://github.com/xleddyl/nuxt-cms/commit/7dc8322))
+- Redesign the admin panel with a dark minimal theme ([7dc8322](https://github.com/443-studio/nuxt-cms/commit/7dc8322))
 
 ### ❤️ Contributors
 
@@ -623,12 +623,12 @@
 
 ## v0.1.27
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.26...v0.1.27)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.26...v0.1.27)
 
 ### 🚀 Enhancements
 
-- Media library search, upload folders and clearer image field actions ([082cb7f](https://github.com/xleddyl/nuxt-cms/commit/082cb7f))
-- Sort collection rows by clicking the column headers ([eb733c5](https://github.com/xleddyl/nuxt-cms/commit/eb733c5))
+- Media library search, upload folders and clearer image field actions ([082cb7f](https://github.com/443-studio/nuxt-cms/commit/082cb7f))
+- Sort collection rows by clicking the column headers ([eb733c5](https://github.com/443-studio/nuxt-cms/commit/eb733c5))
 
 ### ❤️ Contributors
 
@@ -636,11 +636,11 @@
 
 ## v0.1.26
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.25...v0.1.26)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.25...v0.1.26)
 
 ### 🚀 Enhancements
 
-- Sync local media library with the public media folder on server start ([027df53](https://github.com/xleddyl/nuxt-cms/commit/027df53))
+- Sync local media library with the public media folder on server start ([027df53](https://github.com/443-studio/nuxt-cms/commit/027df53))
 
 ### ❤️ Contributors
 
@@ -648,11 +648,11 @@
 
 ## v0.1.25
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.24...v0.1.25)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.24...v0.1.25)
 
 ### 🩹 Fixes
 
-- Inline tailwind theme tokens so host app css is never overridden ([4306b3f](https://github.com/xleddyl/nuxt-cms/commit/4306b3f))
+- Inline tailwind theme tokens so host app css is never overridden ([4306b3f](https://github.com/443-studio/nuxt-cms/commit/4306b3f))
 
 ### ❤️ Contributors
 
@@ -660,11 +660,11 @@
 
 ## v0.1.24
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.23...v0.1.24)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.23...v0.1.24)
 
 ### 🚀 Enhancements
 
-- Ui improvements ([61d206d](https://github.com/xleddyl/nuxt-cms/commit/61d206d))
+- Ui improvements ([61d206d](https://github.com/443-studio/nuxt-cms/commit/61d206d))
 
 ### ❤️ Contributors
 
@@ -672,11 +672,11 @@
 
 ## v0.1.23
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.22...v0.1.23)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.22...v0.1.23)
 
 ### 🚀 Enhancements
 
-- Add media.storage option with read-only local mode ([7d10615](https://github.com/xleddyl/nuxt-cms/commit/7d10615))
+- Add media.storage option with read-only local mode ([7d10615](https://github.com/443-studio/nuxt-cms/commit/7d10615))
 
 ### ❤️ Contributors
 
@@ -684,11 +684,11 @@
 
 ## v0.1.22
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.21...v0.1.22)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.21...v0.1.22)
 
 ### 🩹 Fixes
 
-- Register cms-admin layout from its real file instead of a virtual template ([821dc63](https://github.com/xleddyl/nuxt-cms/commit/821dc63))
+- Register cms-admin layout from its real file instead of a virtual template ([821dc63](https://github.com/443-studio/nuxt-cms/commit/821dc63))
 
 ### ❤️ Contributors
 
@@ -696,11 +696,11 @@
 
 ## v0.1.21
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.20...v0.1.21)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.20...v0.1.21)
 
 ### 🩹 Fixes
 
-- Write cms-admin layout template to disk so vue-tracer resolves its client import ([5c2b79b](https://github.com/xleddyl/nuxt-cms/commit/5c2b79b))
+- Write cms-admin layout template to disk so vue-tracer resolves its client import ([5c2b79b](https://github.com/443-studio/nuxt-cms/commit/5c2b79b))
 
 ### ❤️ Contributors
 
@@ -708,11 +708,11 @@
 
 ## v0.1.20
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.19...v0.1.20)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.19...v0.1.20)
 
 ### 🩹 Fixes
 
-- Push release tag only after branch push ([929095d](https://github.com/xleddyl/nuxt-cms/commit/929095d))
+- Push release tag only after branch push ([929095d](https://github.com/443-studio/nuxt-cms/commit/929095d))
 
 ### ❤️ Contributors
 
@@ -720,15 +720,15 @@
 
 ## v0.1.19
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.18...v0.1.19)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.18...v0.1.19)
 
 ## v0.1.18
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.17...v0.1.18)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.17...v0.1.18)
 
 ### 🩹 Fixes
 
-- Minor improvements and bug fixing ([e85201c](https://github.com/xleddyl/nuxt-cms/commit/e85201c))
+- Minor improvements and bug fixing ([e85201c](https://github.com/443-studio/nuxt-cms/commit/e85201c))
 
 ### ❤️ Contributors
 
@@ -736,15 +736,15 @@
 
 ## v0.1.17
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.16...v0.1.17)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.16...v0.1.17)
 
 ## v0.1.16
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.15...v0.1.16)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.15...v0.1.16)
 
 ### 🩹 Fixes
 
-- Bundle ([4c8fd5d](https://github.com/xleddyl/nuxt-cms/commit/4c8fd5d))
+- Bundle ([4c8fd5d](https://github.com/443-studio/nuxt-cms/commit/4c8fd5d))
 
 ### ❤️ Contributors
 
@@ -752,11 +752,11 @@
 
 ## v0.1.15
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.14...v0.1.15)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.14...v0.1.15)
 
 ### 🚀 Enhancements
 
-- Seeding ([99bf36c](https://github.com/xleddyl/nuxt-cms/commit/99bf36c))
+- Seeding ([99bf36c](https://github.com/443-studio/nuxt-cms/commit/99bf36c))
 
 ### ❤️ Contributors
 
@@ -764,11 +764,11 @@
 
 ## v0.1.14
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.13...v0.1.14)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.13...v0.1.14)
 
 ### 🚀 Enhancements
 
-- New ui ([dbcd894](https://github.com/xleddyl/nuxt-cms/commit/dbcd894))
+- New ui ([dbcd894](https://github.com/443-studio/nuxt-cms/commit/dbcd894))
 
 ### ❤️ Contributors
 
@@ -776,11 +776,11 @@
 
 ## v0.1.13
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.12...v0.1.13)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.12...v0.1.13)
 
 ### 🩹 Fixes
 
-- Readded test (fake) ([1f731d1](https://github.com/xleddyl/nuxt-cms/commit/1f731d1))
+- Readded test (fake) ([1f731d1](https://github.com/443-studio/nuxt-cms/commit/1f731d1))
 
 ### ❤️ Contributors
 
@@ -788,11 +788,11 @@
 
 ## v0.1.12
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.11...v0.1.12)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.11...v0.1.12)
 
 ### 🚀 Enhancements
 
-- Removed nuxt ui and i18n ([fd5aaa0](https://github.com/xleddyl/nuxt-cms/commit/fd5aaa0))
+- Removed nuxt ui and i18n ([fd5aaa0](https://github.com/443-studio/nuxt-cms/commit/fd5aaa0))
 
 ### ❤️ Contributors
 
@@ -800,12 +800,12 @@
 
 ## v0.1.11
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.10...v0.1.11)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.10...v0.1.11)
 
 ### 🚀 Enhancements
 
-- Llm.txt and readme improvement ([0d9f966](https://github.com/xleddyl/nuxt-cms/commit/0d9f966))
-- Docs and libsql ([c8cb4d1](https://github.com/xleddyl/nuxt-cms/commit/c8cb4d1))
+- Llm.txt and readme improvement ([0d9f966](https://github.com/443-studio/nuxt-cms/commit/0d9f966))
+- Docs and libsql ([c8cb4d1](https://github.com/443-studio/nuxt-cms/commit/c8cb4d1))
 
 ### ❤️ Contributors
 
@@ -816,7 +816,7 @@
 
 ### 🚀 Enhancements
 
-- Improvements ([8d988c5](https://github.com/xleddyl/nuxt-cms/commit/8d988c5))
+- Improvements ([8d988c5](https://github.com/443-studio/nuxt-cms/commit/8d988c5))
 
 ### ❤️ Contributors
 
@@ -824,5 +824,5 @@
 
 ## v0.1.8
 
-[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.1.7...v0.1.8)
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.1.7...v0.1.8)
 
