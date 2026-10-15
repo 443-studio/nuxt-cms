@@ -1,4 +1,7 @@
-import { useState } from '#imports'
+import type { FunctionalComponent } from 'vue'
+import { h, markRaw } from 'vue'
+import { useConfirm } from '@xleddyl/443-components-vue'
+import CmsConfirmGroups from '../components/cms/ConfirmGroups.vue'
 
 export interface CmsConfirmLink {
    title: string
@@ -17,27 +20,19 @@ export interface CmsConfirmOptions {
    groups?: CmsConfirmGroup[]
 }
 
-export interface CmsConfirmState extends CmsConfirmOptions {
-   open: boolean
-   message: string
-   resolve?: (value: boolean) => void
-}
-
-export function useCmsConfirmState() {
-   return useState<CmsConfirmState>('cms-confirm', () => ({ open: false, message: '' }))
-}
-
 export function useCmsConfirm() {
-   const state = useCmsConfirmState()
-   return (message: string, options?: CmsConfirmOptions) =>
-      new Promise<boolean>((resolve) => {
-         state.value = {
-            open: true,
-            message,
-            title: options?.title,
-            confirmLabel: options?.confirmLabel,
-            groups: options?.groups,
-            resolve,
-         }
+   const confirm = useConfirm()
+   return (message: string, options?: CmsConfirmOptions) => {
+      const groups = options?.groups
+      const body: FunctionalComponent | undefined = groups?.length
+         ? (_props, { attrs }) => h(CmsConfirmGroups, { ...attrs, groups })
+         : undefined
+      return confirm({
+         title: options?.title,
+         description: message,
+         confirmLabel: options?.confirmLabel,
+         tone: 'danger',
+         body: body ? markRaw(body) : undefined,
       })
+   }
 }

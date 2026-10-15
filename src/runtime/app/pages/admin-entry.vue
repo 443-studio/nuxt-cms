@@ -1,13 +1,13 @@
 <template>
    <div class="cms-page">
-      <CmsPageHeader :title="headerTitle" :links="breadcrumb">
+      <KPageHeader :title="headerTitle" :breadcrumbs="breadcrumb" breadcrumbs-ancestors>
          <template v-if="drafts" #badge>
             <CmsStatusBadge :published="published" />
          </template>
-         <div class="cms-actions">
-            <CmsButton label="Back" icon="arrow-left" variant="soft" @click="goBack" />
-            <CmsButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
-            <CmsButton
+         <template #actions>
+            <KButton label="Back" icon="arrow-left" variant="soft" @click="goBack" />
+            <KButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
+            <KButton
                v-if="drafts"
                type="submit"
                :form="FORM_ID"
@@ -15,10 +15,10 @@
                :loading="saving"
                @click="togglePublished"
             />
-         </div>
-      </CmsPageHeader>
+         </template>
+      </KPageHeader>
 
-      <div class="cms-card cms-panel">
+      <KCard variant="outline" padding="lg">
          <CmsEntryForm
             v-model="formState"
             :fields="fields"
@@ -32,7 +32,7 @@
             @submit="save"
             @error="revertStatus"
          />
-      </div>
+      </KCard>
    </div>
 </template>
 
@@ -51,6 +51,12 @@ import {
    useRoute,
    watch,
 } from '#imports'
+import type { BreadcrumbItem } from '@xleddyl/443-components-vue'
+import {
+   Button as KButton,
+   Card as KCard,
+   PageHeader as KPageHeader,
+} from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
@@ -84,8 +90,8 @@ if (isPage && !pageRoute) {
    throw createError({ statusCode: 404, statusMessage: 'Unknown page', fatal: true })
 }
 
-const breadcrumb = (() => {
-   const links = [{ label: config.label, to: `/cms/${name}` }]
+const breadcrumb = ((): BreadcrumbItem[] => {
+   const links: BreadcrumbItem[] = [{ label: config.label, to: `/cms/${name}` }]
    if (!pageRoute) return links
    const ancestors: string[] = []
    let parent = pageParentPath(pageRoute.path)

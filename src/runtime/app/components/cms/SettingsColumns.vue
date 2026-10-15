@@ -18,10 +18,10 @@
             @drop.prevent="onDrop(index)"
             @dragend="onDragEnd"
          >
-            <CmsIcon name="bars-2" class="cms-settings-grip size-4" />
-            <CmsIcon :name="iconOf(key)" class="cms-settings-item-icon size-4" />
+            <KIcon :name="cmsIcon('bars-2')" class="cms-settings-grip" />
+            <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
             <span class="cms-settings-item-label">{{ labelOf(key) }}</span>
-            <CmsSwitch
+            <KSwitch
                :model-value="true"
                :aria-label="`Hide ${labelOf(key)}`"
                :disabled="model.length === 1"
@@ -41,9 +41,9 @@
          <p class="cms-settings-subtitle">Hidden</p>
          <ul class="cms-settings-list">
             <li v-for="key in hidden" :key="key" class="cms-settings-item is-muted">
-               <CmsIcon :name="iconOf(key)" class="cms-settings-item-icon size-4" />
+               <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
                <span class="cms-settings-item-label">{{ labelOf(key) }}</span>
-               <CmsSwitch
+               <KSwitch
                   :model-value="false"
                   :aria-label="`Show ${labelOf(key)}`"
                   @update:model-value="show(key)"
@@ -56,8 +56,9 @@
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
+import { Icon as KIcon, Switch as KSwitch } from '@xleddyl/443-components-vue'
 import { computed, ref } from '#imports'
-import { fieldIcon } from '../../utils/ui'
+import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const props = defineProps<{
    fields: Record<string, FieldConfig>

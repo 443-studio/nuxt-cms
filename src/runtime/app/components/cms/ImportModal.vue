@@ -1,34 +1,34 @@
 <template>
-   <CmsModal v-model:open="open" :title="`Import ${config.label}`" size="lg">
-      <div class="cms-form">
-         <p class="cms-form-description">
+   <KModal v-model:open="open" :title="`Import ${config.label}`" size="lg">
+      <KStack gap="md">
+         <p class="cms-settings-hint">
             {{ csv ? 'A JSON or CSV file' : 'A JSON file' }} in the format of the export, up to
             {{ maxSize }} and {{ IMPORT_MAX_ROWS }} rows. Media fields take keys of files that are
             already in the media library. Nothing is written until you confirm.
          </p>
 
-         <div class="cms-import-file">
+         <KStack direction="row" gap="sm" wrap>
             <input
                ref="input"
                type="file"
-               class="hidden"
+               hidden
                :accept="csv ? '.json,.csv,application/json,text/csv' : '.json,application/json'"
                @change="onFile"
             />
-            <CmsButton
+            <KButton
                :label="file ? 'Choose another file' : 'Choose file'"
-               icon="document-arrow-up"
+               :icon="cmsIcon('document-arrow-up')"
                variant="soft"
-               color="neutral"
+               tone="neutral"
                :disabled="busy"
                @click="input?.click()"
             />
             <span v-if="file" class="cms-import-file-name">
                {{ file.name }} · {{ formatFileSize(file.size) }}
             </span>
-         </div>
+         </KStack>
 
-         <CmsFormField
+         <KFormField
             label="Mode"
             :description="
                mode === 'create'
@@ -36,97 +36,105 @@
                   : 'A row with the id of an existing entry replaces it. Other rows become new entries.'
             "
          >
-            <div class="cms-media-filters">
-               <button
-                  v-for="option in MODE_OPTIONS"
-                  :key="option.value"
-                  type="button"
-                  class="cms-pill"
-                  :class="{ 'is-active': mode === option.value }"
-                  :disabled="busy"
-                  @click="setMode(option.value)"
-               >
-                  {{ option.label }}
-               </button>
-            </div>
-         </CmsFormField>
+            <KSegmentedControl
+               :model-value="mode"
+               :options="MODE_OPTIONS"
+               size="sm"
+               required
+               :disabled="busy"
+               @update:model-value="setMode"
+            />
+         </KFormField>
 
-         <CmsSpinner v-if="checking" />
+         <KSpinner v-if="checking" />
 
-         <CmsAlert v-else-if="fileErrors.length" color="error" title="The file cannot be imported">
+         <KAlert v-else-if="fileErrors.length" tone="danger" title="The file cannot be imported">
             <ul class="cms-import-list">
                <li v-for="message in fileErrors" :key="message">{{ message }}</li>
             </ul>
-         </CmsAlert>
+         </KAlert>
 
          <template v-else-if="preview">
-            <CmsAlert :color="invalidCount ? 'warning' : 'success'" :title="summary" />
-            <div class="cms-card cms-table-shell cms-import-preview">
-               <div class="cms-table-scroll">
-                  <table class="cms-table">
-                     <thead>
-                        <tr>
-                           <th>Row</th>
-                           <th>Entry</th>
-                           <th>Action</th>
-                           <th>Problems</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        <tr v-for="row in shownRows" :key="row.index">
-                           <td>{{ row.index }}</td>
-                           <td class="cms-import-title">{{ row.title || row.id || 'Untitled' }}</td>
-                           <td>
-                              <span class="cms-tag">
-                                 {{ row.action === 'update' ? 'Update' : 'New' }}
-                              </span>
-                           </td>
-                           <td>
-                              <ul
-                                 v-if="row.errors.length"
-                                 class="cms-import-list cms-import-issues"
-                              >
-                                 <li v-for="(issue, index) in row.errors" :key="index">
-                                    {{ issue.path ? `${issue.path}: ` : '' }}{{ issue.message }}
-                                 </li>
-                              </ul>
-                              <span v-else class="cms-import-ok">
-                                 <CmsIcon name="check" class="size-3.5" />Ready
-                              </span>
-                           </td>
-                        </tr>
-                     </tbody>
-                  </table>
-               </div>
-            </div>
+            <KAlert :tone="invalidCount ? 'warning' : 'success'" :title="summary" />
+            <KTable
+               :rows="shownRows"
+               :columns="PREVIEW_COLUMNS"
+               row-key="index"
+               density="compact"
+               max-height="20rem"
+               label="Rows of the file"
+            >
+               <template #cell-title="{ row }">
+                  <span class="cms-import-title">{{ row.title || row.id || 'Untitled' }}</span>
+               </template>
+               <template #cell-action="{ row }">
+                  <KBadge :label="row.action === 'update' ? 'Update' : 'New'" size="sm" />
+               </template>
+               <template #cell-errors="{ row }">
+                  <ul v-if="row.errors.length" class="cms-import-list cms-import-issues">
+                     <li v-for="(issue, index) in row.errors" :key="index">
+                        {{ issue.path ? `${issue.path}: ` : '' }}{{ issue.message }}
+                     </li>
+                  </ul>
+                  <span v-else class="cms-import-ok">
+                     <KIcon name="check" />
+                     Ready
+                  </span>
+               </template>
+            </KTable>
          </template>
+      </KStack>
 
-         <div class="cms-actions is-end">
-            <CmsButton label="Cancel" variant="soft" color="neutral" @click="open = false" />
-            <CmsButton
-               :label="importLabel"
-               icon="arrow-down-tray"
-               :disabled="!canImport"
-               :loading="importing"
-               @click="commit"
-            />
-         </div>
-      </div>
-   </CmsModal>
+      <template #footer>
+         <KButton label="Cancel" variant="soft" tone="neutral" @click="open = false" />
+         <KButton
+            :label="importLabel"
+            :icon="cmsIcon('arrow-down-tray')"
+            :disabled="!canImport"
+            :loading="importing"
+            @click="commit"
+         />
+      </template>
+   </KModal>
 </template>
 
 <script setup lang="ts">
 import type { CmsEntry } from '#nuxt-cms'
 import { formatFileSize } from '#nuxt-cms'
+import type { ChoiceOption, TableColumn } from '@xleddyl/443-components-vue'
+import {
+   Alert as KAlert,
+   Badge as KBadge,
+   Button as KButton,
+   FormField as KFormField,
+   Icon as KIcon,
+   Modal as KModal,
+   SegmentedControl as KSegmentedControl,
+   Spinner as KSpinner,
+   Stack as KStack,
+   Table as KTable,
+} from '@xleddyl/443-components-vue'
 import { computed, ref, watch } from '#imports'
-import type { CmsImportMode, CmsImportPreview, CmsTransferFormat } from '../../../shared/transfer'
+import type {
+   CmsImportMode,
+   CmsImportPreview,
+   CmsImportPreviewRow,
+   CmsTransferFormat,
+} from '../../../shared/transfer'
 import { canTransferCsv, IMPORT_MAX_BYTES, IMPORT_MAX_ROWS } from '../../../shared/transfer'
 import { useCmsToast } from '../../composables/cms-toast'
-import { errorMessage } from '../../utils/ui'
+import { cmsIcon, errorMessage } from '../../utils/ui'
 
-const MODE_OPTIONS: { value: CmsImportMode; label: string }[] = [
+const MODE_OPTIONS: ChoiceOption<CmsImportMode>[] = [
    { value: 'create', label: 'Create only' },
    { value: 'upsert', label: 'Create or update by id' },
+]
+
+const PREVIEW_COLUMNS: TableColumn<CmsImportPreviewRow>[] = [
+   { key: 'index', label: 'Row', numeric: true, align: 'start' },
+   { key: 'title', label: 'Entry' },
+   { key: 'action', label: 'Action' },
+   { key: 'errors', label: 'Problems' },
 ]
 
 const props = defineProps<{

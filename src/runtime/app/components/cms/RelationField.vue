@@ -1,29 +1,21 @@
 <template>
-   <CmsSelectMenu
-      v-if="multiple"
-      v-model="many"
-      v-model:search-term="searchTerm"
-      multiple
-      ignore-filter
-      :items="options"
-      value-key="value"
-      :loading="loading"
-   />
-   <CmsSelectMenu
-      v-else
-      v-model="single"
-      v-model:search-term="searchTerm"
-      ignore-filter
-      :items="singleItems"
-      value-key="value"
-      :loading="loading"
+   <KCombobox
+      v-model="model"
+      :multiple="multiple"
+      :clearable="!multiple && !required"
+      open-on-focus
+      :options="selectedOptions"
+      :search="search"
+      :debounce="300"
    />
 </template>
 
 <script setup lang="ts">
 import type { CmsConfig } from '#nuxt-cms'
 import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from '#imports'
+import type { ComboboxOption } from '@xleddyl/443-components-vue'
+import { Combobox as KCombobox } from '@xleddyl/443-components-vue'
+import { computed, onMounted, ref } from '#imports'
 import cmsConfig from '#cms-config'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
@@ -43,46 +35,30 @@ type Row = Record<string, unknown>
 
 const target = (cmsConfig as CmsConfig)[props.to]
 const endpoint = `/api/cms/admin/${props.to}`
-const fetched = ref<Row[]>([])
 const selectedRows = ref(new Map<string, Row>())
-const loading = ref(true)
-const searchTerm = ref('')
 
-let fetchRequest = 0
-
-async function fetchOptions() {
-   const request = ++fetchRequest
-   loading.value = true
+async function search(query: string, signal: AbortSignal): Promise<ComboboxOption<string>[]> {
+   const term = query.trim()
    try {
-      const term = searchTerm.value.trim()
       const page = await $fetch<{ items: Row[] }>(endpoint, {
          query: { light: 'true', limit: 25, ...(term ? { search: term } : {}) },
+         signal,
       })
-      if (request !== fetchRequest) return
-      fetched.value = page.items
+      return page.items.map((row) => ({ label: optionLabel(row), value: row.id as string }))
    } catch (err) {
-      if (request !== fetchRequest) return
+      if (signal.aborted) throw err
       toast.add({
          title: 'Loading failed',
          description: errorMessage(err),
          color: 'error',
       })
-   } finally {
-      if (request === fetchRequest) loading.value = false
+      return []
    }
 }
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(searchTerm, () => {
-   clearTimeout(searchTimer)
-   searchTimer = setTimeout(() => void fetchOptions(), 300)
-})
-
-onBeforeUnmount(() => clearTimeout(searchTimer))
-
 const selectedIds = computed<string[]>(() => {
-   if (props.multiple) return (model.value as string[] | null) ?? []
-   return model.value ? [model.value as string] : []
+   if (Array.isArray(model.value)) return model.value
+   return model.value ? [model.value] : []
 })
 
 async function resolveSelected() {
@@ -98,7 +74,6 @@ async function resolveSelected() {
 }
 
 onMounted(() => {
-   void fetchOptions()
    void resolveSelected()
 })
 
@@ -119,38 +94,10 @@ function optionLabel(row: Row): string {
    return String(value ?? `#${row.id}`)
 }
 
-const options = computed(() => {
-   const seen = new Set<string>()
-   const list: { label: string; value: string }[] = []
-   for (const row of fetched.value) {
-      const id = row.id as string
-      list.push({ label: optionLabel(row), value: id })
-      seen.add(id)
-   }
-   for (const id of selectedIds.value) {
-      if (seen.has(id)) continue
+const selectedOptions = computed<ComboboxOption<string>[]>(() =>
+   selectedIds.value.map((id) => {
       const row = selectedRows.value.get(id)
-      list.push({ label: row ? optionLabel(row) : `#${id}`, value: id })
-   }
-   return list
-})
-
-const singleItems = computed(() => [
-   ...(props.required ? [] : [{ label: '—', value: null }]),
-   ...options.value,
-])
-
-const single = computed({
-   get: () => (model.value ?? null) as string | null,
-   set: (value: string | null) => {
-      model.value = value
-   },
-})
-
-const many = computed({
-   get: () => (model.value as string[] | null) ?? [],
-   set: (value: string[]) => {
-      model.value = value
-   },
-})
+      return { label: row ? optionLabel(row) : `#${id}`, value: id }
+   })
+)
 </script>

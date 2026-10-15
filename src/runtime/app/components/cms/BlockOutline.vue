@@ -1,61 +1,45 @@
 <template>
-   <ol class="cms-outline" aria-label="Blocks">
-      <li
-         v-for="(item, index) in items"
-         :key="uidFor(item)"
-         class="cms-outline-row"
-         :class="{
-            'is-selected': index === selected,
-            'is-hidden': isHiddenBlock(item),
-            'is-dragging': dragIndex === index,
-            'is-drop-target': dropIndex === index && dragIndex !== index,
-         }"
-         draggable="true"
-         @dragstart="onDragStart(index, $event)"
-         @dragover.prevent="dropIndex = index"
-         @dragleave="dropIndex === index && (dropIndex = null)"
-         @drop.prevent="onDrop(index)"
-         @dragend="onDragEnd"
-      >
-         <span class="cms-outline-grip" aria-hidden="true">
-            <CmsIcon name="bars-2" class="size-3.5" />
-         </span>
-         <button
-            type="button"
-            class="cms-outline-main"
-            :aria-current="index === selected ? 'true' : undefined"
-            :aria-label="`${labelOf(item)}, ${index + 1} of ${items.length}${
-               isHiddenBlock(item) ? ', hidden' : ''
-            }. Alt and the arrow keys move it`"
-            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-            @click="emit('select', index)"
-            @keydown.alt.up.prevent="index > 0 && emit('move', index, index - 1)"
-            @keydown.alt.down.prevent="index < items.length - 1 && emit('move', index, index + 1)"
-         >
-            <CmsIcon :name="blockOf(item)?.icon ?? 'rectangle-stack'" class="size-4 shrink-0" />
-            <span class="cms-outline-text">
-               <span class="cms-outline-label">{{ labelOf(item) }}</span>
-               <span v-if="summaryOf(item)" class="cms-outline-summary">
-                  {{ summaryOf(item) }}
-               </span>
+   <KTree
+      :nodes="nodes"
+      :selected="selectedId"
+      label="Blocks"
+      size="sm"
+      :bordered="false"
+      reorderable
+      @select="onSelect"
+      @move="onMove"
+   >
+      <template #label="{ node }">
+         <span class="cms-outline-text" :class="{ 'is-hidden': hiddenIds.has(node.id) }">
+            <span class="cms-outline-label">{{ node.label }}</span>
+            <span v-if="node.description" class="cms-outline-summary">
+               {{ node.description }}
             </span>
-            <CmsIcon
-               v-if="isHiddenBlock(item)"
-               name="eye-slash"
-               class="cms-outline-hidden size-4 shrink-0"
-            />
-         </button>
-      </li>
-   </ol>
+         </span>
+      </template>
+      <template #meta="{ node }">
+         <template v-if="hiddenIds.has(node.id)">
+            <KIcon name="eye-slash" class="cms-outline-hidden" />
+            <KVisuallyHidden>Hidden</KVisuallyHidden>
+         </template>
+      </template>
+   </KTree>
 </template>
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
 import { isHiddenBlock } from '#nuxt-cms'
-import { ref } from '#imports'
+import type { TreeMove, TreeNode } from '@xleddyl/443-components-vue'
+import {
+   Icon as KIcon,
+   Tree as KTree,
+   VisuallyHidden as KVisuallyHidden,
+} from '@xleddyl/443-components-vue'
+import { computed } from '#imports'
 import type { CmsBlockValue } from '../../../shared/preview'
 import { blockSummary } from '../../../shared/preview'
 import { useCmsRuntime } from '../../composables/cms-runtime'
+import { cmsIcon } from '../../utils/ui'
 
 const props = defineProps<{
    items: CmsBlockValue[]
@@ -84,32 +68,36 @@ function blockOf(item: CmsBlockValue) {
    return props.field.blocks?.[String(item.type)]
 }
 
-function labelOf(item: CmsBlockValue) {
-   return blockOf(item)?.label ?? String(item.type)
+const nodes = computed<TreeNode[]>(() =>
+   props.items.map((item) => {
+      const block = blockOf(item)
+      return {
+         id: uidFor(item),
+         label: block?.label ?? String(item.type),
+         description: blockSummary(block, item, props.locale, i18n.defaultLocale, 60) || undefined,
+         icon: cmsIcon(block?.icon ?? 'rectangle-stack'),
+      }
+   })
+)
+
+const hiddenIds = computed(
+   () =>
+      new Set<TreeNode['id']>(
+         props.items.filter((item) => isHiddenBlock(item)).map((item) => uidFor(item))
+      )
+)
+
+const selectedId = computed(() => {
+   const item = props.selected === null ? undefined : props.items[props.selected]
+   return item ? uidFor(item) : null
+})
+
+function onSelect(node: TreeNode) {
+   const index = nodes.value.findIndex((entry) => entry.id === node.id)
+   if (index !== -1) emit('select', index)
 }
 
-function summaryOf(item: CmsBlockValue) {
-   return blockSummary(blockOf(item), item, props.locale, i18n.defaultLocale, 60)
-}
-
-const dragIndex = ref<number | null>(null)
-const dropIndex = ref<number | null>(null)
-
-function onDragStart(index: number, event: DragEvent) {
-   dragIndex.value = index
-   if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('text/plain', String(index))
-   }
-}
-
-function onDrop(index: number) {
-   if (dragIndex.value !== null && dragIndex.value !== index) emit('move', dragIndex.value, index)
-   onDragEnd()
-}
-
-function onDragEnd() {
-   dragIndex.value = null
-   dropIndex.value = null
+function onMove(move: TreeMove) {
+   emit('move', move.from.index, move.to.index)
 }
 </script>

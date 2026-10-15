@@ -1,10 +1,10 @@
 <template>
-   <div class="flex flex-col gap-3">
+   <KStack gap="sm" class="cms-blocks-field">
       <div class="cms-blocks-grid">
          <div
             v-for="(item, index) in items"
             :key="uidFor(item)"
-            class="cms-card cms-block-tile"
+            class="cms-block-tile"
             :class="{
                'is-muted': isHidden(item),
                'is-dragging': dragIndex === index,
@@ -45,9 +45,9 @@
                <span v-else-if="summaryOf(item)" class="cms-block-summary">
                   {{ summaryOf(item) }}
                </span>
-               <CmsIcon v-else :name="iconOf(item)" class="size-7" />
+               <KIcon v-else :name="cmsIcon(iconOf(item))" class="cms-block-icon" />
 
-               <CmsIcon v-if="isHidden(item)" name="eye-slash" class="cms-block-hidden size-4" />
+               <KIcon v-if="isHidden(item)" name="eye-slash" class="cms-block-hidden" />
 
                <template v-if="mediaOnly">
                   <span
@@ -55,7 +55,7 @@
                      class="cms-block-missing"
                      title="Not found in the media library"
                   >
-                     <CmsIcon name="exclamation-triangle" class="size-3.5" />
+                     <KIcon name="exclamation-triangle" />
                   </span>
                   <button
                      type="button"
@@ -64,7 +64,7 @@
                      title="Remove"
                      @click.stop="remove(index)"
                   >
-                     <CmsIcon name="x-mark" class="size-3.5" />
+                     <KIcon name="x-mark" />
                   </button>
                </template>
             </component>
@@ -77,35 +77,33 @@
                   @keydown.left.prevent="index > 0 && move(index, -1)"
                   @keydown.right.prevent="index < items.length - 1 && move(index, 1)"
                >
-                  <CmsIcon name="bars-2" class="size-4" />
+                  <KIcon :name="cmsIcon('bars-2')" />
                </button>
                <span class="cms-block-bar-name" :title="barTitle(item)">{{ barLabel(item) }}</span>
                <span
                   v-if="hasMissingMedia(item)"
-                  class="cms-media-missing-icon"
+                  class="cms-block-missing-icon"
                   title="Not found in the media library"
                >
-                  <CmsIcon name="exclamation-triangle" class="size-4" />
+                  <KIcon name="exclamation-triangle" />
                </span>
-               <div class="cms-block-bar-actions">
-                  <CmsButton
-                     icon="trash"
-                     size="xs"
-                     variant="ghost"
-                     color="error"
-                     aria-label="Remove block"
-                     @click="remove(index)"
-                  />
-               </div>
+               <KButton
+                  icon="trash"
+                  size="xs"
+                  variant="ghost"
+                  tone="danger"
+                  aria-label="Remove block"
+                  @click="remove(index)"
+               />
             </div>
          </div>
 
-         <CmsDropdownMenu v-if="canAdd && addItems.length > 1" :items="addItems">
+         <KDropdownMenu v-if="canAdd && addItems.length > 1" :items="addItems">
             <button type="button" class="cms-block-add">
-               <CmsIcon name="plus" class="size-5" />
+               <KIcon name="plus" />
                <span>Add</span>
             </button>
-         </CmsDropdownMenu>
+         </KDropdownMenu>
          <button
             v-else
             type="button"
@@ -114,132 +112,142 @@
             :title="canAdd ? undefined : countHint"
             @click="addFirst"
          >
-            <CmsIcon name="plus" class="size-5" />
+            <KIcon name="plus" />
             <span>{{ mediaOnly ? addMediaLabel : 'Add' }}</span>
          </button>
       </div>
 
-      <p v-if="countHint" class="cms-form-description">{{ countHint }}</p>
+      <p v-if="countHint" class="cms-field-hint">{{ countHint }}</p>
 
-      <CmsButton
+      <div v-if="visual">
+         <KButton
+            label="Open visual editor"
+            :icon="cmsIcon('window')"
+            size="sm"
+            variant="soft"
+            tone="neutral"
+            @click="visualOpen = true"
+         />
+      </div>
+
+      <KModal
          v-if="visual"
-         class="self-start"
-         label="Open visual editor"
-         icon="window"
-         size="sm"
-         variant="soft"
-         color="neutral"
-         @click="visualOpen = true"
-      />
+         v-model:open="visualOpen"
+         size="fullscreen"
+         flush
+         hide-close
+         class="cms-editor-modal"
+         aria-label="Visual editor"
+      >
+         <CmsVisualEditor
+            :state="{ [fieldKey!]: model }"
+            :entry-name="entryName!"
+            :field-key="fieldKey!"
+            :fields="{ [fieldKey!]: field }"
+            :title="field.label"
+            @update:state="onVisualUpdate"
+         >
+            <template #start>
+               <KButton
+                  icon="arrow-left"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  aria-label="Back to the form"
+                  title="Back to the form"
+                  @click="visualOpen = false"
+               />
+            </template>
+            <template #actions>
+               <KButton label="Done" size="sm" @click="visualOpen = false" />
+            </template>
+         </CmsVisualEditor>
+      </KModal>
 
-      <Teleport to="body">
-         <div v-if="visual && visualOpen" class="cms-scope cms-editor-overlay" :data-theme="theme">
-            <CmsVisualEditor
-               :state="{ [fieldKey!]: model }"
-               :entry-name="entryName!"
-               :field-key="fieldKey!"
-               :fields="{ [fieldKey!]: field }"
-               :title="field.label"
-               @update:state="onVisualUpdate"
+      <KModal v-if="mediaOnly" v-model:open="pickerOpen" title="Media" size="lg">
+         <CmsMediaGallery
+            v-model:folder="pickerFolder"
+            selectable
+            :media-type="mediaOnly.field.mediaType"
+            :accept="mediaOnly.field.accept"
+            @select="addMedia"
+         />
+      </KModal>
+
+      <KModal v-model:open="editorOpen" :title="editorTitle">
+         <KStack gap="md">
+            <KFormField
+               v-for="(blockField, blockKey) in editorFields"
+               :key="blockKey"
+               :label="blockField.label"
+               :icon="cmsIcon(fieldIcon(blockField))"
+               :required="blockField.required"
             >
-               <template #start>
-                  <CmsButton
-                     icon="arrow-left"
-                     size="sm"
-                     variant="ghost"
-                     color="neutral"
-                     aria-label="Back to the form"
-                     title="Back to the form"
-                     @click="visualOpen = false"
+               <CmsFieldInput
+                  :model-value="editorItem?.[blockKey]"
+                  :field="blockField"
+                  :locale="locale"
+                  @update:model-value="(value: unknown) => updateEditorField(blockKey, value)"
+               />
+            </KFormField>
+         </KStack>
+
+         <template #footer>
+            <KStack
+               direction="row"
+               justify="between"
+               gap="sm"
+               wrap
+               class="cms-block-editor-actions"
+            >
+               <KStack direction="row" gap="sm" wrap>
+                  <KButton
+                     icon="chevron-left"
+                     variant="soft"
+                     tone="neutral"
+                     aria-label="Move earlier"
+                     :disabled="editorIndex === 0"
+                     @click="moveCurrent(-1)"
                   />
-               </template>
-               <template #actions>
-                  <CmsButton label="Done" size="sm" @click="visualOpen = false" />
-               </template>
-            </CmsVisualEditor>
-         </div>
-      </Teleport>
-
-      <CmsModal v-if="mediaOnly" v-model:open="pickerOpen" title="Media" size="lg">
-         <template #body>
-            <CmsMediaGallery
-               v-model:folder="pickerFolder"
-               selectable
-               :media-type="mediaOnly.field.mediaType"
-               :accept="mediaOnly.field.accept"
-               @select="addMedia"
-            />
-         </template>
-      </CmsModal>
-
-      <CmsModal v-model:open="editorOpen" :title="editorTitle">
-         <template #body>
-            <div class="flex flex-col gap-4">
-               <CmsFormField
-                  v-for="(blockField, blockKey) in editorFields"
-                  :key="blockKey"
-                  :label="blockField.label"
-                  :icon="fieldIcon(blockField)"
-                  :required="blockField.required"
-               >
-                  <CmsFieldInput
-                     :model-value="editorItem?.[blockKey]"
-                     :field="blockField"
-                     :locale="locale"
-                     @update:model-value="(value: unknown) => updateEditorField(blockKey, value)"
+                  <KButton
+                     icon="chevron-right"
+                     variant="soft"
+                     tone="neutral"
+                     aria-label="Move later"
+                     :disabled="editorIndex === items.length - 1"
+                     @click="moveCurrent(1)"
                   />
-               </CmsFormField>
-
-               <div class="cms-actions justify-between">
-                  <div class="cms-actions">
-                     <CmsButton
-                        icon="chevron-left"
-                        variant="soft"
-                        color="neutral"
-                        aria-label="Move earlier"
-                        :disabled="editorIndex === 0"
-                        @click="moveCurrent(-1)"
-                     />
-                     <CmsButton
-                        icon="chevron-right"
-                        variant="soft"
-                        color="neutral"
-                        aria-label="Move later"
-                        :disabled="editorIndex === items.length - 1"
-                        @click="moveCurrent(1)"
-                     />
-                     <CmsButton
-                        label="Duplicate"
-                        icon="document-duplicate"
-                        variant="soft"
-                        color="neutral"
-                        :disabled="!canAdd"
-                        @click="duplicateCurrent"
-                     />
-                     <CmsButton
-                        v-if="editorItem && !declaresHiddenField(blockOf(editorItem))"
-                        :label="isHidden(editorItem) ? 'Show' : 'Hide'"
-                        :icon="isHidden(editorItem) ? 'eye' : 'eye-slash'"
-                        variant="soft"
-                        color="neutral"
-                        @click="toggleHiddenCurrent"
-                     />
-                  </div>
-                  <div class="cms-actions">
-                     <CmsButton
-                        label="Remove"
-                        icon="trash"
-                        variant="soft"
-                        color="error"
-                        @click="removeCurrent"
-                     />
-                     <CmsButton label="Done" @click="editorOpen = false" />
-                  </div>
-               </div>
-            </div>
+                  <KButton
+                     label="Duplicate"
+                     :icon="cmsIcon('document-duplicate')"
+                     variant="soft"
+                     tone="neutral"
+                     :disabled="!canAdd"
+                     @click="duplicateCurrent"
+                  />
+                  <KButton
+                     v-if="editorItem && !declaresHiddenField(blockOf(editorItem))"
+                     :label="isHidden(editorItem) ? 'Show' : 'Hide'"
+                     :icon="cmsIcon(isHidden(editorItem) ? 'eye' : 'eye-slash')"
+                     variant="soft"
+                     tone="neutral"
+                     @click="toggleHiddenCurrent"
+                  />
+               </KStack>
+               <KStack direction="row" gap="sm">
+                  <KButton
+                     label="Remove"
+                     icon="trash"
+                     variant="soft"
+                     tone="danger"
+                     @click="removeCurrent"
+                  />
+                  <KButton label="Done" @click="editorOpen = false" />
+               </KStack>
+            </KStack>
          </template>
-      </CmsModal>
-   </div>
+      </KModal>
+   </KStack>
 </template>
 
 <script setup lang="ts">
@@ -255,12 +263,18 @@ import {
    mediaTypeForKey,
    pickTranslatedMedia,
 } from '#nuxt-cms'
-import { computed, ref, useState, watch } from '#imports'
+import {
+   Button as KButton,
+   DropdownMenu as KDropdownMenu,
+   FormField as KFormField,
+   Icon as KIcon,
+   Modal as KModal,
+   Stack as KStack,
+} from '@xleddyl/443-components-vue'
+import { computed, ref, useState } from '#imports'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
-import { useCmsOverlay } from '../../composables/cms-overlay'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { useCmsTheme } from '../../composables/cms-theme'
-import { fieldIcon } from '../../utils/ui'
+import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const props = defineProps<{
    field: FieldConfig
@@ -316,15 +330,6 @@ const visual = computed(() => {
 })
 
 const visualOpen = ref(false)
-const theme = useCmsTheme()
-const visualOverlay = useCmsOverlay(() => {
-   visualOpen.value = false
-})
-
-watch(visualOpen, (open) => {
-   if (open) visualOverlay.activate()
-   else visualOverlay.deactivate()
-})
 
 function onVisualUpdate(state: Record<string, unknown>) {
    const value = props.fieldKey ? state[props.fieldKey] : null

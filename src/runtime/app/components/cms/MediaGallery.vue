@@ -1,216 +1,177 @@
 <template>
-   <CmsEmptyState
+   <KEmptyState
       v-if="notConfigured"
-      icon="bolt"
+      :icon="cmsIcon('bolt')"
       title="Media storage not configured"
-      body="Set cms.media in nuxt.config to enable uploads."
+      description="Set cms.media in nuxt.config to enable uploads."
    />
 
-   <div
-      v-else
-      class="cms-media-gallery"
-      :class="{ 'is-compact': selectable }"
-      @dragenter="onGalleryDragEnter"
-      @dragover="onGalleryDragOver"
-      @dragleave="onGalleryDragLeave"
-      @drop="onGalleryDrop"
-   >
+   <div v-else ref="gallery" class="cms-media-gallery" :class="{ 'is-compact': selectable }">
       <div class="cms-media-toolbar">
-         <CmsInput
+         <KInput
             v-model="search"
-            icon="magnifying-glass"
+            :icon="cmsIcon('magnifying-glass')"
             :placeholder="
                folder && !searchEverywhere
                   ? `Search in ${mediaFolderName(folder)}…`
                   : 'Search media…'
             "
+            aria-label="Search media"
+            clearable
+            clear-label="Clear search"
             class="cms-media-search"
-         >
-            <template v-if="search" #trailing>
-               <button
-                  type="button"
-                  class="cms-media-search-clear"
-                  aria-label="Clear search"
-                  @click="search = ''"
-               >
-                  <CmsIcon name="x-mark" class="size-4" />
-               </button>
-            </template>
-         </CmsInput>
-         <div class="cms-media-toolbar-actions">
-            <CmsDropdownMenu :items="sortItems" :content="{ align: 'end' }">
-               <CmsButton
+         />
+         <KStack direction="row" gap="sm" align="center" wrap>
+            <KDropdownMenu :items="sortItems" placement="bottom-end" label="Sort by">
+               <KButton
                   :label="sortLabels[activeSort]"
-                  icon="arrows-up-down"
+                  :icon="cmsIcon('arrows-up-down')"
                   variant="ghost"
-                  color="neutral"
+                  tone="neutral"
                   size="sm"
                />
-            </CmsDropdownMenu>
-            <div class="cms-media-view-toggle" role="group" aria-label="View">
-               <CmsButton
-                  icon="squares-2x2"
-                  size="sm"
-                  :variant="view === 'grid' ? 'soft' : 'ghost'"
-                  color="neutral"
-                  aria-label="Grid view"
-                  @click="view = 'grid'"
-               />
-               <CmsButton
-                  icon="list-bullet"
-                  size="sm"
-                  :variant="view === 'list' ? 'soft' : 'ghost'"
-                  color="neutral"
-                  aria-label="List view"
-                  @click="view = 'list'"
-               />
-            </div>
+            </KDropdownMenu>
+            <KSegmentedControl
+               v-model="view"
+               :options="viewOptions"
+               required
+               icon-only
+               size="sm"
+               aria-label="View"
+            />
             <template v-if="canUpload">
-               <CmsButton
+               <KButton
                   label="New folder"
-                  icon="folder-plus"
+                  :icon="cmsIcon('folder-plus')"
                   variant="soft"
                   size="sm"
                   :disabled="!canNest"
                   @click="openNewFolder"
                />
-               <CmsButton
+               <KButton
                   label="Upload"
-                  icon="cloud-arrow-up"
+                  :icon="cmsIcon('cloud-arrow-up')"
                   size="sm"
                   @click="uploadOpen = true"
                />
             </template>
-         </div>
+         </KStack>
       </div>
 
       <p v-if="sourceHint" class="cms-media-source">{{ sourceHint }}</p>
 
       <div class="cms-media-nav">
-         <nav class="cms-media-crumbs" aria-label="Folder">
-            <template v-for="(crumb, index) in crumbs" :key="crumb.folder ?? ''">
-               <CmsIcon v-if="index" name="chevron-right" class="cms-breadcrumb-separator size-3" />
-               <button
-                  type="button"
-                  class="cms-media-crumb"
-                  :class="{
-                     'is-current': crumb.folder === folder,
-                     'is-drop': dropTarget === targetId(crumb.folder),
-                  }"
-                  :aria-current="crumb.folder === folder ? 'page' : undefined"
-                  @click="openFolder(crumb.folder)"
-                  @dragover="onTargetDragOver($event, crumb.folder)"
-                  @dragleave="onTargetDragLeave(crumb.folder)"
-                  @drop="onTargetDrop($event, crumb.folder)"
-               >
-                  <CmsIcon v-if="!crumb.folder" name="home" class="size-3.5" />
-                  {{ crumb.label }}
-               </button>
-            </template>
-         </nav>
-         <div v-if="folder && canManage" class="cms-media-folder-actions">
-            <CmsButton
+         <KBreadcrumbs :items="crumbs" :separator="cmsIcon('chevron-right')" label="Folder" />
+         <KStack v-if="folder && canManage" direction="row" gap="xs" align="center">
+            <KButton
                label="Rename"
-               icon="pencil-square"
+               :icon="cmsIcon('pencil-square')"
                variant="ghost"
-               color="neutral"
+               tone="neutral"
                size="xs"
                @click="openRename"
             />
-            <CmsButton
+            <KButton
                label="Delete folder"
-               icon="trash"
+               :icon="cmsIcon('trash')"
                variant="ghost"
-               color="error"
+               tone="danger"
                size="xs"
                @click="removeFolder(folder)"
             />
-         </div>
+         </KStack>
       </div>
 
-      <div v-if="uploader.uploading.value" class="cms-media-progress">
-         <CmsIcon name="arrow-path" class="size-4 animate-spin" />
+      <div v-if="uploader.uploading.value" class="cms-media-progress" role="status">
+         <KSpinner size="xs" decorative />
          Uploading {{ Math.min(uploader.done.value + 1, uploader.total.value) }} of
          {{ uploader.total.value }} to {{ folder ?? 'Library root' }}…
       </div>
 
-      <div v-if="selection.length" class="cms-media-selection">
-         <span class="cms-media-selection-count">{{ selection.length }} selected</span>
-         <CmsButton
-            v-if="selection.length < visibleFiles.length"
-            :label="`Select all ${visibleFiles.length}`"
-            variant="ghost"
-            color="neutral"
-            size="xs"
-            @click="selectAll"
-         />
-         <div class="cms-media-selection-actions">
-            <CmsButton
+      <KSelectionBar
+         :count="selection.length"
+         :total="visibleFiles.length"
+         :selected-text="(count) => `${count} selected`"
+         placement="sticky"
+         class="cms-media-selection-bar"
+         @select-all="selectAll"
+         @clear="clearSelection"
+      >
+         <template #actions>
+            <KButton
                label="Move to…"
-               icon="folder-arrow-down"
+               :icon="cmsIcon('folder-arrow-down')"
                variant="soft"
                size="xs"
                @click="openMove"
             />
-            <CmsButton
+            <KButton
                label="Delete"
-               icon="trash"
+               :icon="cmsIcon('trash')"
                variant="soft"
-               color="error"
+               tone="danger"
                size="xs"
                @click="removeItems(selectedItems)"
             />
-            <CmsButton
-               icon="x-mark"
-               variant="ghost"
-               color="neutral"
-               size="xs"
-               aria-label="Clear selection"
-               @click="clearSelection"
-            />
-         </div>
-      </div>
-
-      <div v-else-if="showTypeFilters || (query && folder)" class="cms-media-filters">
-         <template v-if="showTypeFilters">
-            <button
-               v-for="f in filters"
-               :key="f"
-               type="button"
-               class="cms-pill"
-               :class="{ 'is-active': filter === f }"
-               @click="filter = f"
-            >
-               {{ filterLabels[f] }}
-            </button>
          </template>
-         <button
+      </KSelectionBar>
+
+      <div
+         v-if="!selection.length && (showTypeFilters || (query && folder))"
+         class="cms-media-filter-row"
+      >
+         <KFilterPills
+            v-if="showTypeFilters"
+            v-model="filter"
+            :options="filterOptions"
+            label="File type"
+            required
+         />
+         <KFilterPills
             v-if="query && folder"
-            type="button"
-            class="cms-pill cms-media-scope"
-            :class="{ 'is-active': searchEverywhere }"
-            @click="searchEverywhere = !searchEverywhere"
-         >
-            <CmsIcon name="magnifying-glass" class="size-3" />Search all folders
-         </button>
+            v-model="scopeValue"
+            :options="scopeOptions"
+            label="Search scope"
+         />
       </div>
 
-      <CmsSpinner v-if="library.loading.value" />
+      <div v-if="library.loading.value" class="cms-media-loading">
+         <KSpinner />
+      </div>
 
-      <CmsEmptyState v-else-if="loadError" icon="exclamation-triangle" title="Could not load media">
-         <CmsButton label="Retry" icon="arrow-path" variant="soft" @click="library.reload()" />
-      </CmsEmptyState>
+      <KEmptyState
+         v-else-if="loadError"
+         :icon="cmsIcon('exclamation-triangle')"
+         title="Could not load media"
+      >
+         <template #actions>
+            <KButton
+               label="Retry"
+               :icon="cmsIcon('arrow-path')"
+               variant="soft"
+               @click="library.reload()"
+            />
+         </template>
+      </KEmptyState>
 
       <template v-else>
          <section v-if="recent.length" class="cms-media-section">
-            <h3 class="cms-media-section-title"><CmsIcon name="clock" class="size-3.5" />Recent</h3>
+            <h3 class="cms-media-section-title">
+               <KIcon :name="cmsIcon('clock')" />
+               Recent
+            </h3>
             <div class="cms-media-grid is-compact is-recent">
-               <button
+               <KCard
                   v-for="item in recent"
                   :key="item.key"
+                  as="button"
                   type="button"
-                  class="cms-card cms-media-tile is-selectable"
+                  variant="outline"
+                  padding="none"
+                  :animated="false"
+                  class="cms-media-tile is-selectable"
                   :title="mediaFilename(item.key)"
+                  :aria-label="mediaFilename(item.key)"
                   @click="emitSelect(item)"
                >
                   <div class="cms-media-preview">
@@ -227,9 +188,9 @@
                         muted
                         playsinline
                      />
-                     <CmsIcon v-else :name="mediaIconFor(item.type)" class="size-6" />
+                     <KIcon v-else :name="cmsIcon(mediaIconFor(item.type))" />
                   </div>
-               </button>
+               </KCard>
             </div>
          </section>
 
@@ -251,10 +212,11 @@
                   @dragleave="onTargetDragLeave(child)"
                   @drop="onTargetDrop($event, child)"
                >
-                  <CmsIcon
-                     :name="dropTarget === targetId(child) ? 'folder-open' : 'folder'"
-                     class="cms-media-folder-tile-icon size-6"
-                  />
+                  <span class="cms-media-folder-tile-icon">
+                     <KIcon
+                        :name="cmsIcon(dropTarget === targetId(child) ? 'folder-open' : 'folder')"
+                     />
+                  </span>
                   <span class="cms-media-folder-tile-text">
                      <span class="cms-media-folder-tile-name">
                         {{ query ? child : mediaFolderName(child) }}
@@ -282,16 +244,17 @@
                class="cms-media-grid"
                :class="{ 'is-compact': selectable }"
             >
-               <div
+               <KCard
                   v-for="item in paged"
                   :key="item.key"
+                  variant="outline"
+                  padding="none"
+                  :animated="false"
+                  :selected="canManage ? isSelected(item.key) : undefined"
                   role="button"
                   tabindex="0"
-                  class="cms-card cms-media-tile is-selectable"
-                  :class="{
-                     'is-checked': isSelected(item.key),
-                     'is-dragging': draggingKeys.includes(item.key),
-                  }"
+                  class="cms-media-tile is-selectable"
+                  :class="{ 'is-dragging': draggingKeys.includes(item.key) }"
                   :draggable="canManage"
                   :aria-pressed="canManage ? isSelected(item.key) : undefined"
                   @click="onItemClick(item, $event)"
@@ -317,7 +280,7 @@
                         muted
                         playsinline
                      />
-                     <CmsIcon v-else :name="mediaIconFor(item.type)" class="size-8" />
+                     <KIcon v-else :name="cmsIcon(mediaIconFor(item.type))" />
                      <button
                         v-if="canManage"
                         type="button"
@@ -327,7 +290,7 @@
                         tabindex="-1"
                         @click.stop="toggleSelect(item.key, $event)"
                      >
-                        <CmsIcon name="check" class="size-3.5" />
+                        <KIcon :name="cmsIcon('check')" />
                      </button>
                      <div class="cms-media-info">
                         {{ tileInfo(item) }}
@@ -338,7 +301,7 @@
                         {{ mediaFilename(item.key) }}
                      </div>
                      <div v-if="query && item.folder" class="cms-media-folder">
-                        <CmsIcon name="folder" class="size-3" />{{ item.folder }}
+                        <KIcon :name="cmsIcon('folder')" />{{ item.folder }}
                      </div>
                      <span
                         v-if="!selectable"
@@ -346,18 +309,17 @@
                         :class="{ 'is-unused': usageCount(item.key) === 0 }"
                      >
                         <template v-if="usageCount(item.key) !== null">
-                           <CmsIcon
-                              :name="usageCount(item.key) ? 'link' : 'link-slash'"
-                              class="size-3"
-                           />{{ usageLabel(item.key) }}
+                           <KIcon :name="cmsIcon(usageCount(item.key) ? 'link' : 'link-slash')" />{{
+                              usageLabel(item.key)
+                           }}
                         </template>
                         <template v-else>&nbsp;</template>
                      </span>
                   </div>
-               </div>
+               </KCard>
             </div>
 
-            <div v-else class="cms-card cms-media-list">
+            <KCard v-else variant="outline" padding="none" :animated="false" class="cms-media-list">
                <div
                   v-for="item in paged"
                   :key="item.key"
@@ -386,13 +348,13 @@
                      tabindex="-1"
                      @click.stop="toggleSelect(item.key, $event)"
                   >
-                     <CmsIcon name="check" class="size-3.5" />
+                     <KIcon :name="cmsIcon('check')" />
                   </button>
                   <CmsMediaThumb :value="item.key" />
                   <span class="cms-media-row-name" :title="item.key">
                      {{ mediaFilename(item.key) }}
                      <span v-if="query && item.folder" class="cms-media-folder">
-                        <CmsIcon name="folder" class="size-3" />{{ item.folder }}
+                        <KIcon :name="cmsIcon('folder')" />{{ item.folder }}
                      </span>
                   </span>
                   <span v-if="!selectable" class="cms-media-row-cell is-usage">
@@ -401,10 +363,9 @@
                         class="cms-media-usage-badge"
                         :class="{ 'is-unused': usageCount(item.key) === 0 }"
                      >
-                        <CmsIcon
-                           :name="usageCount(item.key) ? 'link' : 'link-slash'"
-                           class="size-3"
-                        />{{ usageLabel(item.key) }}
+                        <KIcon :name="cmsIcon(usageCount(item.key) ? 'link' : 'link-slash')" />{{
+                           usageLabel(item.key)
+                        }}
                      </span>
                   </span>
                   <span class="cms-media-row-cell is-mono">{{ extension(item.key) }}</span>
@@ -418,150 +379,136 @@
                      {{ item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '' }}
                   </span>
                </div>
-            </div>
+            </KCard>
          </section>
 
-         <CmsEmptyState v-if="!visibleFiles.length && !visibleFolders.length" v-bind="emptyState">
-            <CmsButton
-               v-if="query"
-               label="Clear search"
-               icon="x-mark"
-               variant="soft"
-               @click="search = ''"
-            />
-            <CmsButton
-               v-else-if="canUpload && !hasTypedFiles"
-               label="Upload"
-               icon="cloud-arrow-up"
-               variant="soft"
-               @click="uploadOpen = true"
-            />
-         </CmsEmptyState>
+         <KEmptyState
+            v-if="!visibleFiles.length && !visibleFolders.length"
+            :icon="cmsIcon(emptyState.icon)"
+            :title="emptyState.title"
+            :description="emptyState.description"
+         >
+            <template v-if="query || (canUpload && !hasTypedFiles)" #actions>
+               <KButton
+                  v-if="query"
+                  label="Clear search"
+                  :icon="cmsIcon('x-mark')"
+                  variant="soft"
+                  @click="search = ''"
+               />
+               <KButton
+                  v-else
+                  label="Upload"
+                  :icon="cmsIcon('cloud-arrow-up')"
+                  variant="soft"
+                  @click="uploadOpen = true"
+               />
+            </template>
+         </KEmptyState>
 
-         <CmsPagination
+         <KPagination
             v-if="visibleFiles.length > PAGE_SIZE"
             v-model:page="page"
             :total="visibleFiles.length"
-            :items-per-page="PAGE_SIZE"
+            :page-size="PAGE_SIZE"
+            :show-summary="false"
+            class="cms-media-pagination"
          />
       </template>
 
       <div v-if="fileDragActive" class="cms-media-drop-overlay">
-         <CmsIcon name="cloud-arrow-up" class="size-8" />
+         <KIcon :name="cmsIcon('cloud-arrow-up')" class="cms-media-drop-icon" />
          <span
             >Drop to upload to <strong>{{ dropTargetLabel }}</strong></span
          >
       </div>
+   </div>
 
-      <CmsModal v-if="canUpload" v-model:open="uploadOpen" title="Upload media">
-         <template #body>
-            <CmsMediaUpload
-               :multiple="!selectable"
-               :media-type="mediaType"
-               :accept="accept"
-               :folder="folder"
-               :directories="!selectable"
-               @uploaded="onUploaded"
+   <template v-if="!notConfigured">
+      <KModal v-if="canUpload" v-model:open="uploadOpen" title="Upload media">
+         <CmsMediaUpload
+            :multiple="!selectable"
+            :media-type="mediaType"
+            :accept="accept"
+            :folder="folder"
+            :directories="!selectable"
+            @uploaded="onUploaded"
+         />
+         <p class="cms-media-hint cms-media-upload-hint">
+            Tip: you can also drop files or folders anywhere on the library, or on a folder.
+         </p>
+      </KModal>
+
+      <KModal v-if="canUpload" v-model:open="newFolderOpen" title="New folder" size="sm">
+         <KFormField
+            label="Name"
+            :description="
+               newFolderPath ? `Creates ${newFolderPath}/` : 'Letters, numbers and dashes.'
+            "
+         >
+            <KInput
+               v-model="folderName"
+               autofocus
+               placeholder="e.g. covers"
+               @keydown.enter.prevent="createFolder"
             />
-            <p class="cms-form-hint cms-media-upload-hint">
-               Tip: you can also drop files or folders anywhere on the library, or on a folder.
+         </KFormField>
+         <template #footer>
+            <KButton label="Cancel" variant="ghost" tone="neutral" @click="newFolderOpen = false" />
+            <KButton
+               label="Create"
+               :loading="busy"
+               :disabled="!newFolderPath"
+               @click="createFolder"
+            />
+         </template>
+      </KModal>
+
+      <KModal v-if="canManage" v-model:open="renameOpen" title="Rename folder" size="sm">
+         <KStack gap="md">
+            <KFormField label="Name">
+               <KInput v-model="folderName" autofocus @keydown.enter.prevent="renameFolder" />
+            </KFormField>
+            <KFormField label="Location">
+               <CmsMediaFolderPicker
+                  v-model="renameParent"
+                  :folders="parentCandidates"
+                  :exclude="folder"
+               />
+            </KFormField>
+            <p class="cms-media-hint">
+               {{
+                  renamePath ? `Moves ${folder}/ to ${renamePath}/` : 'Letters, numbers and dashes.'
+               }}
             </p>
+         </KStack>
+         <template #footer>
+            <KButton label="Cancel" variant="ghost" tone="neutral" @click="renameOpen = false" />
+            <KButton
+               label="Save"
+               :loading="busy"
+               :disabled="!renamePath || renamePath === folder"
+               @click="renameFolder"
+            />
          </template>
-      </CmsModal>
+      </KModal>
 
-      <CmsModal v-if="canUpload" v-model:open="newFolderOpen" title="New folder" size="sm">
-         <template #body>
-            <div class="cms-form">
-               <CmsFormField label="Name">
-                  <CmsInput
-                     v-model="folderName"
-                     autofocus
-                     placeholder="e.g. covers"
-                     @keydown.enter.prevent="createFolder"
-                  />
-                  <p class="cms-form-hint">
-                     {{
-                        newFolderPath ? `Creates ${newFolderPath}/` : 'Letters, numbers and dashes.'
-                     }}
-                  </p>
-               </CmsFormField>
-               <div class="cms-actions is-end">
-                  <CmsButton
-                     label="Cancel"
-                     variant="ghost"
-                     color="neutral"
-                     @click="newFolderOpen = false"
-                  />
-                  <CmsButton
-                     label="Create"
-                     :loading="busy"
-                     :disabled="!newFolderPath"
-                     @click="createFolder"
-                  />
-               </div>
-            </div>
-         </template>
-      </CmsModal>
-
-      <CmsModal v-if="canManage" v-model:open="renameOpen" title="Rename folder" size="sm">
-         <template #body>
-            <div class="cms-form">
-               <CmsFormField label="Name">
-                  <CmsInput v-model="folderName" autofocus @keydown.enter.prevent="renameFolder" />
-               </CmsFormField>
-               <CmsFormField label="Location">
-                  <CmsMediaFolderPicker
-                     v-model="renameParent"
-                     :folders="parentCandidates"
-                     :exclude="folder"
-                  />
-               </CmsFormField>
-               <p class="cms-form-hint">
-                  {{
-                     renamePath
-                        ? `Moves ${folder}/ to ${renamePath}/`
-                        : 'Letters, numbers and dashes.'
-                  }}
-               </p>
-               <div class="cms-actions is-end">
-                  <CmsButton
-                     label="Cancel"
-                     variant="ghost"
-                     color="neutral"
-                     @click="renameOpen = false"
-                  />
-                  <CmsButton
-                     label="Save"
-                     :loading="busy"
-                     :disabled="!renamePath || renamePath === folder"
-                     @click="renameFolder"
-                  />
-               </div>
-            </div>
-         </template>
-      </CmsModal>
-
-      <CmsModal
+      <KModal
          v-if="canManage"
          v-model:open="moveOpen"
          :title="`Move ${selection.length} file${selection.length > 1 ? 's' : ''}`"
          size="sm"
       >
-         <template #body>
-            <div class="cms-form">
-               <CmsMediaFolderPicker v-model="moveTarget" :folders="library.folders.value" />
-               <div class="cms-actions is-end">
-                  <CmsButton
-                     label="Cancel"
-                     variant="ghost"
-                     color="neutral"
-                     @click="moveOpen = false"
-                  />
-                  <CmsButton label="Move here" :loading="busy" @click="moveSelection" />
-               </div>
-            </div>
+         <CmsMediaFolderPicker
+            v-model="moveTarget"
+            :folders="library.folders.value"
+            label="Folder"
+         />
+         <template #footer>
+            <KButton label="Cancel" variant="ghost" tone="neutral" @click="moveOpen = false" />
+            <KButton label="Move here" :loading="busy" @click="moveSelection" />
          </template>
-      </CmsModal>
+      </KModal>
 
       <CmsMediaDetail
          v-if="!selectable"
@@ -571,12 +518,31 @@
          @close="detailKey = null"
          @delete="(item) => removeItems([item])"
       />
-   </div>
+   </template>
 </template>
 
 <script setup lang="ts">
 import type { MediaItem, MediaType, MediaUsage } from '#nuxt-cms'
-import { computed, onMounted, ref, watch } from '#imports'
+import type { BreadcrumbItem, ChoiceOption, FilterPillOption } from '@xleddyl/443-components-vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from '#imports'
+import {
+   Breadcrumbs as KBreadcrumbs,
+   Button as KButton,
+   Card as KCard,
+   DropdownMenu as KDropdownMenu,
+   EmptyState as KEmptyState,
+   FilterPills as KFilterPills,
+   FormField as KFormField,
+   Icon as KIcon,
+   Input as KInput,
+   Modal as KModal,
+   Pagination as KPagination,
+   SegmentedControl as KSegmentedControl,
+   SelectionBar as KSelectionBar,
+   Spinner as KSpinner,
+   Stack as KStack,
+   useFileDrop,
+} from '@xleddyl/443-components-vue'
 import {
    isWithinMediaFolder,
    MEDIA_FOLDER_MAX_DEPTH,
@@ -605,8 +571,10 @@ import {
 } from '../../composables/cms-media-uploader'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
+import { cmsIcon } from '../../utils/ui'
 
 type SortKey = 'newest' | 'oldest' | 'name' | 'size'
+type ViewMode = 'grid' | 'list'
 
 const MEDIA_DRAG = 'application/x-cms-media'
 const FOLDER_DRAG = 'application/x-cms-folder'
@@ -627,6 +595,17 @@ const sortLabels: Record<SortKey, string> = {
    name: 'Name',
    size: 'Largest',
 }
+
+const viewOptions: ChoiceOption<ViewMode>[] = [
+   { value: 'grid', label: 'Grid view', icon: cmsIcon('squares-2x2') },
+   { value: 'list', label: 'List view', icon: cmsIcon('list-bullet') },
+]
+
+const SCOPE_EVERYWHERE = 'everywhere'
+
+const scopeOptions: FilterPillOption<typeof SCOPE_EVERYWHERE>[] = [
+   { value: SCOPE_EVERYWHERE, label: 'Search all folders', icon: cmsIcon('magnifying-glass') },
+]
 
 const props = defineProps<{
    selectable?: boolean
@@ -689,6 +668,10 @@ const filters = computed<('all' | MediaType)[]>(() => [
 ])
 const filter = ref<'all' | MediaType>('all')
 
+const filterOptions = computed(() =>
+   filters.value.map((value) => ({ value, label: filterLabels[value] ?? value }))
+)
+
 watch(filters, (list) => {
    if (!list.includes(filter.value)) filter.value = 'all'
 })
@@ -708,6 +691,13 @@ const searchEverywhere = ref(false)
 const query = computed(() => search.value.trim().toLowerCase())
 const scope = computed(() => (searchEverywhere.value ? null : folder.value))
 
+const scopeValue = computed<typeof SCOPE_EVERYWHERE | null>({
+   get: () => (searchEverywhere.value ? SCOPE_EVERYWHERE : null),
+   set: (value) => {
+      searchEverywhere.value = value === SCOPE_EVERYWHERE
+   },
+})
+
 const hasDates = computed(() => library.items.value.some((item) => item.createdAt))
 const sort = ref<SortKey>('newest')
 
@@ -720,9 +710,9 @@ const sortItems = computed(() =>
       .filter((key) => hasDates.value || (key !== 'newest' && key !== 'oldest'))
       .map((key) => ({
          label: sortLabels[key],
-         type: 'checkbox' as const,
+         type: 'radio' as const,
          checked: activeSort.value === key,
-         onUpdateChecked: () => {
+         onSelect: () => {
             sort.value = key
          },
       }))
@@ -825,12 +815,12 @@ function usageLabel(key: string) {
    return count ? `Used in ${entriesLabel(count)}` : 'Unused'
 }
 
-const emptyState = computed(() => {
+const emptyState = computed<{ icon: string; title: string; description?: string }>(() => {
    if (query.value) {
       return {
          icon: 'magnifying-glass',
          title: 'No matching media',
-         body:
+         description:
             searchEverywhere.value || !folder.value
                ? 'Try a different search or filter.'
                : 'Nothing here matches. Try searching all folders.',
@@ -840,7 +830,7 @@ const emptyState = computed(() => {
       return {
          icon: 'photo',
          title: readOnly.value ? 'No media' : 'No media yet',
-         body: readOnly.value
+         description: readOnly.value
             ? 'No media registered.'
             : 'Drop files here or use Upload to add some.',
       }
@@ -849,17 +839,19 @@ const emptyState = computed(() => {
       return {
          icon: 'folder-open',
          title: 'This folder is empty',
-         body: canUpload.value ? 'Drop files here or use Upload to add some.' : undefined,
+         description: canUpload.value ? 'Drop files here or use Upload to add some.' : undefined,
       }
    }
    return {
       icon: 'photo',
       title: hasTypedFiles.value ? 'No files in the library root' : 'No matching media',
-      body: hasTypedFiles.value ? 'Open a folder to see its files.' : 'No files of this type yet.',
+      description: hasTypedFiles.value
+         ? 'Open a folder to see its files.'
+         : 'No files of this type yet.',
    }
 })
 
-const view = ref<'grid' | 'list'>('grid')
+const view = ref<ViewMode>('grid')
 
 onMounted(() => {
    try {
@@ -873,15 +865,19 @@ watch(view, (value) => {
    } catch {}
 })
 
-const crumbs = computed(() => [
-   { label: 'Library', folder: null as string | null },
-   ...(folder.value
-      ? mediaFolderAncestors(folder.value).map((path) => ({
-           label: mediaFolderName(path),
-           folder: path as string | null,
-        }))
-      : []),
-])
+const crumbs = computed<BreadcrumbItem[]>(() =>
+   [null, ...(folder.value ? mediaFolderAncestors(folder.value) : [])].map((path) => ({
+      label: path ? mediaFolderName(path) : 'Library',
+      icon: path ? undefined : cmsIcon('home'),
+      onClick: () => openFolder(path),
+      attrs: {
+         class: { 'is-drop-target': dropTarget.value === targetId(path) },
+         onDragover: (event: DragEvent) => onTargetDragOver(event, path),
+         onDragleave: () => onTargetDragLeave(path),
+         onDrop: (event: DragEvent) => onTargetDrop(event, path),
+      },
+   }))
+)
 
 function openFolder(target: string | null) {
    folder.value = target
@@ -1196,8 +1192,19 @@ async function uploadTree(pending: Promise<UploadTree>, target: string | null) {
 const draggingKeys = ref<string[]>([])
 const draggingFolder = ref<string | null>(null)
 const dropTarget = ref<string | null>(null)
-const fileDragDepth = ref(0)
-const fileDragActive = computed(() => fileDragDepth.value > 0 && canUpload.value)
+const galleryEl = useTemplateRef<HTMLElement>('gallery')
+
+const { over: fileDragOver } = useFileDrop(galleryEl, {
+   disabled: () => !canUpload.value,
+   ignore: (event) => event.defaultPrevented,
+   onDrop: (_files, event) => {
+      dropTarget.value = null
+      const tree = droppedTree(event)
+      if (tree) void uploadTree(tree, folder.value)
+   },
+})
+
+const fileDragActive = computed(() => fileDragOver.value && canUpload.value)
 
 const ROOT_TARGET = ':root'
 
@@ -1271,12 +1278,10 @@ function onTargetDragLeave(target: string | null) {
 async function onTargetDrop(event: DragEvent, target: string | null) {
    if (!acceptsDrop(event, target)) return
    event.preventDefault()
-   event.stopPropagation()
    const keys = [...draggingKeys.value]
    const path = draggingFolder.value
    const tree = hasFiles(event) ? droppedTree(event) : null
    onDragEnd()
-   fileDragDepth.value = 0
    if (keys.length) {
       if (await moveKeys(keys, target)) clearSelection()
       return
@@ -1290,31 +1295,6 @@ async function onTargetDrop(event: DragEvent, target: string | null) {
       return
    }
    if (tree) await uploadTree(tree, target)
-}
-
-function onGalleryDragEnter(event: DragEvent) {
-   if (!hasFiles(event) || !canUpload.value) return
-   fileDragDepth.value++
-}
-
-function onGalleryDragOver(event: DragEvent) {
-   if (!hasFiles(event) || !canUpload.value) return
-   event.preventDefault()
-   if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
-}
-
-function onGalleryDragLeave(event: DragEvent) {
-   if (!hasFiles(event) || !canUpload.value) return
-   fileDragDepth.value = Math.max(0, fileDragDepth.value - 1)
-}
-
-async function onGalleryDrop(event: DragEvent) {
-   if (!hasFiles(event) || !canUpload.value) return
-   event.preventDefault()
-   fileDragDepth.value = 0
-   dropTarget.value = null
-   const tree = droppedTree(event)
-   if (tree) await uploadTree(tree, folder.value)
 }
 
 function tileInfo(item: MediaItem) {

@@ -10,7 +10,7 @@
                   data-cms-preview-keep
                   @click="post({ type: 'insert', index: state.blocks.length })"
                >
-                  <CmsIcon name="plus" />
+                  <KIcon name="plus" />
                   <span>Add a block</span>
                </button>
             </div>
@@ -24,7 +24,7 @@
                   data-cms-preview-keep
                   @click="post({ type: 'insert', index: state.blocks.length })"
                >
-                  <CmsIcon name="plus" />
+                  <KIcon name="plus" />
                   <span>Add a block</span>
                </button>
             </div>
@@ -56,6 +56,7 @@ import {
    shallowRef,
    useHead,
 } from '#imports'
+import { Icon as KIcon } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { cmsPreviewComponents } from '#cms-blocks'
 import type { CmsPreviewFrameMessage, CmsPreviewState } from '../../shared/preview'

@@ -11,7 +11,7 @@ nuxt-cms is a Nuxt module that adds a CMS to your Nuxt app. The CMS runs in the 
 ## Features
 
 - **Content types in code.** You declare collections, singles, pages and content types (news, blog) in `cms.config.ts`. The module generates the database schema, the migrations and the TypeScript types.
-- **Admin panel at `/cms`.** Editors manage entries, drafts and media, filter and duplicate entries, and import or export a collection as JSON or CSV. The panel has a light and a dark theme, a global search (⌘K) and admin accounts.
+- **Admin panel at `/cms`.** Editors manage entries, drafts and media, filter and duplicate entries, and import or export a collection as JSON or CSV. The panel has a light and a dark theme, a global search (⌘K) and admin accounts. It is built on [@xleddyl/443-components-vue](https://www.npmjs.com/package/@xleddyl/443-components-vue), installed for you; the module adds no Tailwind or other build plugins to your app.
 - **Visual editor.** Editors build content from your own site components, on a live preview of the site.
 - **GraphQL API.** A read-only, typed API with filters, sorting and pagination. Composables such as `useCmsCollection` and `useCmsContent` query it for you.
 - **Your database.** SQLite (default), Postgres, libSQL/Turso or Cloudflare D1.

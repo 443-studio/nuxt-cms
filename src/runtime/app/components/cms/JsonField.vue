@@ -1,19 +1,27 @@
 <template>
-   <div class="cms-form-field">
-      <CmsTextarea
+   <KStack gap="xs">
+      <KTextarea
          v-model="text"
          :rows="6"
-         class="font-mono"
-         :color="invalid ? 'error' : undefined"
+         class="k-mono"
+         :invalid="control.field ? undefined : invalid || undefined"
          @blur="commit"
          @update:model-value="invalid = false"
       />
-      <p v-if="invalid" class="cms-form-error">Invalid JSON</p>
-   </div>
+      <KFieldMessage v-if="!control.field && invalid" :message="INVALID_JSON" />
+   </KStack>
 </template>
 
 <script setup lang="ts">
+import {
+   FieldMessage as KFieldMessage,
+   Stack as KStack,
+   Textarea as KTextarea,
+   useFieldControl,
+} from '@xleddyl/443-components-vue'
 import { ref, watch } from '#imports'
+
+const INVALID_JSON = 'Invalid JSON'
 
 const model = defineModel<unknown>({ required: true })
 
@@ -30,11 +38,15 @@ function parse(raw: string): unknown {
    }
 }
 
-const text = ref(serialize(model.value))
+const control = useFieldControl()
+
+const text = ref<string | null | undefined>(serialize(model.value))
 const invalid = ref(false)
 
+watch(invalid, (value) => control.setControlError(value ? INVALID_JSON : undefined))
+
 watch(model, (value) => {
-   const current = parse(text.value)
+   const current = parse(text.value ?? '')
    if (JSON.stringify(current ?? null) !== JSON.stringify(value ?? null)) {
       text.value = serialize(value)
       invalid.value = false
@@ -42,7 +54,7 @@ watch(model, (value) => {
 })
 
 function commit() {
-   const parsed = parse(text.value)
+   const parsed = parse(text.value ?? '')
    if (parsed === undefined) {
       invalid.value = true
       return

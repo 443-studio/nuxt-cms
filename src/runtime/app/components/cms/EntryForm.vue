@@ -1,108 +1,73 @@
 <template>
-   <CmsForm
-      :id="formId"
-      ref="form"
-      :state="state"
-      :schema="schema"
-      :warnings="warnings"
-      @submit="emit('submit')"
-      @error="onError"
-   >
-      <div v-if="tabList.length > 1" class="cms-tabs" role="tablist">
-         <button
-            v-for="tab in tabList"
-            :key="tab.id"
-            type="button"
-            role="tab"
-            class="cms-tab"
-            :class="{ 'is-active': tab.id === activeTab }"
-            :aria-selected="tab.id === activeTab"
-            @click="activeTab = tab.id"
-         >
-            {{ tab.label }}
-         </button>
-      </div>
-      <div class="cms-form-layout">
-         <div class="cms-form-main">
-            <component
-               :is="section.title ? 'section' : 'div'"
-               v-for="section in sections"
-               :key="section.id"
-               class="cms-form-section"
-               :class="{ 'is-titled': !!section.title, 'is-collapsed': isCollapsed(section) }"
-            >
-               <button
-                  v-if="section.title"
-                  type="button"
-                  class="cms-form-section-header"
-                  :aria-expanded="!isCollapsed(section)"
-                  @click="toggleSection(section.id)"
+   <KForm :id="formId" ref="formRef" :form="form" :focus-on-error="false" class="cms-form">
+      <component :is="tabbed ? KTabs : 'div'" v-bind="tabsBinding" class="cms-form-body">
+         <template #[panelSlot]>
+            <div class="cms-form-main">
+               <component
+                  :is="section.title ? KAccordion : 'div'"
+                  v-for="section in sections"
+                  :key="section.id"
+                  v-bind="sectionBinding(section)"
+                  class="cms-form-section"
                >
-                  <span class="cms-form-section-text">
-                     <span class="cms-form-section-title">{{ section.title }}</span>
-                     <span v-if="section.description" class="cms-form-section-description">
-                        {{ section.description }}
-                     </span>
-                  </span>
-                  <CmsIcon name="chevron-down" class="cms-form-section-chevron size-4" />
-               </button>
-               <div v-show="!isCollapsed(section)" class="cms-form-rows">
-                  <div
-                     v-for="row in section.rows"
-                     :key="row.join('|')"
-                     class="cms-form-row"
-                     :style="{ '--cms-row-cols': row.length }"
-                  >
-                     <CmsFormField
-                        v-for="key in row"
-                        :key="key"
-                        :label="fields[key]!.label"
-                        :description="fields[key]!.description"
-                        :icon="fieldIcon(fields[key]!)"
-                        :name="key"
-                        :required="fields[key]!.required"
-                        :data-cms-field="key"
-                        :class="{ 'is-search-focus': highlighted === key }"
+                  <div class="cms-form-rows" :class="{ 'cms-form-section-body': section.title }">
+                     <div
+                        v-for="row in section.rows"
+                        :key="row.join('|')"
+                        class="cms-form-row"
+                        :style="{ '--cms-row-cols': row.length }"
                      >
-                        <template
-                           v-if="hasLocaleSwitch(fields[key]!) && i18n.locales.length > 1"
-                           #label-actions
+                        <KFormField
+                           v-for="key in row"
+                           :key="key"
+                           :name="key"
+                           :label="fields[key]!.label"
+                           :description="fields[key]!.description"
+                           :icon="cmsIcon(fieldIcon(fields[key]!))"
+                           :required="fields[key]!.required"
+                           :data-cms-field="key"
+                           :class="{ 'cms-search-focus': highlighted === key }"
                         >
-                           <CmsLocaleSwitch
-                              :model-value="localeFor(key)"
-                              :value="
-                                 isTranslatableField(fields[key]!)
-                                    ? (state[key] as Record<string, string> | null)
-                                    : null
-                              "
-                              @update:model-value="(locale: string) => setLocale(key, locale)"
+                           <template
+                              v-if="hasLocaleSwitch(fields[key]!) && i18n.locales.length > 1"
+                              #label-actions
+                           >
+                              <CmsLocaleSwitch
+                                 :model-value="localeFor(key)"
+                                 :value="
+                                    isTranslatableField(fields[key]!)
+                                       ? (state[key] as Record<string, string> | null)
+                                       : null
+                                 "
+                                 @update:model-value="(locale: string) => setLocale(key, locale)"
+                              />
+                           </template>
+                           <CmsFieldInput
+                              v-model="state[key]"
+                              :field="fields[key]!"
+                              :locale="localeFor(key)"
+                              :slug-source="slugSource(fields[key]!)"
+                              :entry-name="entryName"
+                              :field-key="key"
                            />
-                        </template>
-                        <CmsFieldInput
-                           v-model="state[key]"
-                           :field="fields[key]!"
-                           :locale="localeFor(key)"
-                           :slug-source="slugSource(fields[key]!)"
-                           :entry-name="entryName"
-                           :field-key="key"
-                        />
-                     </CmsFormField>
+                        </KFormField>
+                     </div>
                   </div>
-               </div>
-            </component>
-         </div>
-      </div>
-      <div v-if="footer" class="cms-form-actions">
-         <CmsButton type="submit" label="Save" :loading="loading" />
-         <CmsButton
+               </component>
+            </div>
+         </template>
+      </component>
+      <KStack v-if="footer" direction="row" justify="end" gap="sm">
+         <KButton type="submit" label="Save" :loading="loading" />
+         <KButton
             v-if="drafts"
             type="submit"
             :label="published ? 'Make draft' : 'Publish'"
             :loading="loading"
             @click="togglePublished"
          />
-      </div>
-   </CmsForm>
+      </KStack>
+   </KForm>
 </template>
 
 <script setup lang="ts">
@@ -122,6 +87,16 @@ import {
    resolveFormLayout,
    slugSourceValue,
 } from '#nuxt-cms'
+import type { FormErrors } from '@xleddyl/443-components-vue'
+import {
+   Accordion as KAccordion,
+   Button as KButton,
+   Form as KForm,
+   FormField as KFormField,
+   Stack as KStack,
+   Tabs as KTabs,
+   useForm,
+} from '@xleddyl/443-components-vue'
 import { computed, nextTick, onMounted, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import type { CmsSearchFocus } from '../../../shared/search'
@@ -129,7 +104,7 @@ import { buildEntrySchema, entryValidationWarnings } from '../../../shared/valid
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
-import { fieldIcon } from '../../utils/ui'
+import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const props = withDefaults(
    defineProps<{
@@ -161,6 +136,23 @@ const activeTab = ref(tabList.value[0]?.id ?? '')
 watch(tabList, (tabs) => {
    if (!tabs.some((tab) => tab.id === activeTab.value)) activeTab.value = tabs[0]?.id ?? ''
 })
+
+const tabbed = computed(() => tabList.value.length > 1)
+
+const panelSlot = computed(() => (tabbed.value ? 'panel' : 'default'))
+
+const tabsBinding = computed(() =>
+   tabbed.value
+      ? {
+           items: tabList.value.map((tab) => ({ value: tab.id, label: tab.label })),
+           modelValue: activeTab.value,
+           panelFocusable: false,
+           'onUpdate:modelValue': (value: string | number | undefined) => {
+              activeTab.value = String(value ?? '')
+           },
+        }
+      : {}
+)
 
 const settings = useCmsSettingsState()
 
@@ -203,6 +195,17 @@ function toggleSection(id: string) {
    if (section) toggled.value = { ...toggled.value, [id]: !isCollapsed(section) }
 }
 
+function sectionBinding(section: ShownSection) {
+   if (!section.title) return {}
+   return {
+      items: [{ value: section.id, title: section.title, description: section.description }],
+      variant: 'outline' as const,
+      contentVariant: 'neutral' as const,
+      modelValue: isCollapsed(section) ? null : section.id,
+      'onUpdate:modelValue': () => toggleSection(section.id),
+   }
+}
+
 function revealField(key: string) {
    for (const section of sections.value) {
       if (section.rows.some((row) => row.includes(key)) && isCollapsed(section)) {
@@ -211,9 +214,14 @@ function revealField(key: string) {
    }
 }
 
-function onError() {
-   const issue = schema.value.safeParse(state.value).error?.issues[0]
-   const key = issue ? String(issue.path[0] ?? '') : ''
+function firstErrorKey(errors: FormErrors) {
+   const keys = Object.keys(errors).filter((key) => errors[key])
+   return (
+      Object.keys(props.fields).find((key) => keys.includes(key)) ?? keys[0]?.split('.')[0] ?? ''
+   )
+}
+
+function onError(key: string) {
    const field = key ? props.fields[key] : undefined
    if (field && tabList.value.length) {
       const tab = fieldTab(field, tabList.value)
@@ -260,6 +268,14 @@ function warnings(values: Record<string, unknown>) {
    )
 }
 
+const form = useForm({
+   values: state,
+   validator: schema,
+   warnings,
+   onSubmit: () => emit('submit'),
+   onInvalid: (errors) => onError(firstErrorKey(errors)),
+})
+
 const published = computed({
    get: () => state.value.status === 'published',
    set: (value: boolean) => {
@@ -271,7 +287,7 @@ function togglePublished() {
    published.value = !published.value
 }
 
-const form = ref<{ $el: HTMLElement } | null>(null)
+const formRef = ref<{ $el: HTMLFormElement } | null>(null)
 const { highlighted, reveal } = useCmsFieldFocus()
 
 function applyFocus(focus: CmsSearchFocus) {
@@ -286,7 +302,7 @@ function applyFocus(focus: CmsSearchFocus) {
    }
    void nextTick(() => {
       revealField(key)
-      reveal(() => form.value?.$el, key)
+      reveal(() => formRef.value?.$el, key)
    })
 }
 

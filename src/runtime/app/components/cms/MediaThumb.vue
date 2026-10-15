@@ -1,5 +1,8 @@
 <template>
-   <span v-if="!value" class="cms-media-thumb-empty">—</span>
+   <span v-if="!value" class="cms-media-thumb-empty">
+      <KIcon :name="cmsIcon('minus')" />
+      <span class="k-visually-hidden">No media</span>
+   </span>
 
    <img
       v-else-if="kind === 'image' && url"
@@ -21,14 +24,16 @@
    />
 
    <span v-else :title="filename" class="cms-media-thumb is-fallback">
-      <CmsIcon :name="icon" class="size-4" />
+      <KIcon :name="cmsIcon(icon)" />
    </span>
 </template>
 
 <script setup lang="ts">
 import { computed } from '#imports'
+import { Icon as KIcon } from '@xleddyl/443-components-vue'
 import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
 import { useCmsRuntime } from '../../composables/cms-runtime'
+import { cmsIcon } from '../../utils/ui'
 
 const props = defineProps<{ value?: string | null }>()
 

@@ -12,7 +12,6 @@ import {
    addServerPlugin,
    addTemplate,
    addTypeTemplate,
-   addVitePlugin,
    createResolver,
    defineNuxtModule,
    extendPages,
@@ -20,8 +19,6 @@ import {
    useLogger,
 } from '@nuxt/kit'
 import type { ModuleDependencies, Nuxt } from '@nuxt/schema'
-import tailwindcss from '@tailwindcss/vite'
-import svgLoader from 'vite-svg-loader'
 import { buildSchema, introspectionFromSchema } from 'graphql'
 import { minifyIntrospection, outputIntrospectionFile } from 'gql.tada/internal'
 import { createJiti } from 'jiti'
@@ -449,7 +446,23 @@ export default defineNuxtModule<ModuleOptions>({
          (nuxt.options as unknown as { cms?: { enabled?: boolean } }).cms?.enabled,
          process.env[CMS_ENABLED_ENV]
       )
-         ? { 'nuxt-auth-utils': {} }
+         ? {
+              'nuxt-auth-utils': {},
+              '@xleddyl/443-components-vue/nuxt': {
+                 defaults: {
+                    editor: true,
+                    icons: {
+                       collections: [
+                          {
+                             prefix: 'heroicons',
+                             from: resolveImport('@iconify-json/heroicons/icons.json'),
+                             exclude: ['*-solid', '*-20-*', '*-16-*'],
+                          },
+                       ],
+                    },
+                 },
+              },
+           }
          : {},
    defaults: {
       configPath: 'cms.config',
@@ -892,12 +905,13 @@ export default defineNuxtModule<ModuleOptions>({
       })
       nuxt.options.alias['#cms-brand'] = brandTemplate.dst
 
-      addVitePlugin(tailwindcss())
-      addVitePlugin(svgLoader({ defaultImport: 'url', svgoConfig: { plugins: ['prefixIds'] } }))
       nuxt.options.css.push(
          resolveImport('@fontsource-variable/geist/index.css'),
          resolveImport('@fontsource-variable/geist-mono/index.css'),
-         resolver.resolve('./runtime/assets/main.css')
+         resolver.resolve('./runtime/assets/main.css'),
+         resolver.resolve('./runtime/assets/shell.css'),
+         resolver.resolve('./runtime/assets/media.css'),
+         resolver.resolve('./runtime/assets/editor.css')
       )
 
       nuxt.hook('app:templates', (app) => {

@@ -26,7 +26,7 @@
                @keydown="onHandleKey($event, box.index)"
                @click="onHandleClick(box.index)"
             >
-               <CmsIcon name="bars-2" />
+               <KIcon :name="cmsIcon('bars-2')" />
             </button>
             <button
                type="button"
@@ -36,7 +36,7 @@
                :disabled="box.index === 0"
                @click="emitMove(box.index, box.index - 1)"
             >
-               <CmsIcon name="arrow-up" />
+               <KIcon :name="cmsIcon('arrow-up')" />
             </button>
             <button
                type="button"
@@ -46,7 +46,7 @@
                :disabled="box.index >= total - 1"
                @click="emitMove(box.index, box.index + 1)"
             >
-               <CmsIcon name="arrow-down" />
+               <KIcon :name="cmsIcon('arrow-down')" />
             </button>
             <span class="cms-preview-separator" />
             <button
@@ -57,7 +57,7 @@
                :disabled="!canAdd"
                @click="emit('message', { type: 'duplicate', index: box.index })"
             >
-               <CmsIcon name="document-duplicate" />
+               <KIcon :name="cmsIcon('document-duplicate')" />
             </button>
             <button
                v-if="hideable(box)"
@@ -67,7 +67,7 @@
                title="Hide"
                @click="emit('message', { type: 'toggle-hidden', index: box.index })"
             >
-               <CmsIcon name="eye-slash" />
+               <KIcon :name="cmsIcon('eye-slash')" />
             </button>
             <button
                type="button"
@@ -76,7 +76,7 @@
                title="Delete"
                @click="emit('message', { type: 'remove', index: box.index })"
             >
-               <CmsIcon name="trash" />
+               <KIcon :name="cmsIcon('trash')" />
             </button>
          </div>
       </template>
@@ -92,7 +92,7 @@
          title="Insert a block"
          @click="emit('message', { type: 'insert', index: slot.index })"
       >
-         <CmsIcon name="plus" />
+         <KIcon :name="cmsIcon('plus')" />
       </button>
 
       <div
@@ -104,6 +104,8 @@
 </template>
 
 <script setup lang="ts">
+import { Icon as KIcon } from '@xleddyl/443-components-vue'
+import { cmsIcon } from '../utils/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '#imports'
 import type { FieldConfig } from '../../shared/index'
 import { canAddBlock } from '../../shared/index'

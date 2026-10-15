@@ -1,59 +1,33 @@
 <template>
-   <div class="cms-media-filters cms-list-filters">
-      <template v-for="key in keys" :key="key">
-         <CmsDropdownMenu v-if="optionsOf(key)" :items="menuItems(key)">
-            <button
-               type="button"
-               class="cms-pill"
-               :class="{ 'is-active': isActive(key) }"
-               aria-haspopup="menu"
-            >
-               {{ pillLabel(key) }}
-               <CmsIcon name="chevron-down" class="size-3" />
-            </button>
-         </CmsDropdownMenu>
-         <CmsPopover
-            v-else
-            :open="openKey === key"
-            class="cms-list-filter"
-            @update:open="(value: boolean) => (openKey = value ? key : null)"
-         >
-            <button
-               type="button"
-               class="cms-pill"
-               :class="{ 'is-active': isActive(key) }"
-               aria-haspopup="dialog"
-            >
-               {{ pillLabel(key) }}
-               <CmsIcon name="chevron-down" class="size-3" />
-            </button>
-            <template #content>
-               <div class="cms-list-filter-panel" role="dialog" :aria-label="labelOf(key)">
-                  <CmsRelationField
-                     :model-value="model[key] ?? null"
-                     :to="config.fields[key]!.to!"
-                     @update:model-value="(value) => pickRelation(key, value)"
-                  />
-               </div>
-            </template>
-         </CmsPopover>
+   <KFilterPills
+      :model-value="activeKeys"
+      :options="pills"
+      label="Filters"
+      size="sm"
+      multiple
+      clearable
+      clear-label="Clear filters"
+      class="cms-list-filters"
+      @update:model-value="onPillsUpdate"
+   >
+      <template v-for="key in relationKeys" #[`panel-${key}`]="{ close }" :key="key">
+         <div class="cms-list-filter-panel">
+            <CmsRelationField
+               :model-value="model[key] ?? null"
+               :to="config.fields[key]!.to!"
+               @update:model-value="(value) => pickRelation(key, value, close)"
+            />
+         </div>
       </template>
-      <CmsButton
-         v-if="activeCount"
-         label="Clear filters"
-         icon="x-mark"
-         size="xs"
-         variant="ghost"
-         color="neutral"
-         @click="model = {}"
-      />
-   </div>
+   </KFilterPills>
 </template>
 
 <script setup lang="ts">
 import type { CmsConfig, CmsEntry } from '#nuxt-cms'
 import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
-import { computed, reactive, ref, watch } from '#imports'
+import type { FilterPillOption, MenuEntry } from '@xleddyl/443-components-vue'
+import { FilterPills as KFilterPills } from '@xleddyl/443-components-vue'
+import { computed, reactive, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import type { CmsListFilters } from '../../../shared/list-filters'
 import {
@@ -74,10 +48,29 @@ const model = defineModel<CmsListFilters>({ required: true })
 
 const { i18n } = useCmsRuntime()
 
-const openKey = ref<string | null>(null)
 const fetchedTitles = reactive<Record<string, string>>({})
 
-const activeCount = computed(() => Object.values(model.value).filter(Boolean).length)
+const activeKeys = computed(() => props.keys.filter((key) => !!model.value[key]))
+
+const relationKeys = computed(() => props.keys.filter((key) => !optionsOf(key)))
+
+const pills = computed<FilterPillOption<string>[]>(() =>
+   props.keys.map((key) => {
+      const menu = optionsOf(key) ? menuItems(key) : undefined
+      return {
+         value: key,
+         label: labelOf(key),
+         valueLabel: valueLabelOf(key),
+         active: isActive(key),
+         menu,
+         panel: !menu,
+      }
+   })
+)
+
+function onPillsUpdate(value: string[]) {
+   if (!value.length) model.value = {}
+}
 
 function optionsOf(key: string) {
    return listFilterOptions(props.config, key)
@@ -98,21 +91,24 @@ function set(key: string, value: string | null) {
    model.value = next
 }
 
-function menuItems(key: string) {
+function menuItems(key: string): MenuEntry[] {
    const current = model.value[key]
    return [
-      { label: 'Any', checked: !current, onSelect: () => set(key, null) },
-      ...(optionsOf(key) ?? []).map((option) => ({
-         label: option.label,
-         checked: current === option.value,
-         onSelect: () => set(key, option.value),
-      })),
+      { type: 'radio', label: 'Any', checked: !current, onSelect: () => set(key, null) },
+      ...(optionsOf(key) ?? []).map(
+         (option): MenuEntry => ({
+            type: 'radio',
+            label: option.label,
+            checked: current === option.value,
+            onSelect: () => set(key, option.value),
+         })
+      ),
    ]
 }
 
-function pickRelation(key: string, value: string | string[] | null) {
+function pickRelation(key: string, value: string | string[] | null, close: () => void) {
    set(key, typeof value === 'string' ? value : null)
-   openKey.value = null
+   close()
 }
 
 function titleText(entry: CmsEntry | undefined, value: unknown): string {
@@ -160,12 +156,11 @@ watch(
    { immediate: true }
 )
 
-function pillLabel(key: string) {
+function valueLabelOf(key: string) {
    const value = model.value[key]
-   if (!value) return labelOf(key)
-   const shown = optionsOf(key)
+   if (!value) return undefined
+   return optionsOf(key)
       ? listFilterValueLabel(props.config, key, value)
       : relationTitle(key, value)
-   return `${labelOf(key)}: ${shown}`
 }
 </script>

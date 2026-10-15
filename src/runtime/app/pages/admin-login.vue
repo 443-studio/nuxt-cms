@@ -1,81 +1,86 @@
 <template>
-   <div class="cms-scope cms-canvas cms-auth" :data-theme="theme">
-      <div class="cms-auth-panel cms-rise">
-         <header class="cms-auth-header">
-            <CmsBrandMark size="lg" />
-            <h1 class="cms-title cms-title-lg">Welcome back</h1>
-            <p class="cms-subtitle">Sign in to manage your content.</p>
-         </header>
+   <KRoot class="cms-scope cms-canvas" :theme="theme" preset="default">
+      <KAuthLayout
+         title="Welcome back"
+         description="Sign in to manage your content."
+         footer="Powered by nuxt-cms"
+      >
+         <template #brand>
+            <CmsBrandMark size="lg" hide-text class="cms-auth-brand" />
+         </template>
 
-         <div class="cms-card cms-auth-card">
-            <CmsForm :state="state" @submit="login">
-               <CmsAlert v-if="error" color="error" :title="error" />
-               <CmsFormField label="Email" name="email" required>
-                  <CmsInput
-                     v-model="state.email"
-                     type="email"
-                     icon="envelope"
-                     autocomplete="username"
-                     placeholder="you@example.com"
-                  />
-               </CmsFormField>
-               <CmsFormField label="Password" name="password" required>
-                  <CmsInput
-                     v-model="state.password"
-                     type="password"
-                     icon="key"
-                     autocomplete="current-password"
-                     placeholder="••••••••"
-                  />
-               </CmsFormField>
-               <CmsButton
-                  type="submit"
-                  label="Sign in"
-                  icon="arrow-right"
-                  trailing-icon
-                  size="lg"
-                  block
-                  :loading="loading"
+         <KForm :form="form">
+            <KFormField label="Email" name="email" required>
+               <KInput
+                  v-model="form.values.email"
+                  type="email"
+                  :icon="cmsIcon('envelope')"
+                  autocomplete="username"
+                  placeholder="you@example.com"
                />
-            </CmsForm>
-         </div>
-
-         <p class="cms-auth-footer">Powered by nuxt-cms</p>
-      </div>
-   </div>
+            </KFormField>
+            <KFormField label="Password" name="password" required>
+               <KInput
+                  v-model="form.values.password"
+                  type="password"
+                  icon="key"
+                  autocomplete="current-password"
+                  placeholder="••••••••"
+               />
+            </KFormField>
+            <KButton type="submit" label="Sign in" trailing-icon="arrow-right" size="lg" block />
+         </KForm>
+      </KAuthLayout>
+   </KRoot>
 </template>
 
 <script setup lang="ts">
-import { definePageMeta, navigateTo, ref, useUserSession } from '#imports'
-import { errorMessage } from '../utils/ui'
+import {
+   AuthLayout as KAuthLayout,
+   Button as KButton,
+   Form as KForm,
+   FormField as KFormField,
+   Input as KInput,
+   Root as KRoot,
+   provideTheme,
+   useForm,
+} from '@xleddyl/443-components-vue'
+import { definePageMeta, navigateTo, useUserSession } from '#imports'
+import { cmsIcon, errorMessage } from '../utils/ui'
 import { useCmsTheme } from '../composables/cms-theme'
 
 definePageMeta({ layout: false })
 
 const theme = useCmsTheme()
+provideTheme(theme)
 const { loggedIn } = useUserSession()
 if (loggedIn.value) {
    await navigateTo('/cms', { replace: true })
 }
 
-const state = ref({ email: '', password: '' })
-const error = ref<string | null>(null)
-const loading = ref(false)
+const form = useForm({
+   schema: {
+      email: { initial: (): string | number | null | undefined => '' },
+      password: { initial: (): string | number | null | undefined => '' },
+   },
+   onSubmit: login,
+})
 
-async function login() {
-   loading.value = true
-   error.value = null
+async function login(values: {
+   email: string | number | null | undefined
+   password: string | number | null | undefined
+}) {
    try {
-      await $fetch('/api/cms/auth/login', { method: 'POST', body: state.value })
+      await $fetch('/api/cms/auth/login', { method: 'POST', body: values })
       window.location.replace('/cms')
    } catch (e) {
       const status = (e as { statusCode?: number }).statusCode
-      error.value =
+      form.setError(
+         '',
          status === 401
             ? 'Invalid email or password.'
             : errorMessage(e) ?? 'Login failed. Please try again.'
-   } finally {
-      loading.value = false
+      )
    }
 }
 </script>

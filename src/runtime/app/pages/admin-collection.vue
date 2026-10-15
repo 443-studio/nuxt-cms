@@ -1,33 +1,35 @@
 <template>
    <div class="cms-page" :class="{ 'is-fill': isCollectionKind(config) && !error }">
-      <CmsPageHeader
+      <KPageHeader
          :title="config.label"
-         :icon="kindMeta.icon"
+         :icon="cmsIcon(kindMeta.icon)"
          :description="kindMeta.description"
       >
          <template v-if="config.kind !== 'single' && total" #badge>
             <span :key="total" class="cms-count">{{ total }}</span>
          </template>
-         <CmsButton
-            v-if="config.kind === 'single'"
-            type="submit"
-            :form="FORM_ID"
-            label="Save"
-            :loading="saving"
-         />
-      </CmsPageHeader>
+         <template v-if="config.kind === 'single'" #actions>
+            <KButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
+         </template>
+      </KPageHeader>
 
-      <CmsEmptyState v-if="error" icon="exclamation-triangle" title="Could not load entries">
-         <CmsButton
-            label="Retry"
-            icon="arrow-path"
-            variant="soft"
-            :loading="status === 'pending'"
-            @click="reload"
-         />
-      </CmsEmptyState>
+      <KEmptyState
+         v-if="error"
+         :icon="cmsIcon('exclamation-triangle')"
+         title="Could not load entries"
+      >
+         <template #actions>
+            <KButton
+               label="Retry"
+               :icon="cmsIcon('arrow-path')"
+               variant="soft"
+               :loading="status === 'pending'"
+               @click="reload"
+            />
+         </template>
+      </KEmptyState>
 
-      <div v-else-if="config.kind === 'single'" class="cms-card cms-panel">
+      <KCard v-else-if="config.kind === 'single'" variant="outline" padding="lg">
          <CmsEntryForm
             v-model="formState"
             :fields="config.fields"
@@ -38,20 +40,20 @@
             :focus="focus"
             @submit="saveSingle"
          />
-      </div>
+      </KCard>
 
       <template v-else-if="config.kind === 'page'">
-         <div class="cms-toolbar">
-            <CmsInput
-               v-if="total || searchTerm"
+         <div v-if="total || searchTerm" class="cms-toolbar">
+            <KInput
                v-model="search"
-               icon="magnifying-glass"
+               :icon="cmsIcon('magnifying-glass')"
                placeholder="Search…"
-               class="flex-1"
+               aria-label="Search pages"
+               class="cms-toolbar-search"
             />
          </div>
 
-         <div v-if="pageTree.length" class="cms-card cms-tree">
+         <KCard v-if="pageTree.length" variant="outline" padding="none" class="cms-tree">
             <NuxtLink
                v-for="(node, index) in pageTree"
                :key="String(node.row.id)"
@@ -62,103 +64,110 @@
                   '--cms-row-delay': `${Math.min(index, 14) * 24}ms`,
                }"
             >
-               <CmsIcon
+               <KIcon
                   v-if="node.depth"
-                  name="arrow-turn-left-up"
-                  class="cms-tree-branch size-3.5"
+                  :name="cmsIcon('arrow-turn-left-up')"
+                  class="cms-tree-branch"
                />
                <span class="cms-tree-doc">
-                  <CmsIcon name="document-text" class="size-4" />
+                  <KIcon :name="cmsIcon('document-text')" />
                </span>
-               <div class="min-w-0 flex-1">
-                  <div class="cms-tree-title">
-                     {{ node.row.label }}
-                  </div>
-                  <div class="cms-tree-path">{{ node.row.path }}</div>
-               </div>
+               <span class="cms-tree-text">
+                  <span class="cms-tree-title">{{ node.row.label }}</span>
+                  <span class="cms-tree-path">{{ node.row.path }}</span>
+               </span>
                <span class="cms-tree-meta">{{ lastEdit(node.row.updatedAt) }}</span>
-               <CmsIcon name="chevron-right" class="cms-tree-chevron size-4" />
+               <KIcon name="chevron-right" class="cms-tree-chevron" />
             </NuxtLink>
-         </div>
+         </KCard>
 
-         <CmsSpinner v-else-if="status === 'pending'" />
+         <KSpinner v-else-if="status === 'pending'" block />
 
-         <CmsEmptyState v-else-if="searchTerm" icon="magnifying-glass" title="No matching pages" />
-
-         <CmsEmptyState
-            v-else
-            icon="document-text"
-            title="No pages yet"
-            body="Pages come from the routes of the app."
+         <KEmptyState
+            v-else-if="searchTerm"
+            :icon="cmsIcon('magnifying-glass')"
+            title="No matching pages"
          />
 
-         <CmsPagination v-model:page="page" :total="total" :items-per-page="PAGE_SIZE" />
+         <KEmptyState
+            v-else
+            :icon="cmsIcon('document-text')"
+            title="No pages yet"
+            description="Pages come from the routes of the app."
+         />
+
+         <KPagination
+            v-model:page="page"
+            :total="total"
+            :page-size="PAGE_SIZE"
+            :show-summary="false"
+         />
       </template>
 
       <template v-else>
          <div class="cms-toolbar">
-            <CmsInput
+            <KInput
                v-if="total || narrowed"
                v-model="search"
-               icon="magnifying-glass"
+               :icon="cmsIcon('magnifying-glass')"
                placeholder="Search…"
-               class="flex-1"
+               aria-label="Search entries"
+               class="cms-toolbar-search"
             />
-            <div v-if="selected.length" :key="'bulk'" class="cms-toolbar-actions cms-bulk-actions">
-               <span class="cms-bulk-count">{{ selected.length }} selected</span>
-               <CmsButton
-                  icon="x-mark"
-                  variant="ghost"
-                  color="neutral"
-                  size="sm"
-                  aria-label="Clear selection"
-                  title="Clear selection"
-                  @click="selected = []"
-               />
-               <template v-if="drafts">
-                  <CmsButton
-                     label="Draft"
-                     icon="pencil-square"
-                     variant="soft"
-                     :disabled="saving"
-                     @click="bulkStatus('draft')"
-                  />
-                  <CmsButton
-                     label="Publish"
-                     icon="check-circle"
-                     variant="soft"
-                     :disabled="saving"
-                     @click="bulkStatus('published')"
-                  />
+            <div class="cms-toolbar-actions">
+               <KSelectionBar
+                  :count="selected.length"
+                  :total="rows.length"
+                  :on-select-all="selectAll"
+                  :on-clear="clearSelection"
+               >
+                  <template #actions>
+                     <template v-if="drafts">
+                        <KButton
+                           label="Draft"
+                           :icon="cmsIcon('pencil-square')"
+                           variant="soft"
+                           :disabled="saving"
+                           @click="bulkStatus('draft')"
+                        />
+                        <KButton
+                           label="Publish"
+                           :icon="cmsIcon('check-circle')"
+                           variant="soft"
+                           :disabled="saving"
+                           @click="bulkStatus('published')"
+                        />
+                     </template>
+                     <KButton
+                        v-if="selected.length === 1"
+                        label="Duplicate"
+                        :icon="cmsIcon('document-duplicate')"
+                        variant="soft"
+                        :disabled="saving"
+                        @click="duplicateSelected"
+                     />
+                     <KButton
+                        label="Delete"
+                        :icon="cmsIcon('trash')"
+                        tone="danger"
+                        :loading="saving"
+                        @click="bulkDelete"
+                     />
+                  </template>
+               </KSelectionBar>
+               <template v-if="!selected.length">
+                  <KDropdownMenu :items="transferItems" placement="bottom-end">
+                     <KButton
+                        :icon="cmsIcon('arrows-up-down')"
+                        variant="soft"
+                        tone="neutral"
+                        :loading="exporting"
+                        aria-label="Import and export"
+                        title="Import and export"
+                     />
+                  </KDropdownMenu>
+                  <KButton label="New entry" icon="plus" @click="openCreate" />
                </template>
-               <CmsButton
-                  v-if="selected.length === 1"
-                  label="Duplicate"
-                  icon="document-duplicate"
-                  variant="soft"
-                  :disabled="saving"
-                  @click="duplicateSelected"
-               />
-               <CmsButton
-                  label="Delete"
-                  icon="trash"
-                  color="error"
-                  :loading="saving"
-                  @click="bulkDelete"
-               />
-            </div>
-            <div v-else :key="'default'" class="cms-toolbar-actions">
-               <CmsDropdownMenu :items="transferItems" :content="{ align: 'end' }">
-                  <CmsButton
-                     icon="arrows-up-down"
-                     variant="soft"
-                     color="neutral"
-                     :loading="exporting"
-                     aria-label="Import and export"
-                     title="Import and export"
-                  />
-               </CmsDropdownMenu>
-               <CmsButton label="New entry" icon="plus" @click="openCreate" />
             </div>
          </div>
 
@@ -170,55 +179,59 @@
             :relations="relations"
          />
 
-         <CmsTable
+         <KTable
             v-if="rows.length"
             v-model:selected="selected"
-            selectable
             v-model:sort="sort"
-            :data="rows"
+            selectable
+            :rows="rows"
             :columns="columns"
-            @select="onSelect"
+            :row-key="rowKey"
+            @row-click="onSelect"
          >
-            <template v-for="key in mediaKeys" #[`${key}-cell`]="{ row }" :key="key">
-               <CmsMediaThumb :value="mediaThumbValue(key, row.original[key])" />
+            <template v-for="key in mediaKeys" #[`cell-${key}`]="{ row }" :key="key">
+               <CmsMediaThumb :value="mediaThumbValue(key, row[key])" />
             </template>
-            <template v-if="drafts" #status-cell="{ row }">
+            <template v-if="drafts" #cell-status="{ row }">
                <CmsStatusBadge
-                  :published="row.original.status === 'published'"
-                  :scheduled="mounted && isContent && isScheduledContent(row.original)"
-                  :at="formatDateTime(row.original.publishedAt)"
+                  :published="row.status === 'published'"
+                  :scheduled="mounted && isContent && isScheduledContent(row)"
+                  :at="formatDateTime(row.publishedAt)"
                />
             </template>
-         </CmsTable>
+         </KTable>
 
-         <CmsSpinner v-else-if="status === 'pending'" />
+         <KSpinner v-else-if="status === 'pending'" block />
 
-         <CmsEmptyState
+         <KEmptyState
             v-else-if="narrowed"
-            icon="magnifying-glass"
+            :icon="cmsIcon('magnifying-glass')"
             title="No matching entries"
             fill
          >
-            <CmsButton
-               v-if="filterCount"
-               label="Clear filters"
-               icon="x-mark"
-               variant="soft"
-               @click="filters = {}"
-            />
-         </CmsEmptyState>
+            <template v-if="filterCount" #actions>
+               <KButton label="Clear filters" icon="x-mark" variant="soft" @click="filters = {}" />
+            </template>
+         </KEmptyState>
 
-         <CmsEmptyState
+         <KEmptyState
             v-else
-            icon="sparkles"
+            :icon="cmsIcon('sparkles')"
             title="Nothing here yet"
-            body="Entries you create will show up here."
+            description="Entries you create will show up here."
             fill
          >
-            <CmsButton label="New entry" icon="plus" variant="soft" @click="openCreate" />
-         </CmsEmptyState>
+            <template #actions>
+               <KButton label="New entry" icon="plus" variant="soft" @click="openCreate" />
+            </template>
+         </KEmptyState>
 
-         <CmsPagination v-model:page="page" :total="total" :items-per-page="PAGE_SIZE" />
+         <KPagination
+            v-model:page="page"
+            :total="total"
+            :page-size="PAGE_SIZE"
+            :show-summary="false"
+         />
 
          <CmsEntryDrawer
             v-if="!isContent"
@@ -264,6 +277,20 @@ import {
    useRoute,
    watch,
 } from '#imports'
+import type { MenuEntry, RowKey, TableColumn, TableSort } from '@xleddyl/443-components-vue'
+import {
+   Button as KButton,
+   Card as KCard,
+   DropdownMenu as KDropdownMenu,
+   EmptyState as KEmptyState,
+   Icon as KIcon,
+   Input as KInput,
+   PageHeader as KPageHeader,
+   Pagination as KPagination,
+   SelectionBar as KSelectionBar,
+   Spinner as KSpinner,
+   Table as KTable,
+} from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
 import type { CmsListFilters } from '../../shared/list-filters'
@@ -281,7 +308,7 @@ import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
-import { errorMessage } from '../utils/ui'
+import { cmsIcon, errorMessage } from '../utils/ui'
 
 definePageMeta({
    layout: 'cms-admin',
@@ -315,11 +342,6 @@ const drafts = isCollectionKind(config) && !!config.drafts
 const formKeys = drafts ? [...fieldKeys, 'status'] : fieldKeys
 
 type Row = Record<string, unknown>
-
-interface TableSort {
-   key: string
-   order: 'asc' | 'desc'
-}
 
 const endpoint: string = `/api/cms/admin/${name}`
 
@@ -370,7 +392,7 @@ watch(
 )
 
 const sortQuery = computed(() =>
-   sort.value ? { sort: sort.value.key, order: sort.value.order } : {}
+   sort.value ? { sort: sort.value.key, order: sort.value.direction } : {}
 )
 
 const listQuery = computed(() => ({
@@ -558,18 +580,22 @@ function isSortable(field: FieldConfig) {
 
 const settings = useCmsSettingsState()
 
-const columns = computed(() =>
+const columns = computed<TableColumn<Row>[]>(() =>
    entryListColumns(name, settings.value).map((key) =>
       key === 'status' && !config.fields.status
-         ? { accessorKey: 'status', header: 'Status', sortable: true }
+         ? { key: 'status', label: 'Status', sortable: true }
          : {
-              id: key,
-              accessorFn: (row: Row) => displayValue(config.fields[key]!, key, row[key]),
-              header: config.fields[key]!.label,
+              key,
+              label: config.fields[key]!.label,
+              value: (row: Row) => displayValue(config.fields[key]!, key, row[key]),
               sortable: isSortable(config.fields[key]!),
            }
    )
 )
+
+function rowKey(row: Row) {
+   return String(row.id)
+}
 
 const filterKeys = computed(() => {
    if (!isCollectionKind(config)) return []
@@ -582,13 +608,13 @@ const drawerOpen = ref(false)
 const drawerEntryId = ref<string | null>(null)
 const drawerInitial = ref<Row | null>(null)
 
-function onSelect(_event: Event, row: { original: Row }) {
+function onSelect(row: Row) {
    if (isContent) {
-      void navigateTo(`/cms/${name}/${row.original.id}`)
+      void navigateTo(`/cms/${name}/${row.id}`)
       return
    }
    drawerInitial.value = null
-   drawerEntryId.value = String(row.original.id)
+   drawerEntryId.value = String(row.id)
    drawerOpen.value = true
 }
 
@@ -609,7 +635,7 @@ function openDuplicate(values: Row) {
 }
 
 async function duplicateSelected() {
-   const id = selected.value[0]
+   const id = selected.value.map(String)[0]
    if (!id || saving.value) return
    if (isContent) {
       void navigateTo({ path: `/cms/${name}/new`, query: { duplicate: id } })
@@ -655,7 +681,7 @@ async function exportEntries(format: CmsTransferFormat, narrow: boolean) {
    }
 }
 
-const transferItems = computed(() => {
+const transferItems = computed<MenuEntry[]>(() => {
    const formats: CmsTransferFormat[] = csvAvailable ? ['json', 'csv'] : ['json']
    const exports = (narrow: boolean) =>
       formats.map((format) => ({
@@ -681,12 +707,20 @@ async function onDrawerDeleted() {
 
 const confirmAction = useCmsConfirm()
 
-const selected = ref<string[]>([])
+const selected = ref<RowKey[]>([])
 
 watch(rows, (current) => {
    const ids = new Set(current.map((row) => String(row.id)))
-   selected.value = selected.value.filter((id) => ids.has(id))
+   selected.value = selected.value.filter((id) => ids.has(String(id)))
 })
+
+function selectAll() {
+   selected.value = rows.value.map(rowKey)
+}
+
+function clearSelection() {
+   selected.value = []
+}
 
 function entriesLabel(count: number) {
    return `${count} ${count === 1 ? 'entry' : 'entries'}`
@@ -720,7 +754,7 @@ function reportBulk(done: string, total: number, failed: { reason: unknown }[]) 
 }
 
 async function bulkDelete() {
-   const ids = [...selected.value]
+   const ids = selected.value.map(String)
    if (!ids.length || saving.value) return
    if (!(await confirmAction(`Delete ${entriesLabel(ids.length)}?`))) return
    const emptiesPage = ids.length >= rows.value.length && page.value > 1
@@ -730,7 +764,7 @@ async function bulkDelete() {
 }
 
 async function bulkStatus(status: 'draft' | 'published') {
-   const ids = [...selected.value]
+   const ids = selected.value.map(String)
    if (!ids.length || saving.value) return
    const failed = await runBulk(ids, async (id) => {
       const entry = await cmsApi<Row>(`${endpoint}/${id}`)

@@ -1,69 +1,108 @@
 <template>
-   <div class="cms-folder-picker">
-      <CmsInput
-         v-if="folders.length > 8"
-         v-model="query"
-         size="sm"
-         icon="magnifying-glass"
-         placeholder="Find a folder…"
-      />
-      <div class="cms-folder-picker-list" role="listbox">
-         <button
-            v-if="!query"
-            type="button"
-            role="option"
-            class="cms-folder-picker-row"
-            :class="{ 'is-active': model === null }"
-            :aria-selected="model === null"
-            :disabled="isDisabled(null)"
-            @click="model = null"
-         >
-            <CmsIcon name="home" class="size-4" />
-            <span class="truncate">Library root</span>
-            <CmsIcon v-if="model === null" name="check" class="cms-folder-picker-check size-4" />
-         </button>
-         <button
-            v-for="folder in visible"
-            :key="folder"
-            type="button"
-            role="option"
-            class="cms-folder-picker-row"
-            :class="{ 'is-active': model === folder }"
-            :style="
-               query ? undefined : { paddingLeft: `${0.625 + mediaFolderDepth(folder) * 1}rem` }
-            "
-            :aria-selected="model === folder"
-            :disabled="isDisabled(folder)"
-            @click="model = folder"
-         >
-            <CmsIcon :name="model === folder ? 'folder-open' : 'folder'" class="size-4" />
-            <span class="truncate">{{ query ? folder : mediaFolderName(folder) }}</span>
-            <CmsIcon v-if="model === folder" name="check" class="cms-folder-picker-check size-4" />
-         </button>
-         <p v-if="query && !visible.length" class="cms-folder-picker-empty">No matching folders</p>
+   <div class="cms-media-folder-picker">
+      <KFieldBoundary v-if="folders.length > 8" auxiliary>
+         <KInput
+            v-model="query"
+            size="sm"
+            :icon="cmsIcon('magnifying-glass')"
+            placeholder="Find a folder…"
+            aria-label="Find a folder"
+            clearable
+         />
+      </KFieldBoundary>
+      <div class="cms-media-folder-picker-list">
+         <KTree
+            v-model:selected="selected"
+            v-model:expanded="expanded"
+            :nodes="nodes"
+            :bordered="false"
+            :label="label"
+            size="sm"
+            checkmark
+            empty-text="No matching folders"
+         />
       </div>
    </div>
 </template>
 
 <script setup lang="ts">
+import type { TreeNode } from '@xleddyl/443-components-vue'
 import { computed, ref } from '#imports'
-import { isWithinMediaFolder, mediaFolderDepth, mediaFolderName } from '#nuxt-cms'
+import {
+   FieldBoundary as KFieldBoundary,
+   Input as KInput,
+   Tree as KTree,
+} from '@xleddyl/443-components-vue'
+import { isWithinMediaFolder, mediaFolderName, mediaFolderParent } from '#nuxt-cms'
+import { cmsIcon } from '../../utils/ui'
+
+const ROOT_ID = ':root'
 
 const props = defineProps<{
    folders: string[]
    exclude?: string | null
+   label?: string
 }>()
 
 const model = defineModel<string | null>({ default: null })
 
 const query = ref('')
+const term = computed(() => query.value.trim().toLowerCase())
 
-const visible = computed(() => {
-   const term = query.value.trim().toLowerCase()
-   return term ? props.folders.filter((folder) => folder.includes(term)) : props.folders
+const visible = computed(() =>
+   term.value ? props.folders.filter((folder) => folder.includes(term.value)) : props.folders
+)
+
+function isDisabled(folder: string) {
+   return !!props.exclude && isWithinMediaFolder(folder, props.exclude)
+}
+
+function folderNode(folder: string, label: string, children?: TreeNode[]): TreeNode {
+   return {
+      id: folder,
+      label,
+      icon: cmsIcon(model.value === folder ? 'folder-open' : 'folder'),
+      disabled: isDisabled(folder),
+      children: children?.length ? children : undefined,
+   }
+}
+
+const nodes = computed<TreeNode[]>(() => {
+   if (term.value) return visible.value.map((folder) => folderNode(folder, folder))
+   const build = (parent: string | null): TreeNode[] =>
+      props.folders
+         .filter((folder) => mediaFolderParent(folder) === parent)
+         .map((folder) => folderNode(folder, mediaFolderName(folder), build(folder)))
+   return [{ id: ROOT_ID, label: 'Library root', icon: cmsIcon('home'), children: build(null) }]
 })
 
-function isDisabled(folder: string | null) {
-   return !!props.exclude && !!folder && isWithinMediaFolder(folder, props.exclude)
-}
+const parentIds = computed(() => {
+   const ids: TreeNode['id'][] = []
+   const walk = (list: TreeNode[]) => {
+      for (const node of list) {
+         if (!node.children) continue
+         ids.push(node.id)
+         walk(node.children)
+      }
+   }
+   walk(nodes.value)
+   return ids
+})
+
+const collapsed = ref<TreeNode['id'][]>([])
+
+const expanded = computed<TreeNode['id'][]>({
+   get: () => parentIds.value.filter((id) => !collapsed.value.includes(id)),
+   set: (ids) => {
+      collapsed.value = parentIds.value.filter((id) => !ids.includes(id))
+   },
+})
+
+const selected = computed<TreeNode['id'] | null>({
+   get: () => (model.value === null ? ROOT_ID : model.value),
+   set: (id) => {
+      if (id === null) return
+      model.value = id === ROOT_ID ? null : String(id)
+   },
+})
 </script>

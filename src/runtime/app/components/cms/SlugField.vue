@@ -1,27 +1,30 @@
 <template>
-   <CmsInput
-      :model-value="(model ?? '') as string"
-      class="font-mono"
+   <KInput
+      :model-value="model ?? ''"
+      class="k-mono"
       @update:model-value="
          (v) => {
-            model = (v as string) || null
+            model = v == null || v === '' ? null : String(v)
             touched = true
          }
       "
    >
       <template v-if="source !== undefined" #trailing>
-         <CmsButton
+         <KButton
             icon="arrow-path"
             size="xs"
             variant="ghost"
-            color="neutral"
+            tone="neutral"
+            aria-label="Regenerate slug"
+            title="Regenerate slug"
             @click="regenerate"
          />
       </template>
-   </CmsInput>
+   </KInput>
 </template>
 
 <script setup lang="ts">
+import { Button as KButton, Input as KInput } from '@xleddyl/443-components-vue'
 import { ref, watch } from '#imports'
 import { slugify } from '#nuxt-cms'
 

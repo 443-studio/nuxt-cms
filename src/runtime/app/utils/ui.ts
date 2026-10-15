@@ -1,11 +1,5 @@
-import type { InjectionKey, Reactive, Ref } from 'vue'
 import type { FieldConfig, FieldType } from '#nuxt-cms'
-
-export const CMS_FORM_ERRORS: InjectionKey<Reactive<Record<string, string>>> =
-   Symbol('cms-form-errors')
-
-export const CMS_FORM_WARNINGS: InjectionKey<Readonly<Ref<Record<string, string>>>> =
-   Symbol('cms-form-warnings')
+import { isBuiltinIcon } from '@xleddyl/443-components-vue'
 
 export function errorMessage(error: unknown): string | undefined {
    const err = error as { data?: { message?: string }; message?: string }
@@ -31,4 +25,8 @@ const FIELD_ICONS: Record<FieldType, string> = {
 export function fieldIcon(field: FieldConfig) {
    if (field.type === 'select' && field.multiple) return 'list-bullet'
    return FIELD_ICONS[field.type]
+}
+
+export function cmsIcon(name: string) {
+   return name.includes(':') || isBuiltinIcon(name) ? name : `heroicons:${name}`
 }

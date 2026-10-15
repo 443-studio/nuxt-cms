@@ -6,6 +6,7 @@ import {
    normalizeMediaFolder,
 } from '../../shared/index'
 import { ref } from '#imports'
+import { readDroppedFiles } from '@xleddyl/443-components-vue'
 import { useCmsRuntime } from './cms-runtime'
 import { useCmsToast } from './cms-toast'
 
@@ -86,10 +87,6 @@ function isHiddenName(name: string) {
    return name.startsWith('.')
 }
 
-function joinPath(parent: string | null, name: string) {
-   return parent ? `${parent}/${name}` : name
-}
-
 export function uploadTreeFromFiles(list: FileList | File[]): UploadTree {
    const files: UploadEntry[] = []
    const directories = new Set<string>()
@@ -103,51 +100,22 @@ export function uploadTreeFromFiles(list: FileList | File[]): UploadTree {
    return { files, directories: [...directories] }
 }
 
-function readDirectory(entry: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
-   const reader = entry.createReader()
-   const all: FileSystemEntry[] = []
-   return new Promise((resolve, reject) => {
-      const next = () =>
-         reader.readEntries((batch) => {
-            if (!batch.length) return resolve(all)
-            all.push(...batch)
-            next()
-         }, reject)
-      next()
-   })
-}
-
-function entryFile(entry: FileSystemFileEntry): Promise<File> {
-   return new Promise((resolve, reject) => entry.file(resolve, reject))
-}
-
-async function walkEntry(entry: FileSystemEntry, parent: string | null, tree: UploadTree) {
-   if (isHiddenName(entry.name)) return
-   if (entry.isFile) {
-      tree.files.push({ file: await entryFile(entry as FileSystemFileEntry), directory: parent })
-      return
+export function uploadTreeFromEntries(
+   entries: { file: File; path: string }[],
+   directories: string[] = []
+): UploadTree {
+   return {
+      files: entries.map(({ file, path }) => ({
+         file,
+         directory: path.split('/').slice(0, -1).join('/') || null,
+      })),
+      directories,
    }
-   if (!entry.isDirectory) return
-   const directory = joinPath(parent, entry.name)
-   tree.directories.push(directory)
-   const children = await readDirectory(entry as FileSystemDirectoryEntry)
-   for (const child of children) await walkEntry(child, directory, tree)
 }
 
-export function uploadTreeFromDrop(dataTransfer: DataTransfer): Promise<UploadTree> {
-   const files = Array.from(dataTransfer.files)
-   const entries = Array.from(dataTransfer.items ?? [])
-      .filter((item) => item.kind === 'file')
-      .map((item) => item.webkitGetAsEntry?.() ?? null)
-      .filter((entry): entry is FileSystemEntry => !!entry)
-   if (!entries.some((entry) => entry.isDirectory)) {
-      return Promise.resolve(uploadTreeFromFiles(files))
-   }
-   return (async () => {
-      const tree: UploadTree = { files: [], directories: [] }
-      for (const entry of entries) await walkEntry(entry, null, tree)
-      return tree
-   })()
+export async function uploadTreeFromDrop(dataTransfer: DataTransfer): Promise<UploadTree> {
+   const tree = await readDroppedFiles(dataTransfer, { directories: true, skipHidden: true })
+   return uploadTreeFromEntries(tree.files, tree.directories)
 }
 
 async function mapWithConcurrency<T, R>(

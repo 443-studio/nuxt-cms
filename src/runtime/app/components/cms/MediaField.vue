@@ -1,12 +1,14 @@
 <template>
-   <div
+   <KCard
       v-if="model"
-      class="cms-card cms-block-tile cms-media-single"
+      variant="outline"
+      padding="none"
+      class="cms-media-single"
       :class="{ 'is-missing': missing }"
    >
       <button
          type="button"
-         class="cms-block-preview"
+         class="cms-media-single-preview"
          aria-label="Replace media"
          @click="openGallery"
       >
@@ -18,60 +20,66 @@
             muted
             playsinline
          />
-         <CmsIcon v-else :name="icon" class="size-7" />
+         <KIcon v-else :name="cmsIcon(icon)" />
       </button>
-      <div class="cms-block-bar">
-         <span class="cms-block-bar-name" :title="model">{{ mediaFilename(model) }}</span>
-         <div class="cms-block-bar-actions">
-            <CmsButton
-               icon="arrow-path"
+      <div class="cms-media-single-bar">
+         <span class="cms-media-single-name" :title="model">{{ mediaFilename(model) }}</span>
+         <KStack direction="row" gap="none" align="center">
+            <KButton
+               :icon="cmsIcon('arrow-path')"
                size="xs"
                variant="ghost"
-               color="neutral"
+               tone="neutral"
                aria-label="Replace"
                @click="openGallery"
             />
-            <CmsButton
-               icon="trash"
+            <KButton
+               :icon="cmsIcon('trash')"
                size="xs"
                variant="ghost"
-               color="error"
+               tone="danger"
                aria-label="Remove"
                @click="clear"
             />
-         </div>
+         </KStack>
       </div>
-   </div>
+   </KCard>
 
-   <button v-else type="button" class="cms-block-add cms-media-single" @click="openGallery">
-      <CmsIcon name="photo" class="size-5" />
+   <button v-else type="button" class="cms-media-single-add" @click="openGallery">
+      <KIcon :name="cmsIcon('photo')" />
       <span>Choose</span>
    </button>
 
    <p v-if="missing" class="cms-media-missing">
-      <CmsIcon name="exclamation-triangle" class="size-4" />
+      <KIcon :name="cmsIcon('exclamation-triangle')" />
       <span>Not found in the media library</span>
    </p>
 
-   <CmsModal v-model:open="galleryOpen" title="Media" size="lg">
-      <template #body>
-         <CmsMediaGallery
-            v-model:folder="pickerFolder"
-            selectable
-            :media-type="mediaType"
-            :accept="accept"
-            @select="onSelect"
-         />
-      </template>
-   </CmsModal>
+   <KModal v-model:open="galleryOpen" title="Media" size="lg">
+      <CmsMediaGallery
+         v-model:folder="pickerFolder"
+         selectable
+         :media-type="mediaType"
+         :accept="accept"
+         @select="onSelect"
+      />
+   </KModal>
 </template>
 
 <script setup lang="ts">
 import type { MediaType } from '#nuxt-cms'
 import { computed, ref, useState } from '#imports'
+import {
+   Button as KButton,
+   Card as KCard,
+   Icon as KIcon,
+   Modal as KModal,
+   Stack as KStack,
+} from '@xleddyl/443-components-vue'
 import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
 import { useCmsRuntime } from '../../composables/cms-runtime'
+import { cmsIcon } from '../../utils/ui'
 
 defineProps<{
    mediaType?: MediaType | MediaType[]

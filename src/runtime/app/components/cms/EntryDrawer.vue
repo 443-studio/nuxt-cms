@@ -1,10 +1,17 @@
 <template>
-   <CmsDrawer v-model:open="open" :title="title" @close="requestClose">
-      <template v-if="drafts && !loading" #badge>
-         <CmsStatusBadge :published="published" />
+   <KDrawer v-model:open="open" :title="title" size="lg" :before-close="confirmClose">
+      <template v-if="drafts && !loading" #title-trailing>
+         <KBadge
+            dot
+            :tone="published ? 'success' : 'neutral'"
+            :variant="published ? 'soft' : 'outline'"
+            :label="published ? 'Published' : 'Draft'"
+         />
       </template>
 
-      <CmsSpinner v-if="loading" />
+      <KStack v-if="loading" align="center" justify="center" class="cms-drawer-loading">
+         <KSpinner size="lg" label="Loading" />
+      </KStack>
 
       <CmsEntryForm
          v-else
@@ -21,58 +28,67 @@
       />
 
       <template #footer>
-         <div v-if="!isNew" class="cms-actions">
-            <CmsButton
-               label="Delete"
-               icon="trash"
-               variant="ghost"
-               color="error"
-               :disabled="saving || loading"
-               @click="remove"
-            />
-            <CmsButton
-               label="Duplicate"
-               icon="document-duplicate"
-               variant="ghost"
-               color="neutral"
-               :disabled="saving || loading"
-               @click="duplicate"
-            />
-         </div>
-         <span v-else />
-         <div class="cms-actions">
-            <CmsButton
-               v-if="drafts"
-               type="submit"
-               :form="FORM_ID"
-               :label="published ? 'Make draft' : 'Publish'"
-               variant="soft"
-               :loading="saving"
-               :disabled="loading"
-               @click="togglePublished"
-            />
-            <CmsButton
-               type="submit"
-               :form="FORM_ID"
-               label="Save"
-               :loading="saving"
-               :disabled="loading"
-            />
-         </div>
+         <KStack direction="row" justify="between" gap="sm" wrap class="cms-drawer-actions">
+            <KStack v-if="!isNew" direction="row" gap="sm">
+               <KButton
+                  label="Delete"
+                  icon="trash"
+                  variant="ghost"
+                  tone="danger"
+                  :disabled="saving || loading"
+                  @click="remove"
+               />
+               <KButton
+                  label="Duplicate"
+                  :icon="cmsIcon('document-duplicate')"
+                  variant="ghost"
+                  tone="neutral"
+                  :disabled="saving || loading"
+                  @click="duplicate"
+               />
+            </KStack>
+            <span v-else />
+            <KStack direction="row" gap="sm">
+               <KButton
+                  v-if="drafts"
+                  type="submit"
+                  :form="FORM_ID"
+                  :label="published ? 'Make draft' : 'Publish'"
+                  variant="soft"
+                  :loading="saving"
+                  :disabled="loading"
+                  @click="togglePublished"
+               />
+               <KButton
+                  type="submit"
+                  :form="FORM_ID"
+                  label="Save"
+                  :loading="saving"
+                  :disabled="loading"
+               />
+            </KStack>
+         </KStack>
       </template>
-   </CmsDrawer>
+   </KDrawer>
 </template>
 
 <script setup lang="ts">
 import type { CmsEntry } from '#nuxt-cms'
 import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
+import {
+   Badge as KBadge,
+   Button as KButton,
+   Drawer as KDrawer,
+   Spinner as KSpinner,
+   Stack as KStack,
+} from '@xleddyl/443-components-vue'
 import { computed, ref, watch } from '#imports'
 import { duplicateEntryValues } from '../../../shared/duplicate'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
-import { errorMessage } from '../../utils/ui'
+import { cmsIcon, errorMessage } from '../../utils/ui'
 
 const FORM_ID = 'cms-entry-drawer-form'
 
@@ -195,9 +211,8 @@ watch(
    { immediate: true }
 )
 
-async function requestClose() {
-   if (dirty.value && !(await confirmAction('You have unsaved changes. Close anyway?'))) return
-   open.value = false
+function confirmClose() {
+   return !dirty.value || confirmAction('You have unsaved changes. Close anyway?')
 }
 
 async function save() {

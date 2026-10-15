@@ -14,45 +14,48 @@
       :field-key="fieldKey"
    />
    <CmsRichTextField v-else-if="field.type === 'richtext'" v-model="strOrNull" />
-   <CmsTextarea
+   <KTextarea
       v-else-if="field.type === 'text' && field.textarea"
-      v-model="str"
+      v-model="plainText"
       :rows="8"
       :placeholder="field.placeholder"
    />
-   <CmsInput v-else-if="field.type === 'text'" v-model="str" :placeholder="field.placeholder" />
-   <CmsInput
+   <KInput v-else-if="field.type === 'text'" v-model="text" :placeholder="field.placeholder" />
+   <KInput
       v-else-if="field.type === 'email'"
-      v-model="str"
+      v-model="text"
       type="email"
       :placeholder="field.placeholder"
    />
    <CmsSlugField v-else-if="field.type === 'slug'" v-model="strOrNull" :source="slugSource" />
-   <CmsSelectMenu
-      v-else-if="field.type === 'select'"
-      v-model="selValue"
-      :multiple="field.multiple"
-      :items="selectItems"
+   <KCombobox
+      v-else-if="field.type === 'select' && field.multiple"
+      v-model="multiValue"
+      multiple
+      open-on-focus
+      :options="selectItems"
       :placeholder="field.placeholder ?? 'Select…'"
    />
-   <CmsSwitch
-      v-else-if="field.type === 'boolean'"
-      :model-value="!!model"
-      @update:model-value="
-         (v) => {
-            model = !!v
-         }
-      "
+   <KSelect
+      v-else-if="field.type === 'select'"
+      v-model="singleValue"
+      :options="selectItems"
+      :placeholder="field.placeholder ?? 'Select…'"
    />
+   <KSwitch v-else-if="field.type === 'boolean'" v-model="flag" />
    <CmsJsonField v-else-if="field.type === 'json'" v-model="jsonValue" />
-   <CmsInput
+   <KNumberInput
       v-else-if="field.type === 'number'"
-      v-model.number="num"
-      type="number"
+      v-model="num"
+      align="start"
       :placeholder="field.placeholder"
    />
-   <CmsInput v-else-if="field.type === 'date'" v-model="str" type="date" />
-   <CmsInput v-else-if="field.type === 'datetime'" v-model="localDateTime" type="datetime-local" />
+   <KDateInput v-else-if="field.type === 'date'" v-model="plainText" />
+   <KDateInput
+      v-else-if="field.type === 'datetime'"
+      v-model="localDateTime"
+      type="datetime-local"
+   />
    <CmsRelationField
       v-else-if="field.type === 'relation'"
       v-model="relationValue"
@@ -66,6 +69,15 @@
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
 import { isTranslatableField, selectOptions } from '#nuxt-cms'
+import {
+   Combobox as KCombobox,
+   DateInput as KDateInput,
+   Input as KInput,
+   NumberInput as KNumberInput,
+   Select as KSelect,
+   Switch as KSwitch,
+   Textarea as KTextarea,
+} from '@xleddyl/443-components-vue'
 import { computed } from '#imports'
 
 const props = defineProps<{
@@ -78,10 +90,9 @@ const props = defineProps<{
 
 const model = defineModel<unknown>({ required: true })
 
-const selectItems = computed(() => [
-   ...(props.field.required || props.field.multiple ? [] : [{ label: '—', value: null }]),
-   ...selectOptions(props.field).map(({ value, label }) => ({ label, value })),
-])
+const selectItems = computed(() =>
+   selectOptions(props.field).map(({ value, label }) => ({ label, value }))
+)
 
 function proxy<T>(fromModel: (v: unknown) => T, toModel: (v: T) => unknown = (v) => v) {
    return computed<T>({
@@ -92,22 +103,37 @@ function proxy<T>(fromModel: (v: unknown) => T, toModel: (v: T) => unknown = (v)
    })
 }
 
-const str = proxy<string>(
+function emptyToNull(value: string | number | null | undefined) {
+   return value == null || value === '' ? null : String(value)
+}
+
+const text = proxy<string | number | null | undefined>(
    (v) => (v as string | null) ?? '',
-   (v) => (v === '' ? null : v)
+   emptyToNull
 )
+const plainText = proxy<string | null | undefined>((v) => (v as string | null) ?? '', emptyToNull)
 const strOrNull = proxy<string | null>((v) => v as string | null)
-const selValue = proxy<string | string[] | null>((v) =>
-   props.field.multiple ? (v as string[] | null) ?? [] : (v as string | null) ?? null
+const singleValue = proxy<string | null | undefined>(
+   (v) => (v as string | null) ?? null,
+   emptyToNull
 )
-const num = proxy<number | undefined>(
-   (v) => (v as number | null) ?? undefined,
+const multiValue = proxy<string | string[] | null | undefined>(
+   (v) => (v as string[] | null) ?? [],
+   (v) => (Array.isArray(v) ? v : v == null ? [] : [v])
+)
+const flag = proxy<boolean | null | undefined>(
+   (v) => !!v,
+   (v) => !!v
+)
+const num = proxy<number | null | undefined>(
+   (v) => (v as number | null) ?? null,
    (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : null)
 )
 const translatable = proxy<Record<string, string> | null>((v) => v as Record<string, string> | null)
 const blocksValue = proxy<Record<string, unknown>[] | null>(
    (v) => v as Record<string, unknown>[] | null
 )
+
 function toLocalDateTime(value: unknown): string {
    if (typeof value !== 'string' || !value) return ''
    const date = new Date(value)
@@ -115,13 +141,13 @@ function toLocalDateTime(value: unknown): string {
    return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
 
-function fromLocalDateTime(value: string): string | null {
+function fromLocalDateTime(value: string | null | undefined): string | null {
    if (!value) return null
    const date = new Date(value)
    return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
-const localDateTime = proxy<string>(toLocalDateTime, fromLocalDateTime)
+const localDateTime = proxy<string | null | undefined>(toLocalDateTime, fromLocalDateTime)
 const relationValue = proxy<string | string[] | null>((v) => v as string | string[] | null)
 const jsonValue = proxy<unknown>((v) => v)
 </script>

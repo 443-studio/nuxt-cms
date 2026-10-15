@@ -8,7 +8,7 @@
          @click="emit('pick', String(type))"
       >
          <span class="cms-palette-icon">
-            <CmsIcon :name="block.icon ?? 'rectangle-stack'" class="size-4" />
+            <KIcon :name="cmsIcon(block.icon ?? 'rectangle-stack')" />
          </span>
          <span class="cms-palette-text">
             <span class="cms-palette-label">{{ block.label }}</span>
@@ -22,6 +22,8 @@
 
 <script setup lang="ts">
 import type { BlockConfig } from '#nuxt-cms'
+import { Icon as KIcon } from '@xleddyl/443-components-vue'
+import { cmsIcon } from '../../utils/ui'
 
 withDefaults(defineProps<{ blocks: Record<string, BlockConfig>; label?: string }>(), {
    label: 'Available blocks',

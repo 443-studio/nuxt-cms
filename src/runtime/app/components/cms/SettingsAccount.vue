@@ -1,144 +1,140 @@
 <template>
-   <div class="cms-settings-entry">
-      <div class="cms-settings-entry-header">
-         <div class="cms-settings-heading">
-            <h2 class="cms-title cms-title-sm">Account</h2>
-            <p class="cms-settings-hint">Your profile and your password.</p>
-         </div>
-      </div>
+   <KAlert v-if="isSuperAdmin" tone="neutral" title="Environment account">
+      This account signs in with the credentials of the environment variables (NUXT_CMS_ADMIN_EMAIL
+      and NUXT_CMS_ADMIN_PASSWORD). Change them there. Only this account can manage users.
+   </KAlert>
 
-      <div class="cms-account-card">
-         <span class="cms-avatar is-lg">{{ initial }}</span>
-         <div class="cms-account-text">
-            <span class="cms-account-name">{{ displayName }}</span>
-            <span class="cms-account-email">{{ email }}</span>
-         </div>
-         <span class="cms-badge is-muted">{{ isSuperAdmin ? 'Super admin' : 'Admin' }}</span>
-      </div>
-
-      <CmsAlert v-if="isSuperAdmin" color="neutral" title="Environment account">
-         This account signs in with the credentials of the environment variables
-         (NUXT_CMS_ADMIN_EMAIL and NUXT_CMS_ADMIN_PASSWORD). Change them there. Only this account
-         can manage users.
-      </CmsAlert>
-
-      <template v-else>
-         <div class="cms-settings-group">
-            <div class="cms-settings-heading">
-               <p class="cms-settings-label">Profile</p>
-               <p class="cms-settings-hint">The name shows in the sidebar.</p>
-            </div>
-            <CmsForm :state="profile" @submit="saveProfile">
-               <div class="cms-form-row" style="--cms-row-cols: 2">
-                  <CmsFormField label="Name" name="name">
-                     <CmsInput v-model="profile.name" placeholder="Your name" autocomplete="name" />
-                  </CmsFormField>
-                  <CmsFormField label="Email" name="email">
-                     <CmsInput :model-value="email" disabled />
-                  </CmsFormField>
-               </div>
-               <div class="cms-actions is-end">
-                  <CmsButton
-                     type="submit"
-                     label="Save profile"
-                     size="sm"
-                     :loading="savingProfile"
-                     :disabled="profile.name === (user?.name ?? '')"
+   <template v-else>
+      <KSettingsGroup label="Profile" description="The name shows in the sidebar.">
+         <KForm :form="profile">
+            <KGrid :columns="2">
+               <KFormField label="Name" name="name">
+                  <KInput
+                     v-model="profile.values.name"
+                     placeholder="Your name"
+                     autocomplete="name"
                   />
-               </div>
-            </CmsForm>
-         </div>
+               </KFormField>
+               <KFormField label="Email">
+                  <KInput :model-value="email" disabled />
+               </KFormField>
+            </KGrid>
+            <KStack direction="row" justify="end" gap="sm">
+               <KButton
+                  type="submit"
+                  label="Save profile"
+                  size="sm"
+                  :disabled="profile.values.name === (user?.name ?? '')"
+               />
+            </KStack>
+         </KForm>
+      </KSettingsGroup>
 
-         <div class="cms-settings-group">
-            <div class="cms-settings-heading">
-               <p class="cms-settings-label">Password</p>
-               <p class="cms-settings-hint">
-                  At least {{ MIN_PASSWORD_LENGTH }} characters. Use the sparkle button to generate
-                  one.
-               </p>
-            </div>
-            <CmsForm :state="password" @submit="savePassword">
-               <CmsAlert v-if="passwordError" color="error" :title="passwordError" />
-               <CmsFormField label="Current password" name="current">
-                  <CmsPasswordInput
-                     v-model="password.current"
-                     autocomplete="current-password"
-                     placeholder="••••••••"
-                  />
-               </CmsFormField>
-               <CmsFormField label="New password" name="next">
-                  <CmsPasswordInput v-model="password.next" generate copy />
-               </CmsFormField>
-               <div class="cms-actions is-end">
-                  <CmsButton
-                     type="submit"
-                     label="Change password"
-                     size="sm"
-                     :loading="savingPassword"
-                     :disabled="!password.current || password.next.length < MIN_PASSWORD_LENGTH"
-                  />
-               </div>
-            </CmsForm>
-         </div>
-      </template>
-   </div>
+      <KSettingsGroup
+         label="Password"
+         :description="`At least ${MIN_PASSWORD_LENGTH} characters. Use the generate button to create one.`"
+      >
+         <KForm :form="password">
+            <KFormField label="Current password" name="current">
+               <KPasswordInput
+                  v-model="password.values.current"
+                  icon="key"
+                  autocomplete="current-password"
+                  placeholder="••••••••"
+               />
+            </KFormField>
+            <KFormField label="New password" name="next">
+               <KPasswordInput
+                  v-model="password.values.next"
+                  icon="key"
+                  autocomplete="new-password"
+                  :generate="generatePassword"
+                  copy
+               />
+            </KFormField>
+            <KStack direction="row" justify="end" gap="sm">
+               <KButton
+                  type="submit"
+                  label="Change password"
+                  size="sm"
+                  :disabled="
+                     !password.values.current ||
+                     (password.values.next ?? '').length < MIN_PASSWORD_LENGTH
+                  "
+               />
+            </KStack>
+         </KForm>
+      </KSettingsGroup>
+   </template>
 </template>
 
 <script setup lang="ts">
 import { MIN_PASSWORD_LENGTH } from '#nuxt-cms'
-import { ref, watch } from '#imports'
-import { useCmsAccount } from '../../composables/cms-account'
+import {
+   Alert as KAlert,
+   Button as KButton,
+   Form as KForm,
+   FormField as KFormField,
+   Grid as KGrid,
+   Input as KInput,
+   PasswordInput as KPasswordInput,
+   SettingsGroup as KSettingsGroup,
+   Stack as KStack,
+   useForm,
+} from '@xleddyl/443-components-vue'
+import { watch } from '#imports'
+import { generatePassword, useCmsAccount } from '../../composables/cms-account'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
 import { errorMessage } from '../../utils/ui'
 
-const { user, email, isSuperAdmin, displayName, initial, refresh } = useCmsAccount()
+const { user, email, isSuperAdmin, refresh } = useCmsAccount()
 const toast = useCmsToast()
 
-const profile = ref({ name: user.value?.name ?? '' })
+const profile = useForm({
+   schema: { name: { initial: (): string => user.value?.name ?? '' } },
+   onSubmit: saveProfile,
+})
+
 watch(
    () => user.value?.name,
-   (name) => {
-      profile.value.name = name ?? ''
-   }
+   (name) => profile.reset({ name: name ?? '' })
 )
 
-const savingProfile = ref(false)
-
-async function saveProfile() {
-   savingProfile.value = true
+async function saveProfile(values: { name: string }) {
    try {
       await cmsApi('/api/cms/account', {
          method: 'PUT',
-         body: { name: profile.value.name || null },
+         body: { name: values.name || null },
       })
       await refresh()
       toast.add({ title: 'Profile saved', color: 'success' })
    } catch (error) {
       toast.add({ title: 'Profile not saved', description: errorMessage(error), color: 'error' })
-   } finally {
-      savingProfile.value = false
    }
 }
 
-const password = ref({ current: '', next: '' })
-const passwordError = ref<string | null>(null)
-const savingPassword = ref(false)
+const password = useForm({
+   schema: {
+      current: { initial: (): string | null | undefined => '' },
+      next: { initial: (): string | null | undefined => '' },
+   },
+   onSubmit: savePassword,
+})
 
-async function savePassword() {
-   savingPassword.value = true
-   passwordError.value = null
+async function savePassword(values: {
+   current: string | null | undefined
+   next: string | null | undefined
+}) {
    try {
       await cmsApi('/api/cms/account/password', {
          method: 'PUT',
-         body: { currentPassword: password.value.current, newPassword: password.value.next },
+         body: { currentPassword: values.current, newPassword: values.next },
       })
-      password.value = { current: '', next: '' }
+      password.reset()
       toast.add({ title: 'Password changed', color: 'success' })
    } catch (error) {
-      passwordError.value = errorMessage(error) ?? 'Password not changed.'
-   } finally {
-      savingPassword.value = false
+      password.setError('', errorMessage(error) ?? 'Password not changed.')
    }
 }
 </script>

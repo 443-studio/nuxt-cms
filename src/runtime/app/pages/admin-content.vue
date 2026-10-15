@@ -10,11 +10,11 @@
       content
    >
       <template #start>
-         <CmsButton
-            icon="arrow-left"
+         <KButton
+            :icon="cmsIcon('arrow-left')"
             size="sm"
             variant="ghost"
-            color="neutral"
+            tone="neutral"
             :aria-label="`Back to ${config.label}`"
             :title="`Back to ${config.label}`"
             @click="goBack"
@@ -27,77 +27,75 @@
       </template>
 
       <template #actions>
-         <CmsPopover v-model:open="scheduleOpen" class="cms-editor-schedule">
-            <CmsButton
-               icon="clock"
+         <KPopover v-model:open="scheduleOpen" placement="bottom-end" label="Schedule">
+            <KButton
+               :icon="cmsIcon('clock')"
                size="sm"
                variant="ghost"
-               color="neutral"
+               tone="neutral"
                :label="scheduled ? 'Reschedule' : 'Schedule'"
                :disabled="saving"
-               aria-haspopup="dialog"
-               :aria-expanded="scheduleOpen"
             />
             <template #content>
-               <div class="cms-editor-schedule-panel" role="dialog" aria-label="Schedule">
-                  <CmsFormField
+               <KStack gap="md" class="cms-editor-schedule-panel">
+                  <KFormField
                      label="Publish at"
                      description="The item stays hidden from the site until this moment."
                   >
                      <CmsFieldInput v-model="scheduleDraft" :field="publishedAtField" />
-                  </CmsFormField>
-                  <div class="cms-actions is-end">
-                     <CmsButton
+                  </KFormField>
+                  <KStack direction="row" justify="end" gap="sm">
+                     <KButton
                         label="Cancel"
                         size="sm"
                         variant="ghost"
-                        color="neutral"
+                        tone="neutral"
                         @click="scheduleOpen = false"
                      />
-                     <CmsButton
+                     <KButton
                         label="Schedule"
                         size="sm"
                         :disabled="!scheduleDraft"
                         :loading="saving"
                         @click="schedule"
                      />
-                  </div>
-               </div>
+                  </KStack>
+               </KStack>
             </template>
-         </CmsPopover>
-         <CmsButton
+         </KPopover>
+         <KButton
             label="Save"
             size="sm"
             variant="soft"
-            color="neutral"
+            tone="neutral"
             :loading="saving"
             @click="save()"
          />
-         <CmsButton
+         <KButton
             :label="published ? 'Unpublish' : 'Publish'"
             size="sm"
             :variant="published ? 'soft' : 'solid'"
-            :color="published ? 'neutral' : 'primary'"
+            :tone="published ? 'neutral' : 'accent'"
             :loading="saving"
             @click="save(published ? 'draft' : 'published')"
          />
-         <CmsDropdownMenu
+         <KDropdownMenu
             v-if="!isNew"
             :items="[
                { label: 'Duplicate', onSelect: duplicate },
                { label: 'Delete', onSelect: remove },
             ]"
-            :content="{ align: 'end' }"
+            placement="bottom-end"
          >
-            <CmsButton
-               icon="ellipsis-horizontal"
+            <KButton
+               :icon="cmsIcon('ellipsis-horizontal')"
                size="sm"
                variant="ghost"
-               color="neutral"
+               tone="neutral"
                aria-label="More actions"
                title="More actions"
             />
-         </CmsDropdownMenu>
+         </KDropdownMenu>
       </template>
    </CmsVisualEditor>
 </template>
@@ -124,6 +122,13 @@ import {
    useRoute,
    watch,
 } from '#imports'
+import {
+   Button as KButton,
+   DropdownMenu as KDropdownMenu,
+   FormField as KFormField,
+   Popover as KPopover,
+   Stack as KStack,
+} from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
 import { readSearchFocus } from '../../shared/search'
@@ -131,7 +136,7 @@ import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
-import { errorMessage } from '../utils/ui'
+import { cmsIcon, errorMessage } from '../utils/ui'
 
 definePageMeta({
    layout: 'cms-editor',

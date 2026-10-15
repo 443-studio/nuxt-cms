@@ -1,45 +1,56 @@
 <template>
-   <CmsModal
+   <KModal
       :open="open"
       size="sm"
       :title="`Welcome to ${cmsBrand.title}`"
-      @update:open="(v) => !v && keep()"
+      @update:open="(value) => !value && keep()"
    >
-      <template #body>
-         <CmsForm :state="state" @submit="save">
-            <p class="cms-settings-hint">
-               You signed in with a password that someone shared with you. Set your own password
-               now, or keep this one. You can change it later in Settings, Account.
-            </p>
-            <CmsAlert v-if="error" color="error" :title="error" />
-            <CmsFormField label="New password" name="password">
-               <CmsPasswordInput v-model="state.password" generate copy />
-            </CmsFormField>
-            <div class="cms-actions is-end">
-               <CmsButton
-                  label="Keep current password"
-                  variant="ghost"
-                  color="neutral"
-                  :disabled="busy"
-                  @click="keep"
-               />
-               <CmsButton
-                  type="submit"
-                  label="Set password"
-                  :loading="busy"
-                  :disabled="state.password.length < MIN_PASSWORD_LENGTH"
-               />
-            </div>
-         </CmsForm>
-      </template>
-   </CmsModal>
+      <KForm :form="form">
+         <p class="cms-settings-hint">
+            You signed in with a password that someone shared with you. Set your own password now,
+            or keep this one. You can change it later in Settings, Account.
+         </p>
+         <KFormField label="New password" name="password">
+            <KPasswordInput
+               v-model="form.values.password"
+               icon="key"
+               autocomplete="new-password"
+               :generate="generatePassword"
+               copy
+            />
+         </KFormField>
+         <KStack direction="row" justify="end" gap="sm" wrap>
+            <KButton
+               label="Keep current password"
+               variant="ghost"
+               tone="neutral"
+               :disabled="form.submitting.value"
+               @click="keep"
+            />
+            <KButton
+               type="submit"
+               label="Set password"
+               :disabled="(form.values.password ?? '').length < MIN_PASSWORD_LENGTH"
+            />
+         </KStack>
+      </KForm>
+   </KModal>
 </template>
 
 <script setup lang="ts">
 import { MIN_PASSWORD_LENGTH } from '#nuxt-cms'
 import { cmsBrand } from '#cms-brand'
+import {
+   Button as KButton,
+   Form as KForm,
+   FormField as KFormField,
+   Modal as KModal,
+   PasswordInput as KPasswordInput,
+   Stack as KStack,
+   useForm,
+} from '@xleddyl/443-components-vue'
 import { computed, ref } from '#imports'
-import { useCmsAccount } from '../../composables/cms-account'
+import { generatePassword, useCmsAccount } from '../../composables/cms-account'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
 import { errorMessage } from '../../utils/ui'
@@ -50,9 +61,10 @@ const toast = useCmsToast()
 const dismissed = ref(false)
 const open = computed(() => !!user.value?.firstLogin && !dismissed.value)
 
-const state = ref({ password: '' })
-const error = ref<string | null>(null)
-const busy = ref(false)
+const form = useForm({
+   schema: { password: { initial: (): string | null | undefined => '' } },
+   onSubmit: save,
+})
 
 async function keep() {
    dismissed.value = true
@@ -60,21 +72,17 @@ async function keep() {
    await refresh()
 }
 
-async function save() {
-   busy.value = true
-   error.value = null
+async function save(values: { password: string | null | undefined }) {
    try {
       await cmsApi('/api/cms/account/password', {
          method: 'PUT',
-         body: { newPassword: state.value.password },
+         body: { newPassword: values.password },
       })
       dismissed.value = true
       await refresh()
       toast.add({ title: 'Password set', color: 'success' })
    } catch (e) {
-      error.value = errorMessage(e) ?? 'Password not set.'
-   } finally {
-      busy.value = false
+      form.setError('', errorMessage(e) ?? 'Password not set.')
    }
 }
 </script>

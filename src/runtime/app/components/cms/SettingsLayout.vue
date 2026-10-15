@@ -24,7 +24,9 @@
             >
                <p v-if="section.title" class="cms-layout-section-title">
                   {{ section.title }}
-                  <span v-if="section.collapsed" class="cms-badge is-muted">Collapsed</span>
+                  <KBadge v-if="section.collapsed" size="sm" class="cms-code-badge"
+                     >Collapsed</KBadge
+                  >
                </p>
                <template v-for="(row, rowIndex) in section.rows" :key="row.join('|')">
                   <div
@@ -50,8 +52,8 @@
                         @drop.prevent="drop"
                         @dragend="onDragEnd"
                      >
-                        <CmsIcon name="bars-2" class="cms-settings-grip size-3.5" />
-                        <CmsIcon :name="iconOf(key)" class="cms-settings-item-icon size-3.5" />
+                        <KIcon :name="cmsIcon('bars-2')" class="cms-settings-grip" />
+                        <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
                         <span class="cms-layout-chip-label">{{ fields[key]?.label ?? key }}</span>
                         <span v-if="tabLabel(key)" class="cms-layout-chip-tab">{{
                            tabLabel(key)
@@ -81,8 +83,9 @@
 <script setup lang="ts">
 import type { CmsFormLayout, CmsLayoutSection, CmsTab, FieldConfig } from '#nuxt-cms'
 import { MAX_LAYOUT_ROW_FIELDS, fieldTab } from '#nuxt-cms'
+import { Badge as KBadge, Icon as KIcon } from '@xleddyl/443-components-vue'
 import { ref } from '#imports'
-import { fieldIcon } from '../../utils/ui'
+import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 type Area = 'main'
 

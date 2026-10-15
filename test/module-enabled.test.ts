@@ -242,12 +242,16 @@ describe('module setup when enabled', () => {
       await moduleDefinition.setup(options(), nuxt)
       expect(kit.addServerHandler).toHaveBeenCalled()
 
-      expect(moduleDefinition.moduleDependencies({ options: {} })).toEqual({
-         'nuxt-auth-utils': {},
-      })
-      expect(moduleDefinition.moduleDependencies({ options: { cms: { enabled: true } } })).toEqual({
-         'nuxt-auth-utils': {},
-      })
+      for (const dependencies of [
+         moduleDefinition.moduleDependencies({ options: {} }),
+         moduleDefinition.moduleDependencies({ options: { cms: { enabled: true } } }),
+      ]) {
+         expect(Object.keys(dependencies)).toEqual([
+            'nuxt-auth-utils',
+            '@xleddyl/443-components-vue/nuxt',
+         ])
+         expect(dependencies['@xleddyl/443-components-vue/nuxt'].defaults.editor).toBe(true)
+      }
    })
 
    it('lets an explicit option win over the env variable', async () => {

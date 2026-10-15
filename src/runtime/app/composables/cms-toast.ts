@@ -1,4 +1,4 @@
-import { useState } from '#imports'
+import { toast } from '@xleddyl/443-components-vue'
 
 export interface CmsToast {
    id: number
@@ -7,24 +7,15 @@ export interface CmsToast {
    color?: 'success' | 'error'
 }
 
-let counter = 0
-
-export function useCmsToastState() {
-   return useState<CmsToast[]>('cms-toasts', () => [])
-}
-
 export function useCmsToast() {
-   const toasts = useCmsToastState()
-
-   function remove(id: number) {
-      toasts.value = toasts.value.filter((toast) => toast.id !== id)
+   function add(input: Omit<CmsToast, 'id'>) {
+      const show =
+         input.color === 'error' ? toast.error : input.color === 'success' ? toast.success : toast
+      return { id: show(input.title, { description: input.description }) }
    }
 
-   function add(toast: Omit<CmsToast, 'id'>) {
-      const id = ++counter
-      toasts.value = [...toasts.value, { id, ...toast }]
-      if (import.meta.client) setTimeout(() => remove(id), 4000)
-      return { id }
+   function remove(id: string | number) {
+      toast.dismiss(id)
    }
 
    return { add, remove }

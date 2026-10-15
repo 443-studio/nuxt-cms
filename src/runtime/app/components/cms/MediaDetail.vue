@@ -1,73 +1,94 @@
 <template>
-   <CmsDrawer :open="!!item" :title="item ? mediaFilename(item.key) : ''" @close="emit('close')">
-      <div v-if="item" class="cms-media-detail">
+   <KDrawer
+      :open="!!item"
+      :title="shown ? mediaFilename(shown.key) : ''"
+      size="lg"
+      @update:open="(value) => !value && emit('close')"
+   >
+      <div v-if="shown" class="cms-media-detail">
          <div class="cms-media-detail-preview">
-            <img v-if="item.type === 'image' && item.url" :src="item.url" :alt="item.alt ?? ''" />
+            <img
+               v-if="shown.type === 'image' && shown.url"
+               :src="shown.url"
+               :alt="shown.alt ?? ''"
+            />
             <video
-               v-else-if="item.type === 'video' && item.url"
-               :src="item.url"
+               v-else-if="shown.type === 'video' && shown.url"
+               :src="shown.url"
                controls
                preload="metadata"
                playsinline
             />
-            <CmsIcon v-else :name="mediaIconFor(item.type)" class="size-12" />
+            <KIcon v-else :name="cmsIcon(mediaIconFor(shown.type))" />
          </div>
 
-         <div class="cms-actions">
-            <template v-if="item.url">
-               <CmsButton
-                  :label="copied ? 'Copied' : 'Copy URL'"
-                  :icon="copied ? 'check' : 'clipboard-document'"
+         <KStack direction="row" gap="sm" align="center" wrap>
+            <template v-if="absoluteUrl">
+               <KCopyButton
+                  :value="absoluteUrl"
+                  label="Copy URL"
+                  copied-label="Copied"
+                  show-label
                   variant="soft"
-                  color="neutral"
+                  tone="neutral"
                   size="sm"
-                  @click="copyUrl"
                />
-               <a
-                  :href="item.url"
+               <KButton
+                  :href="shown.url ?? undefined"
                   target="_blank"
-                  rel="noopener"
-                  class="cms-btn cms-btn-sm cms-btn-neutral cms-btn-ghost"
-               >
-                  <CmsIcon name="arrow-top-right-on-square" class="size-4 shrink-0" />Open
-               </a>
+                  label="Open"
+                  :icon="cmsIcon('arrow-top-right-on-square')"
+                  variant="ghost"
+                  tone="neutral"
+                  size="sm"
+               />
             </template>
-            <a
+            <KButton
                :href="downloadHref"
                download
-               class="cms-btn cms-btn-sm cms-btn-neutral cms-btn-ghost"
-            >
-               <CmsIcon name="arrow-down-tray" class="size-4 shrink-0" />Download
-            </a>
+               label="Download"
+               :icon="cmsIcon('arrow-down-tray')"
+               variant="ghost"
+               tone="neutral"
+               size="sm"
+            />
+         </KStack>
+
+         <div class="cms-media-detail-facts">
+            <KDescriptionList :items="facts">
+               <template #value="{ item: fact }">
+                  <span
+                     class="cms-media-detail-fact"
+                     :class="{ 'k-mono': fact.key === 'key' }"
+                     :title="fact.value == null ? undefined : String(fact.value)"
+                     >{{ fact.value }}</span
+                  >
+               </template>
+            </KDescriptionList>
          </div>
 
-         <dl class="cms-media-detail-facts">
-            <template v-for="fact in facts" :key="fact.label">
-               <dt>{{ fact.label }}</dt>
-               <dd :class="{ 'is-mono': fact.mono }" :title="fact.value">{{ fact.value }}</dd>
-            </template>
-         </dl>
-
-         <div class="cms-form">
-            <CmsFormField label="Alt text">
-               <CmsInput
+         <KStack gap="md">
+            <KFormField label="Alt text">
+               <KInput
                   v-model="alt"
                   placeholder="Describe the image for screen readers"
                   @keydown.enter.prevent="save"
                />
-            </CmsFormField>
-            <CmsFormField v-if="!readOnly" label="Folder">
+            </KFormField>
+            <KFormField v-if="!readOnly" label="Folder">
                <CmsMediaFolderPicker v-model="folder" :folders="folders" />
-            </CmsFormField>
-         </div>
+            </KFormField>
+         </KStack>
 
          <section class="cms-media-detail-usage">
             <h3 class="cms-media-section-title">Used in</h3>
-            <CmsSpinner v-if="usageLoading" />
-            <p v-else-if="usageList === null" class="cms-form-hint">
+            <div v-if="usageLoading" class="cms-media-loading">
+               <KSpinner size="sm" />
+            </div>
+            <p v-else-if="usageList === null" class="cms-media-hint">
                Could not check where this file is used.
             </p>
-            <p v-else-if="!usageList.length" class="cms-form-hint">Not used in any entry.</p>
+            <p v-else-if="!usageList.length" class="cms-media-hint">Not used in any entry.</p>
             <ul v-else class="cms-media-usage-list">
                <li v-for="(entry, index) in usageList" :key="index">
                   <NuxtLink
@@ -84,29 +105,41 @@
       </div>
 
       <template #footer>
-         <CmsButton
+         <KButton
             v-if="!readOnly"
             label="Delete"
-            icon="trash"
+            :icon="cmsIcon('trash')"
             variant="ghost"
-            color="error"
+            tone="danger"
             @click="item && emit('delete', item)"
          />
          <span v-else />
-         <div class="cms-actions">
-            <CmsButton label="Close" variant="ghost" color="neutral" @click="emit('close')" />
-            <CmsButton label="Save" :loading="saving" :disabled="!dirty" @click="save" />
-         </div>
+         <KStack direction="row" gap="sm" align="center">
+            <KButton label="Close" variant="ghost" tone="neutral" @click="emit('close')" />
+            <KButton label="Save" :loading="saving" :disabled="!dirty" @click="save" />
+         </KStack>
       </template>
-   </CmsDrawer>
+   </KDrawer>
 </template>
 
 <script setup lang="ts">
 import type { MediaItem, MediaUsage } from '#nuxt-cms'
-import { computed, ref, watch } from '#imports'
+import { computed, ref, useRequestURL, watch } from '#imports'
+import {
+   Button as KButton,
+   CopyButton as KCopyButton,
+   DescriptionList as KDescriptionList,
+   Drawer as KDrawer,
+   FormField as KFormField,
+   Icon as KIcon,
+   Input as KInput,
+   Spinner as KSpinner,
+   Stack as KStack,
+} from '@xleddyl/443-components-vue'
 import { formatFileSize, mediaFilename, mediaIconFor } from '#nuxt-cms'
 import type { CmsMediaLibrary } from '../../composables/cms-media-library'
 import { usageLink } from '../../composables/cms-media-library'
+import { cmsIcon } from '../../utils/ui'
 
 const props = defineProps<{
    item: MediaItem | null
@@ -121,9 +154,19 @@ const folders = computed(() => props.library.folders.value)
 const alt = ref('')
 const folder = ref<string | null>(null)
 const saving = ref(false)
-const copied = ref(false)
 const usageList = ref<MediaUsage[] | null>([])
 const usageLoading = ref(false)
+const requestUrl = useRequestURL()
+const lastItem = ref<MediaItem | null>(props.item)
+
+watch(
+   () => props.item,
+   (value) => {
+      if (value) lastItem.value = value
+   }
+)
+
+const shown = computed(() => props.item ?? lastItem.value)
 
 watch(
    () => props.item?.key,
@@ -131,7 +174,6 @@ watch(
       if (!props.item || !key) return
       alt.value = props.item.alt ?? ''
       folder.value = props.item.folder ?? null
-      copied.value = false
       usageLoading.value = true
       const usage = await props.library.usage([key])
       if (props.item?.key !== key) return
@@ -150,38 +192,36 @@ const dirty = computed(() => {
 })
 
 const downloadHref = computed(() =>
-   props.item ? `/api/cms/admin/media/download?key=${encodeURIComponent(props.item.key)}` : ''
+   shown.value ? `/api/cms/admin/media/download?key=${encodeURIComponent(shown.value.key)}` : ''
+)
+
+const absoluteUrl = computed(() =>
+   shown.value?.url ? new URL(shown.value.url, requestUrl.origin).toString() : null
 )
 
 const facts = computed(() => {
-   const item = props.item
+   const item = shown.value
    if (!item) return []
-   const list: { label: string; value: string; mono?: boolean }[] = [
-      { label: 'Folder', value: item.folder ?? 'Library root' },
-      { label: 'Type', value: item.mime ?? item.type },
+   const list: { key: string; label: string; value: string }[] = [
+      { key: 'folder', label: 'Folder', value: item.folder ?? 'Library root' },
+      { key: 'type', label: 'Type', value: item.mime ?? item.type },
    ]
-   if (item.size != null) list.push({ label: 'Size', value: formatFileSize(item.size) })
+   if (item.size != null) {
+      list.push({ key: 'size', label: 'Size', value: formatFileSize(item.size) })
+   }
    if (item.width && item.height) {
-      list.push({ label: 'Dimensions', value: `${item.width} × ${item.height}` })
+      list.push({ key: 'dimensions', label: 'Dimensions', value: `${item.width} × ${item.height}` })
    }
    if (item.createdAt) {
-      list.push({ label: 'Uploaded', value: new Date(item.createdAt).toLocaleString() })
+      list.push({
+         key: 'uploaded',
+         label: 'Uploaded',
+         value: new Date(item.createdAt).toLocaleString(),
+      })
    }
-   list.push({ label: 'Key', value: item.key, mono: true })
+   list.push({ key: 'key', label: 'Key', value: item.key })
    return list
 })
-
-async function copyUrl() {
-   if (!props.item?.url) return
-   const url = new URL(props.item.url, window.location.origin).toString()
-   try {
-      await navigator.clipboard.writeText(url)
-      copied.value = true
-      setTimeout(() => (copied.value = false), 1500)
-   } catch {
-      copied.value = false
-   }
-}
 
 async function save() {
    if (!props.item || !dirty.value || saving.value) return
