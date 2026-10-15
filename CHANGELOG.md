@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.4.4
+
+[compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.3...v0.4.4)
+
+### 🏡 Chore
+
+- Share the release script with the other packages ([2bdd159](https://github.com/xleddyl/nuxt-cms/commit/2bdd159))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.4.3
 
 [compare changes](https://github.com/xleddyl/nuxt-cms/compare/v0.4.2...v0.4.3)
