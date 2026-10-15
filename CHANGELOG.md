@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.7.1
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.7.0...v0.7.1)
+
+### 🩹 Fixes
+
+- Update @xleddyl/443-components-vue to 0.6.2 so the admin language matches @nuxtjs/i18n after hydration ([85697b0](https://github.com/443-studio/nuxt-cms/commit/85697b0))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.7.0
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.6.0...v0.7.0)
