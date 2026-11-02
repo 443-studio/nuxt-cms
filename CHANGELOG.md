@@ -1,6 +1,19 @@
 # Changelog
 
 
+## v0.8.1
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.8.0...v0.8.1)
+
+### 🩹 Fixes
+
+- Stop leaking admin auto-imports and unresolvable optimizeDeps into host apps ([d3ebcb8](https://github.com/443-studio/nuxt-cms/commit/d3ebcb8))
+- Scope admin styles and theme/locale plugins to the admin routes ([ed37e7f](https://github.com/443-studio/nuxt-cms/commit/ed37e7f))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.8.0
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.7.1...v0.8.0)
