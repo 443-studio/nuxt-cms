@@ -269,6 +269,12 @@ export default defineCmsConfig({
             options: ['bass', 'trout', 'pike', 'carp', 'catfish'],
             multiple: true,
          },
+         keywords: {
+            label: 'Keywords',
+            type: 'tags',
+            max: 10,
+            description: 'Free tags: Enter or comma adds one, existing ones are suggested.',
+         },
          contactEmail: {
             label: 'Contact email',
             type: 'email',

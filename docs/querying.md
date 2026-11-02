@@ -141,14 +141,61 @@ pagesByPath(path: String!, locale: String): Pages
 ## Filters, sorting, pagination
 
 **Filterable fields:** `id`, `createdAt`, `updatedAt`, and every field except `json`, `blocks`,
-`translatable` fields, and `many-to-many` relations. Single relations filter by the related id as a
+`translatable` and `private` fields. Single relations filter by the related id as a
 `StringFilter`. Non-translatable `media` fields filter and sort on the stored object key.
+Multi-value fields (multi-select, `tags`, `many-to-many` relations) filter with a
+`StringListFilter` and cannot be sorted.
 
 **Operators:**
 
 - String: `eq neq gt gte lt lte like in isNull`
 - Int / Float: `eq neq gt gte lt lte in isNull`
 - Boolean: `eq neq isNull`
+- String list: `hasAny hasAll isEmpty`
+
+All filters combine with AND, across fields and across the operators of one field.
+
+### List filters
+
+```graphql
+input StringListFilter {
+  hasAny: [String!]
+  hasAll: [String!]
+  isEmpty: Boolean
+}
+```
+
+- `hasAny`: the list holds at least one of the values.
+- `hasAll`: the list holds every one of the values (repeated values count once).
+- `isEmpty: true`: the list is empty or null; `isEmpty: false`: it has at least one item.
+- On multi-select and `tags` the values are matched exactly (case-sensitive) against the stored
+  strings; on a `many-to-many` relation they are the ids of the related entries. A drafted related
+  entry still counts, since the match is on the join table.
+- An empty `hasAny` or `hasAll` list is an error; a `null` operator is ignored.
+- SQLite, libSQL and D1 run it with `json_each` (or a subquery on the join table); Postgres with
+  `jsonb_array_elements_text` and `@>`.
+
+```graphql
+{
+  guides(
+    filters: {
+      spots: { hasAny: ["Lago di Garda", "Po"] }
+      species: { hasAll: ["pike", "zander"] }
+      regions: { isEmpty: false }
+    }
+  ) {
+    id name spots
+  }
+}
+```
+
+The same object works as the `filters` option of `useCmsCollection` and `useCmsContents`:
+
+```ts
+const { data } = await useCmsCollection('guides', {
+   filters: { spots: { hasAny: ['Lago di Garda'] } },
+})
+```
 
 **Sort:** `[{ field: <fieldName>, direction: asc | desc }]` (`direction` defaults to `asc`).
 

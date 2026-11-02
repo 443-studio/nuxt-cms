@@ -8,6 +8,7 @@ import {
    isCollectionKind,
    isMultiSelect,
    isRequiredField,
+   isStringListField,
    isTranslatableField,
    isTranslatableMediaField,
    layoutErrors,
@@ -62,6 +63,7 @@ const RESERVED_TYPE_NAMES = [
    'FloatFilter',
    'StringFilter',
    'BooleanFilter',
+   'StringListFilter',
 ]
 
 export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
@@ -290,8 +292,17 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
             )
                errors.push(`${fat}: slug source '${field.from}' cannot be translatable`)
          }
-         if (field.type !== 'blocks' && (field.min !== undefined || field.max !== undefined))
-            errors.push(`${fat}: min and max are only supported on blocks fields`)
+         if (field.type === 'tags') {
+            errors.push(...tagsOptionErrors(fat, field))
+         } else if (field.suggestions !== undefined) {
+            errors.push(`${fat}: suggestions is only supported on tags fields`)
+         }
+         if (
+            field.type !== 'blocks' &&
+            field.type !== 'tags' &&
+            (field.min !== undefined || field.max !== undefined)
+         )
+            errors.push(`${fat}: min and max are only supported on blocks and tags fields`)
          if (field.type === 'blocks') {
             if (field.translatable) errors.push(`${fat}: blocks fields cannot be translatable`)
             errors.push(...blocksCountErrors(fat, field))
@@ -311,7 +322,7 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                      errors.push(`${bfat}: key must be a valid identifier`)
                   if (blockFieldKey === 'type')
                      errors.push(`${bfat}: 'type' is reserved inside blocks`)
-                  if (['relation', 'blocks', 'slug'].includes(blockField.type)) {
+                  if (['relation', 'blocks', 'slug', 'tags'].includes(blockField.type)) {
                      errors.push(
                         `${bfat}: ${blockField.type} fields are not supported inside blocks`
                      )
@@ -475,6 +486,19 @@ function blocksCountErrors(at: string, field: FieldConfig): string[] {
    return errors
 }
 
+function tagsOptionErrors(at: string, field: FieldConfig): string[] {
+   const errors: string[] = []
+   if (field.min !== undefined) errors.push(`${at}: min is not supported on tags fields`)
+   if (
+      field.max !== undefined &&
+      !(typeof field.max === 'number' && Number.isInteger(field.max) && field.max >= 1)
+   )
+      errors.push(`${at}: max must be an integer of 1 or more`)
+   if (field.suggestions !== undefined && typeof field.suggestions !== 'boolean')
+      errors.push(`${at}: suggestions must be a boolean`)
+   return errors
+}
+
 function blockMetaErrors(at: string, block: BlockConfig): string[] {
    const errors: string[] = []
    if (block.validate !== undefined && typeof block.validate !== 'function')
@@ -563,6 +587,9 @@ function columnExpr(key: string, field: FieldConfig, dialect: Dialect, table: st
          break
       case 'select':
          expr = field.multiple ? jsonExpr(col, dialect) : `text('${col}')`
+         break
+      case 'tags':
+         expr = jsonExpr(col, dialect)
          break
       case 'slug':
          expr = `text('${col}').unique()`
@@ -735,7 +762,7 @@ export function renderSchemaFile(
             f.type === 'json' ||
             f.type === 'blocks' ||
             (isTranslatableField(f) && !isTranslatableMediaField(f)) ||
-            isMultiSelect(f)
+            isStringListField(f)
       )
    )
       core.add('jsonb')

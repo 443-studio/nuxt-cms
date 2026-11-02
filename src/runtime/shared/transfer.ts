@@ -1,5 +1,10 @@
 import type { CmsEntry, CmsI18n, FieldConfig } from './index'
-import { isCollectionKind, isMultiSelect, isTranslatableField, selectOptionLabel } from './index'
+import {
+   isCollectionKind,
+   isStringListField,
+   isTranslatableField,
+   selectOptionLabel,
+} from './index'
 
 export type CmsTransferFormat = 'json' | 'csv'
 
@@ -172,14 +177,14 @@ export function parseCsv(text: string): string[][] {
 
 function csvCellText(field: FieldConfig | undefined, value: unknown): string {
    if (value === null || value === undefined) return ''
-   if (field?.type === 'json' || isMultiSelectField(field)) return JSON.stringify(value)
+   if (field?.type === 'json' || isStringList(field)) return JSON.stringify(value)
    if (typeof value === 'boolean') return value ? 'true' : 'false'
    if (typeof value === 'object') return JSON.stringify(value)
    return String(value)
 }
 
-function isMultiSelectField(field: FieldConfig | undefined) {
-   return !!field && isMultiSelect(field)
+function isStringList(field: FieldConfig | undefined) {
+   return !!field && isStringListField(field)
 }
 
 export function entryRowsToCsv(
@@ -224,7 +229,8 @@ export function csvCellValue(field: FieldConfig, text: string): CellResult {
       if (FALSE_VALUES.includes(lower)) return { value: false }
       return { error: 'Not a boolean (true or false)' }
    }
-   if (field.type === 'json' || isMultiSelect(field)) {
+   if (field.type === 'tags' && !text.trim().startsWith('[')) return { value: text.split(',') }
+   if (field.type === 'json' || isStringListField(field)) {
       try {
          return { value: JSON.parse(text) }
       } catch {

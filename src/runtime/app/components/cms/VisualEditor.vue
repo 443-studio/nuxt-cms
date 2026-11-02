@@ -204,6 +204,8 @@
                                  :field="fields[key]!"
                                  :locale="locale"
                                  :slug-source="slugSource(fields[key]!)"
+                                 :entry-name="entryName"
+                                 :field-key="key"
                                  @update:model-value="(value: unknown) => setValue(key, value)"
                               />
                            </KFormField>

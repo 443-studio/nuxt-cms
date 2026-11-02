@@ -14,6 +14,7 @@ export type FieldType =
    | 'email'
    | 'slug'
    | 'select'
+   | 'tags'
    | 'json'
    | 'media'
    | 'relation'
@@ -359,6 +360,7 @@ export interface FieldConfig {
    translatable?: boolean
    options?: readonly SelectOptionInput[]
    multiple?: boolean
+   suggestions?: boolean
    from?: string
    blocks?: Record<string, BlockConfig>
    min?: number
@@ -499,6 +501,55 @@ export function decodeEntryTranslatableMedia<T extends Record<string, unknown>>(
 
 export function isMultiSelect(field: FieldConfig): boolean {
    return field.type === 'select' && !!field.multiple
+}
+
+export function isStringListField(field: FieldConfig): boolean {
+   return field.type === 'tags' || isMultiSelect(field)
+}
+
+export function isMultiValueField(field: FieldConfig): boolean {
+   return (
+      isStringListField(field) ||
+      (field.type === 'relation' && field.cardinality === 'many-to-many')
+   )
+}
+
+export function tagKey(value: string): string {
+   return value.trim().toLowerCase()
+}
+
+export function normalizeTags(values: readonly unknown[]): string[] {
+   const seen = new Set<string>()
+   const tags: string[] = []
+   for (const value of values) {
+      if (typeof value !== 'string') continue
+      const tag = value.trim()
+      const key = tagKey(tag)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      tags.push(tag)
+   }
+   return tags
+}
+
+export function distinctTags(values: readonly unknown[]): string[] {
+   const lists = values.map((value) => {
+      if (Array.isArray(value)) return value
+      if (typeof value !== 'string' || !value.startsWith('[')) return []
+      try {
+         const parsed: unknown = JSON.parse(value)
+         return Array.isArray(parsed) ? parsed : []
+      } catch {
+         return []
+      }
+   })
+   return normalizeTags(lists.flat()).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+   )
+}
+
+export function canAddTag(field: Pick<FieldConfig, 'max'>, count: number): boolean {
+   return field.max === undefined || count < field.max
 }
 
 export function translatableFieldKeys(entry: EntryLike): string[] {
@@ -1023,6 +1074,12 @@ export interface SelectFieldInput extends FieldInputBase {
    multiple?: boolean
 }
 
+export interface TagsFieldInput extends FieldInputBase {
+   type: 'tags'
+   max?: number
+   suggestions?: boolean
+}
+
 export interface JsonFieldInput extends FieldInputBase {
    type: 'json'
 }
@@ -1082,6 +1139,7 @@ export type CmsFieldInput =
    | EmailFieldInput
    | SlugFieldInput
    | SelectFieldInput
+   | TagsFieldInput
    | JsonFieldInput
    | MediaFieldInput
    | RelationFieldInput

@@ -12,6 +12,7 @@ import {
    declaresHiddenField,
    isFieldVisible,
    isTranslatableField,
+   normalizeTags,
    selectOptionValues,
 } from './index'
 
@@ -31,6 +32,7 @@ export interface ValidationMessages {
    requiredLocale: (locale: string) => string
    minBlocks: (min: number) => string
    maxBlocks: (max: number) => string
+   maxTags: (max: number) => string
 }
 
 const DEFAULT_MESSAGES: ValidationMessages = {
@@ -43,6 +45,7 @@ const DEFAULT_MESSAGES: ValidationMessages = {
    requiredLocale: (locale) => `Required field (locale '${locale}')`,
    minBlocks: (min) => `Add at least ${min} ${min === 1 ? 'block' : 'blocks'}`,
    maxBlocks: (max) => `Add at most ${max} ${max === 1 ? 'block' : 'blocks'}`,
+   maxTags: (max) => `Add at most ${max} ${max === 1 ? 'tag' : 'tags'}`,
 }
 
 const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -140,6 +143,34 @@ export function blocksCountMessage(
    if (field.max !== undefined && count > field.max) return m.maxBlocks(field.max)
    if (field.min !== undefined && count > 0 && count < field.min) return m.minBlocks(field.min)
    return null
+}
+
+export function tagsCountMessage(
+   field: Pick<FieldConfig, 'max'>,
+   count: number,
+   messages?: Partial<ValidationMessages>
+): string | null {
+   const m: ValidationMessages = { ...DEFAULT_MESSAGES, ...messages }
+   if (field.max !== undefined && count > field.max) return m.maxTags(field.max)
+   return null
+}
+
+function countMessage(field: FieldConfig, count: number, m: ValidationMessages): string | null {
+   return field.type === 'tags'
+      ? tagsCountMessage(field, count, m)
+      : blocksCountMessage(field, count, m)
+}
+
+function tagsSchema(field: FieldConfig, bounded: boolean, m: ValidationMessages): z.ZodType {
+   return z
+      .array(z.string())
+      .nullish()
+      .transform((value) => normalizeTags(value ?? []))
+      .superRefine((tags, ctx) => {
+         if (field.required && !tags.length) ctx.addIssue({ code: 'custom', message: m.required })
+         const message = bounded ? tagsCountMessage(field, tags.length, m) : null
+         if (message) ctx.addIssue({ code: 'custom', message })
+      })
 }
 
 function boundedBlocks<T extends z.ZodType<unknown[]>>(
@@ -257,7 +288,7 @@ export function buildEntrySchema(
       if (declared.showIf && declared.required) conditional.push([key, declared])
       if (
          declared.showIf &&
-         declared.type === 'blocks' &&
+         (declared.type === 'blocks' || declared.type === 'tags') &&
          (declared.min !== undefined || declared.max !== undefined)
       )
          conditionalBounds.push([key, declared])
@@ -273,6 +304,10 @@ export function buildEntrySchema(
          shape[key] = field.required
             ? list.min(1, m.required)
             : list.nullish().transform((v) => v ?? [])
+         continue
+      }
+      if (field.type === 'tags') {
+         shape[key] = tagsSchema(field, !declared.showIf, m)
          continue
       }
       if (field.type === 'blocks') {
@@ -316,7 +351,7 @@ export function buildEntrySchema(
       for (const [key, field] of conditionalBounds) {
          const list = values[key]
          if (!isFieldVisible(field, values) || !Array.isArray(list)) continue
-         const message = blocksCountMessage(field, list.length, m)
+         const message = countMessage(field, list.length, m)
          if (message) ctx.addIssue({ code: 'custom', path: [key], message })
       }
       if (!hooks) return

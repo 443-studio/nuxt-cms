@@ -36,6 +36,15 @@
       :options="selectItems"
       :placeholder="field.placeholder ?? 'Select…'"
    />
+   <CmsTagsField
+      v-else-if="field.type === 'tags'"
+      v-model="model"
+      :max="field.max"
+      :placeholder="field.placeholder"
+      :suggestions="field.suggestions"
+      :entry-name="entryName"
+      :field-key="fieldKey"
+   />
    <KSelect
       v-else-if="field.type === 'select'"
       v-model="singleValue"

@@ -16,6 +16,7 @@ const FIELD_ICONS: Record<FieldType, string> = {
    email: 'at-symbol',
    slug: 'link',
    select: 'chevron-up-down',
+   tags: 'tag',
    json: 'code-bracket',
    media: 'photo',
    relation: 'arrows-right-left',

@@ -4,6 +4,7 @@ import {
    blockTypeName,
    blocksFieldTypeName,
    isCollectionKind,
+   isMultiValueField,
    isPrivateField,
    isRequiredField,
    isTranslatableField,
@@ -16,6 +17,8 @@ export { blockTypeName, blocksFieldTypeName, typeName }
 function entryFields(entry: CmsEntry): Record<string, FieldConfig> {
    return entry.kind === 'page' ? pageAllFields(entry) : entry.fields
 }
+
+export const LIST_FILTER = 'StringListFilter'
 
 function scalarFor(field: FieldConfig): string {
    switch (field.type) {
@@ -32,15 +35,12 @@ function scalarFor(field: FieldConfig): string {
 
 function filterScalarFor(field: FieldConfig): string | null {
    if (isPrivateField(field) || isTranslatableField(field)) return null
+   if (isMultiValueField(field)) return LIST_FILTER
    switch (field.type) {
       case 'json':
          return null
       case 'blocks':
          return null
-      case 'select':
-         return field.multiple ? null : 'StringFilter'
-      case 'relation':
-         return field.cardinality === 'many-to-many' ? null : 'StringFilter'
       case 'number':
          return field.integer ? 'IntFilter' : 'FloatFilter'
       case 'boolean':
@@ -68,7 +68,8 @@ function fieldSdl(config: CmsConfig, entryName: string, key: string, field: Fiel
       return `  ${key}: ${target}${nonNull ? '!' : ''}`
    }
    if (field.type === 'media') return `  ${key}: CmsMedia`
-   if (field.type === 'select' && field.multiple) return `  ${key}: [String!]!`
+   if (field.type === 'tags' || (field.type === 'select' && field.multiple))
+      return `  ${key}: [String!]!`
    if (field.type === 'blocks')
       return `  ${key}: [${blocksFieldTypeName(entryName, key)}!]${
          isRequiredField(field) ? '!' : ''
@@ -128,7 +129,10 @@ function filterSdl(name: string, entry: CmsEntry): string {
    const gqlType = typeName(name)
    const keys = filterableKeys(entry)
    const filters = keys.map(([key, scalar]) => `  ${key}: ${scalar}`).join('\n')
-   const sortFields = keys.map(([key]) => `  ${key}`).join('\n')
+   const sortFields = keys
+      .filter(([, scalar]) => scalar !== LIST_FILTER)
+      .map(([key]) => `  ${key}`)
+      .join('\n')
    return [
       `input ${gqlType}Filters {\n${filters}\n}`,
       `enum ${gqlType}SortField {\n${sortFields}\n}`,
@@ -143,6 +147,7 @@ const COMMON_SDL = [
    'input FloatFilter {\n  eq: Float\n  neq: Float\n  gt: Float\n  gte: Float\n  lt: Float\n  lte: Float\n  in: [Float!]\n  isNull: Boolean\n}',
    'input StringFilter {\n  eq: String\n  neq: String\n  gt: String\n  gte: String\n  lt: String\n  lte: String\n  like: String\n  in: [String!]\n  isNull: Boolean\n}',
    'input BooleanFilter {\n  eq: Boolean\n  neq: Boolean\n  isNull: Boolean\n}',
+   `input ${LIST_FILTER} {\n  hasAny: [String!]\n  hasAll: [String!]\n  isEmpty: Boolean\n}`,
    'enum CmsMediaType {\n  image\n  video\n  file\n}',
    'type CmsMedia {\n  key: String!\n  url: String\n  type: CmsMediaType!\n  alt: String\n  folder: String\n  mime: String\n  size: Int\n  width: Int\n  height: Int\n}',
 ]

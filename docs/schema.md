@@ -134,7 +134,7 @@ pages_media   (page_id -> pages.id on delete cascade, key, position default 0, m
   table holds only `id`, `path` and `updated_at`.
 - A scalar field is one row in `<entry>_fields` at `position` 0. Plain strings (`text`,
   `richtext`, `email`, `date`, single `select`) are stored as they are; every other value
-  (numbers, booleans, multi-select, `json`, translatable text) is stored as JSON text, so a
+  (numbers, booleans, multi-select, `tags`, `json`, translatable text) is stored as JSON text, so a
   translatable field keeps the same `{"en": "...", "it": "..."}` it has in a column.
 - A media field is one row in `<entry>_media` at `position` 0; `media_key` holds the same value a
   column would (the key, or the JSON of a translatable media).
@@ -321,6 +321,7 @@ Every field has `label: string` and optional `required?: boolean` and `private?:
 | `email`    | none                                                                               | String              |
 | `slug`     | `from: '<fieldKey>'` (required; auto-generated from that text field)                | String (unique)     |
 | `select`   | `options: (string \| { value, label })[]` (required, unique values), `multiple?: boolean` | String (enum) or `[String!]!` |
+| `tags`     | `max?: number`, `suggestions?: boolean` (default `true`); see [Tags fields](#tags-fields) | `[String!]!`        |
 | `json`     | none                                                                               | JSON                |
 | `media`    | `mediaType?: T \| T[]` where `T` is `'image' \| 'video' \| 'file'`, `accept?: string[]`, `translatable?: boolean`, `mobile?: boolean` | CmsMedia object     |
 | `relation` | see [Relations](#relations)                                                         | related entry / list |
@@ -374,9 +375,40 @@ tags: {
 }
 ```
 
-Multi-select fields are stored as JSON arrays and queried as `[String!]!` in GraphQL. They are **excluded from filtering and sorting** and **not allowed inside blocks**.
+Multi-select fields are stored as JSON arrays and queried as `[String!]!` in GraphQL. They filter
+with a [`StringListFilter`](querying.md#list-filters) (`hasAny`, `hasAll`, `isEmpty`), are **excluded
+from sorting** and are **not allowed inside blocks**.
 
 When `required: true`, the field must have at least one item (an empty array is invalid).
+
+## Tags fields
+
+A `tags` field is a free list of strings, for values that are not known in advance (spots, rivers,
+keywords):
+
+```ts
+spots: { label: 'Spot', type: 'tags' },
+languages: { label: 'Languages', type: 'tags', required: true, max: 5, suggestions: false },
+```
+
+- Stored as a JSON array of strings (the same column as a multi-select: `text` in JSON mode on
+  SQLite, libSQL and D1, `jsonb` on Postgres), queried as `[String!]!` and typed `string[]` in
+  `#cms-types`. An empty field is `[]`.
+- Every value is trimmed, empty values are dropped and duplicates are ignored case-insensitively
+  (the first spelling wins), by the admin input and again by the validation of the admin API and
+  the import.
+- `max` caps the number of tags (an integer of 1 or more, checked after deduplication, message
+  `ValidationMessages.maxTags`, "Add at most 5 tags"); with `showIf` it applies only while the field
+  is visible. `required: true` asks for at least one tag. `min` is not supported.
+- `suggestions` (default `true`) makes the admin input suggest the values already used in the same
+  field across the entry, read by `GET /api/cms/tags/<entry>/<field>` (admin session). Set it to
+  `false` for values that should not leak from one entry to another.
+- In the admin: type a value and press Enter or comma to add a chip, Backspace on an empty input
+  removes the last chip, the x on a chip removes it.
+- Filters with a [`StringListFilter`](querying.md#list-filters) (`hasAny`, `hasAll`, `isEmpty`;
+  exact, case-sensitive match), never sorts.
+- Not allowed inside `blocks` (like multi-select), not translatable, and it cannot be a
+  `titleField` or the target of a `showIf`.
 
 ## Relations
 
@@ -434,8 +466,8 @@ gallery: { label: 'Gallery', type: 'blocks', min: 2, max: 8, blocks: { ... } }
 - `min` is an integer of 0 or more, `max` an integer of 1 or more, and `min` cannot exceed `max`.
   They are only valid on `blocks` fields. The schema, the column and the query shape do not change.
 
-Block fields accept every field type **except** `slug`, `relation`, `blocks`, and multi-select
-(`select` with `multiple: true`). They can be `translatable` (see below) but not `private`: mark the
+Block fields accept every field type **except** `slug`, `relation`, `blocks`, `tags` and
+multi-select (`select` with `multiple: true`). They can be `translatable` (see below) but not `private`: mark the
 whole `blocks` field private instead.
 `required` inside a block is an admin and save-time rule: the API and the generated types always
 return block fields as nullable, since stored items can predate a field or its `required` flag.
@@ -624,7 +656,7 @@ photo: { label: 'Photo', type: 'media', showIf: { field: 'type', eq: 'image' } }
   belonging to opposite branches can never both be filled, and a `NOT NULL` on either would make every
   entry unsavable. Treat a conditional field as optional when you read it.
 - The condition may point at a `select`, `boolean`, `text`, `number`, `date`, `email` or `slug`
-  field. It cannot point at `blocks`, `relation`, `media`, `json`, multi-select or translatable fields, whose
+  field. It cannot point at `blocks`, `relation`, `media`, `json`, multi-select, `tags` or translatable fields, whose
   values have no single comparable form.
 - When the target is a `select`, the referenced values are checked against its `options` at build
   time, so a typo fails the build instead of silently hiding the field forever.
@@ -808,6 +840,7 @@ export default defineCmsConfig({
          date: { label: 'Date', type: 'date', required: true },
          visibility: { label: 'Visibility', type: 'select', options: ['public', 'hidden'] },
          topics: { label: 'Topics', type: 'select', options: ['tech', 'science', 'art'], multiple: true },
+         keywords: { label: 'Keywords', type: 'tags', max: 10 },
          poster: { label: 'Poster', type: 'media', mediaType: ['image', 'video'] },
          category: { label: 'Category', type: 'relation', to: 'categories' },
          tags: { label: 'Tags', type: 'relation', to: 'tags', cardinality: 'many-to-many' },
@@ -845,9 +878,10 @@ export default defineCmsConfig({
 - `select` needs a non-empty array of `options`: non-empty strings or `{ value, label }` objects
   with a non-empty `value` and `label`, and no value repeated.
 - `min` and `max` are only valid on `blocks` fields: `min` an integer of 0 or more, `max` an
-  integer of 1 or more, `min` not greater than `max`.
+  integer of 1 or more, `min` not greater than `max`. A `tags` field takes `max` only (an integer of
+  1 or more), and `suggestions` (a boolean) is only valid on `tags` fields.
 - `validate` on an entry or a block must be a function.
-- Multi-select (`select` with `multiple: true`) is not allowed inside `blocks` and is excluded from filters and sorting.
+- Multi-select (`select` with `multiple: true`) and `tags` are not allowed inside `blocks` and are excluded from sorting.
 - `translatable` is only valid on `text`, `richtext` and `media`, at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
 - `showIf` must reference another declared field of a comparable type, cannot be used on the `titleField` or inside `blocks`, and needs exactly one of `eq` / `in`.
 - `tab` must name a tab declared by the same entry; tab ids must be unique and every tab needs a label.

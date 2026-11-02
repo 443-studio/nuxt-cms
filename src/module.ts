@@ -1121,6 +1121,11 @@ export default defineNuxtModule<ModuleOptions>({
       })
 
       addServerHandler({
+         route: '/api/cms/tags/:collection/:field',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/tags.get'),
+      })
+      addServerHandler({
          route: '/api/cms/export/:collection',
          method: 'get',
          handler: resolver.resolve('./runtime/server/api/collection-export.get'),

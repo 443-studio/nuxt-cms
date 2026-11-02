@@ -561,6 +561,8 @@ function displayValue(field: FieldConfig, key: string, value: unknown): string {
          return formatDateTime(value)
       case 'select':
          return truncate(selectDisplayValue(field, value))
+      case 'tags':
+         return Array.isArray(value) ? truncate(value.join(', ')) : ''
       case 'blocks':
          return `${(value as unknown[]).length} ▤`
       case 'relation': {

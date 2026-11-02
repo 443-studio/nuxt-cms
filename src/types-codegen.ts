@@ -46,6 +46,7 @@ function fieldTsType(
       return isRequiredField(field) && !config[field.to!]?.drafts ? target : `${target} | null`
    }
    if (field.type === 'media') return `${mediaTsType(field)} | null`
+   if (field.type === 'tags') return 'string[]'
    if (field.type === 'select' && field.multiple) {
       const union = selectOptionValues(field)
          .map((o) => JSON.stringify(o))

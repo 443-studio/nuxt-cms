@@ -68,7 +68,16 @@ interface SearchContext extends CmsSearchOptions {
    pattern: string
 }
 
-const VALUE_TYPES = new Set(['text', 'richtext', 'email', 'slug', 'select', 'json', 'blocks'])
+const VALUE_TYPES = new Set([
+   'text',
+   'richtext',
+   'email',
+   'slug',
+   'select',
+   'tags',
+   'json',
+   'blocks',
+])
 
 function isSearchableField(field: FieldConfig): boolean {
    return VALUE_TYPES.has(field.type)
@@ -113,6 +122,8 @@ function fieldTexts(field: FieldConfig, value: unknown, defaultLocale: string): 
          .join(', ')
       return [{ locale: null, text }]
    }
+   if (field.type === 'tags' && Array.isArray(value))
+      return value.length ? [{ locale: null, text: value.map(String).join(', ') }] : []
    if (typeof value === 'string') return [{ locale: null, text: plainText(field, value) }]
    return [{ locale: null, text: JSON.stringify(value) }]
 }

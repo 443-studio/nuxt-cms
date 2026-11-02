@@ -29,6 +29,7 @@ import {
    decodeTranslatableMedia,
    entryFieldsFor,
    hasTranslatableBlockFields,
+   isMultiValueField,
    isPrivateField,
    isTranslatableMediaField,
    localizeBlocks,
@@ -47,6 +48,13 @@ import {
 import { normalizeTimestampFields } from '../../shared/timestamps'
 import { useMediaIndex } from './media-index'
 import { readPages } from './page-storage'
+import type { JoinTable } from './list-filter'
+import {
+   isListFilterOperator,
+   joinListCondition,
+   jsonListCondition,
+   listFilterValues,
+} from './list-filter'
 import { getContentI18n, resolveTable, tableColumns } from './registry'
 import { visibilityConditions } from './visibility'
 
@@ -183,11 +191,55 @@ function columnFor(table: SQLiteTable, key: string): AnySQLiteColumn | undefined
    return Object.hasOwn(columns, key) ? columns[key] : undefined
 }
 
-function filterConditions(table: SQLiteTable, filters: Filters | null | undefined): SQL[] {
+function joinTableFor(name: string, key: string): JoinTable {
+   const join = (cmsTables as Record<string, unknown>)[`${name}_${key}`] as SQLiteTable | undefined
+   if (!join) throw new GraphQLError(`No join table for ${name}.${key}`)
+   const columns = tableColumns(join)
+   return { table: join, sourceId: columns.sourceId!, targetId: columns.targetId! }
+}
+
+function listConditions(
+   name: string,
+   table: SQLiteTable,
+   key: string,
+   field: FieldConfig,
+   ops: Record<string, unknown>
+): SQL[] {
+   const conditions: SQL[] = []
+   for (const [op, value] of Object.entries(ops)) {
+      if (value === undefined || value === null) continue
+      if (!isListFilterOperator(op)) throw new GraphQLError(`Unknown operator for ${key}: ${op}`)
+      if (op !== 'isEmpty' && !listFilterValues(value).length)
+         throw new GraphQLError(`Empty ${op} list for ${key}`)
+      if (field.type === 'relation') {
+         const id = columnFor(table, 'id')
+         if (!id) throw new GraphQLError(`Unknown filter field: ${key}`)
+         conditions.push(joinListCondition(joinTableFor(name, key), id, op, value))
+         continue
+      }
+      const column = columnFor(table, key)
+      if (!column) throw new GraphQLError(`Unknown filter field: ${key}`)
+      conditions.push(jsonListCondition(cmsDialect, column, op, value))
+   }
+   return conditions
+}
+
+function filterConditions(
+   name: string,
+   entry: CmsEntry,
+   table: SQLiteTable,
+   filters: Filters | null | undefined
+): SQL[] {
    if (!filters) return []
    const conditions: SQL[] = []
+   const fields = entryFieldsFor(entry)
    for (const [key, ops] of Object.entries(filters)) {
       if (!ops) continue
+      const field = Object.hasOwn(fields, key) ? fields[key] : undefined
+      if (field && isMultiValueField(field)) {
+         conditions.push(...listConditions(name, table, key, field, ops))
+         continue
+      }
       const column = columnFor(table, key)
       if (!column) throw new GraphQLError(`Unknown filter field: ${key}`)
       for (const [op, value] of Object.entries(ops)) {
@@ -452,7 +504,10 @@ export function buildCmsSchema() {
       queryResolvers[name] = async (_: unknown, args: ListArgs) => {
          const locale = resolveLocaleArg(args.locale)
          const table = tableFor(name)
-         const where = [...publishedFilter(entry, table), ...filterConditions(table, args.filters)]
+         const where = [
+            ...publishedFilter(entry, table),
+            ...filterConditions(name, entry, table, args.filters),
+         ]
          const limit = Math.min(MAX_LIMIT, Math.max(0, args.limit ?? DEFAULT_LIMIT))
          const offset = Math.max(0, args.offset ?? 0)
          const rows = await useDb()
@@ -495,7 +550,10 @@ export function buildCmsSchema() {
 
       queryResolvers[`${name}Count`] = async (_: unknown, args: { filters?: Filters | null }) => {
          const table = tableFor(name)
-         const where = [...publishedFilter(entry, table), ...filterConditions(table, args.filters)]
+         const where = [
+            ...publishedFilter(entry, table),
+            ...filterConditions(name, entry, table, args.filters),
+         ]
          const [counted] = await useDb()
             .select({ total: sql<number>`count(*)` })
             .from(table)

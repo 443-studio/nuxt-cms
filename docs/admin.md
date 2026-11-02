@@ -70,6 +70,14 @@ The admin API runs the same checks again.
 label in the input, the table, the entry title, relation pickers and search results; the stored
 value stays the option value.
 
+**Tags fields.** A [`tags`](schema.md#tags-fields) field is a chips input: type a value and press
+Enter or comma to add it (pasting `a, b, c` adds three), Backspace on an empty input removes the
+last chip and the x on a chip removes it. Values are trimmed and a value that is already there
+(ignoring case) is not added twice. Unless the field sets `suggestions: false`, the dropdown
+suggests the values used in the same field by the other entries; the first row is always what you
+typed, so Enter adds it as written. At `max` the input stops adding. The table shows the tags
+separated by commas, and the search box of the sidebar finds them.
+
 **Bulk actions.** Every row of a collection table has a checkbox. When rows are selected, the
 toolbar shows **Delete** and, on a collection with `drafts`, **Publish** and **Draft**. With one row
 selected it also shows **Duplicate**.
@@ -121,8 +129,9 @@ table order.
   relations as ids and many-to-many relations as lists of ids, blocks as their list.
 - **CSV**, only when the entry has no `blocks` and no `many-to-many` field. The header is `id`, the
   fields, `status` and the timestamps. A translatable field has one column per locale (`title.it`,
-  `title.de`). Booleans are `true` or `false`, `json` and multi-select values are JSON text, and an
-  empty cell is an empty value. The file is UTF-8 with a byte order mark, so spreadsheet apps read
+  `title.de`). Booleans are `true` or `false`, `json`, multi-select and `tags` values are JSON
+  text (a `tags` cell may also be plain comma separated text, `Garda, Po`), and an empty cell is an
+  empty value. The file is UTF-8 with a byte order mark, so spreadsheet apps read
   the accents.
 
 **Import from file** takes a file in the same format (a JSON file can also be a plain array of
