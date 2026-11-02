@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
    addComponent,
    addComponentsDir,
@@ -16,6 +16,7 @@ import {
    defineNuxtModule,
    extendPages,
    resolvePath,
+   tryResolveModule,
    useLogger,
 } from '@nuxt/kit'
 import type { ModuleDependencies, Nuxt } from '@nuxt/schema'
@@ -450,6 +451,7 @@ export default defineNuxtModule<ModuleOptions>({
               'nuxt-auth-utils': {},
               '@xleddyl/443-components-vue/nuxt': {
                  defaults: {
+                    composables: false,
                     editor: true,
                     icons: {
                        collections: [
@@ -922,6 +924,18 @@ export default defineNuxtModule<ModuleOptions>({
          }
       })
       addComponentsDir({ path: resolver.resolve('./runtime/app/components') })
+      nuxt.hook('modules:done', async () => {
+         const include = nuxt.options.vite.optimizeDeps?.include
+         if (!include) return
+         const rootUrl = pathToFileURL(`${nuxt.options.rootDir}/`).href
+         nuxt.options.vite.optimizeDeps!.include = await Promise.all(
+            include.map(async (entry) =>
+               entry.startsWith('@tiptap/') && !(await tryResolveModule(entry, rootUrl))
+                  ? `@xleddyl/nuxt-cms > ${entry}`
+                  : entry
+            )
+         )
+      })
       addRouteMiddleware({
          name: 'cms-auth',
          path: resolver.resolve('./runtime/app/middleware/cms-auth'),
