@@ -84,3 +84,5 @@ async function login(values: {
    }
 }
 </script>
+
+<style src="../../assets/admin.css" />

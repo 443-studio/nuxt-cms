@@ -19,3 +19,5 @@ provideTheme(theme)
 
 await loadCmsSettings()
 </script>
+
+<style src="../../assets/admin.css" />

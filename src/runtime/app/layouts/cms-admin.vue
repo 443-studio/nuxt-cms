@@ -249,3 +249,5 @@ async function logout() {
    await navigateTo('/cms/login')
 }
 </script>
+
+<style src="../../assets/admin.css" />

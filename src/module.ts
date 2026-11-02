@@ -452,6 +452,8 @@ export default defineNuxtModule<ModuleOptions>({
               '@xleddyl/443-components-vue/nuxt': {
                  defaults: {
                     composables: false,
+                    css: false,
+                    fonts: false,
                     editor: true,
                     icons: {
                        collections: [
@@ -907,12 +909,6 @@ export default defineNuxtModule<ModuleOptions>({
       })
       nuxt.options.alias['#cms-brand'] = brandTemplate.dst
 
-      nuxt.options.css.push(
-         resolveImport('@fontsource-variable/geist/index.css'),
-         resolveImport('@fontsource-variable/geist-mono/index.css'),
-         resolver.resolve('./runtime/assets/cms.css')
-      )
-
       nuxt.hook('app:templates', (app) => {
          app.layouts['cms-admin'] = {
             name: 'cms-admin',
@@ -924,6 +920,14 @@ export default defineNuxtModule<ModuleOptions>({
          }
       })
       addComponentsDir({ path: resolver.resolve('./runtime/app/components') })
+      nuxt.hook('app:resolve', (app) => {
+         app.plugins = app.plugins.filter(
+            (plugin) =>
+               !/[\\/]443-components-vue[\\/]dist[\\/]nuxt[\\/]runtime[\\/](theme|locale)(\.mjs)?$/.test(
+                  plugin.src
+               )
+         )
+      })
       nuxt.hook('modules:done', async () => {
          const include = nuxt.options.vite.optimizeDeps?.include
          if (!include) return
