@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.8.0
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.7.1...v0.8.0)
+
+### 🚀 Enhancements
+
+- Add tags field type and hasAny, hasAll and isEmpty filters for multi-value fields ([6d8fa5e](https://github.com/443-studio/nuxt-cms/commit/6d8fa5e))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.7.1
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.7.0...v0.7.1)
