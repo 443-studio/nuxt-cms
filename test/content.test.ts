@@ -16,6 +16,7 @@ import {
    isScheduledContent,
    normalizeCmsConfig,
    slugSourceValue,
+   slugify,
 } from '../src/runtime/shared/index'
 import { buildEntrySchema } from '../src/runtime/shared/validation'
 import { visibilityConditions } from '../src/runtime/server/utils/visibility'
@@ -140,13 +141,11 @@ describe('content validation', () => {
       expect(validateConfig(config, I18N)).toEqual([])
    })
 
-   it('keeps refusing a translatable slug source outside content entries', () => {
+   it('accepts a translatable slug source outside content entries', () => {
       const config = contentConfig()
       config.events!.fields.description = { label: 'Description', type: 'text', translatable: true }
       config.events!.fields.slug!.from = 'description'
-      expect(validateConfig(config, I18N)).toContain(
-         "cms.config entry 'events', field 'slug': slug source 'description' cannot be translatable"
-      )
+      expect(validateConfig(config, I18N)).toEqual([])
    })
 
    it('checks the block component, icon and prop names', () => {
@@ -275,6 +274,17 @@ describe('content helpers', () => {
       expect(slugSourceValue(title, { en: 'Hello', it: 'Ciao' }, 'en')).toBe('Hello')
       expect(slugSourceValue({ label: 'T', type: 'text' }, 'Plain', 'en')).toBe('Plain')
       expect(slugSourceValue(title, null, 'en')).toBeNull()
+   })
+
+   it('builds a collection slug from the default locale of a translatable text field', () => {
+      const name = { label: 'Name', type: 'text', translatable: true } as const
+      expect(slugify(slugSourceValue(name, { en: 'Brown Trout', it: 'Trota fario' }, 'en')!)).toBe(
+         'brown-trout'
+      )
+      expect(slugify(slugSourceValue(name, { en: 'Brown Trout', it: 'Trota fario' }, 'it')!)).toBe(
+         'trota-fario'
+      )
+      expect(slugSourceValue(name, { it: 'Trota fario' }, 'en')).toBeNull()
    })
 })
 

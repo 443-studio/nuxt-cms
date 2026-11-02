@@ -319,7 +319,7 @@ Every field has `label: string` and optional `required?: boolean` and `private?:
 | `date`     | none                                                                               | String `yyyy-mm-dd` |
 | `datetime` | none                                                                                | String, ISO 8601 UTC |
 | `email`    | none                                                                               | String              |
-| `slug`     | `from: '<fieldKey>'` (required; auto-generated from that text field)                | String (unique)     |
+| `slug`     | `from: '<fieldKey>'` (required; auto-generated from that text field, from its default-locale value when translatable) | String (unique)     |
 | `select`   | `options: (string \| { value, label })[]` (required, unique values), `multiple?: boolean` | String (enum) or `[String!]!` |
 | `tags`     | `max?: number`, `suggestions?: boolean` (default `true`); see [Tags fields](#tags-fields) | `[String!]!`        |
 | `json`     | none                                                                               | JSON                |
@@ -766,7 +766,9 @@ a translatable media field a JSON map of locale → key), not the resolved Graph
 `translatable: true` is supported on `text`, `richtext` and `media`, as top-level fields and
 [inside blocks](#translatable-block-fields). It requires `cms.i18n.locales` to be configured. Values are stored per locale and resolved to a single value at query time via the
 `locale` argument (falling back to `defaultLocale` when a translation is missing). Translatable
-fields are **excluded from filtering and sorting**.
+fields are **excluded from filtering and sorting**. A `slug` field can take its `from` from a
+translatable `text` field: the admin generates it from the value in `defaultLocale`, and the slug
+itself is a single value shared by every locale.
 
 ```ts
 i18n: { locales: ['en', 'it'], defaultLocale: 'en' } // in nuxt.config.ts
@@ -885,8 +887,8 @@ export default defineCmsConfig({
 - `translatable` is only valid on `text`, `richtext` and `media`, at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
 - `showIf` must reference another declared field of a comparable type, cannot be used on the `titleField` or inside `blocks`, and needs exactly one of `eq` / `in`.
 - `tab` must name a tab declared by the same entry; tab ids must be unique and every tab needs a label.
-- `slug.from` must point to a non-translatable `text` field (the `slug` of a content entry is the
-  only exception: it reads the default locale of the title).
+- `slug.from` must point to a `text` field. When that field is translatable, the slug is generated
+  from its value in the default locale (as the `slug` of a content entry is from the title).
 - `private` is not allowed inside `blocks`.
 - A relation `to` must reference an existing collection or content entry.
 - `list.filters` may only name single `select`, `boolean` and single `relation` fields, plus

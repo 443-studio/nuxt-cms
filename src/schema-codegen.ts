@@ -1,7 +1,6 @@
 import { typeName } from './runtime/shared/graphql-sdl'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from './runtime/shared/index'
 import {
-   CONTENT_SLUG_FIELD,
    CONTENT_SYSTEM_FIELDS,
    PAGE_PATH_FIELD,
    fieldConditions,
@@ -286,11 +285,6 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
             if (!source) errors.push(`${fat}: slug source '${field.from}' is not a declared field`)
             else if (source.type !== 'text')
                errors.push(`${fat}: slug source '${field.from}' must be a text field`)
-            else if (
-               isTranslatableField(source) &&
-               !(entry.kind === 'content' && key === CONTENT_SLUG_FIELD)
-            )
-               errors.push(`${fat}: slug source '${field.from}' cannot be translatable`)
          }
          if (field.type === 'tags') {
             errors.push(...tagsOptionErrors(fat, field))

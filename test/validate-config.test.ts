@@ -181,6 +181,18 @@ describe('validateConfig', () => {
       expect(errors.some((e) => e.includes("slug source 'seats'"))).toBe(true)
    })
 
+   it('accepts a slug sourced from a translatable text field', () => {
+      const config = sampleConfig()
+      config.categories!.fields.name = {
+         label: 'Name',
+         type: 'text',
+         translatable: true,
+         required: true,
+      }
+      config.categories!.fields.slug = { label: 'Slug', type: 'slug', from: 'name' }
+      expect(validateConfig(config, I18N)).toEqual([])
+   })
+
    it('rejects translatable fields without configured locales', () => {
       const errors = validateConfig(sampleConfig(), { locales: [], defaultLocale: 'en' })
       expect(errors.some((e) => e.includes('translatable requires'))).toBe(true)

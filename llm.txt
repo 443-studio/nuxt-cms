@@ -51,7 +51,7 @@ Every field has `label: string` and optional `required?: boolean` and `private?:
 | `date`     | none                                                                               | String `yyyy-mm-dd` |
 | `datetime` | none                                                                                | String, ISO 8601 UTC |
 | `email`    | none                                                                               | String            |
-| `slug`     | `from: '<fieldKey>'` (required; auto-generated from that text field)                | String            |
+| `slug`     | `from: '<fieldKey>'` (required; auto-generated from that text field, from its default-locale value when translatable) | String            |
 | `select`   | `options: (string \| { value, label })[]` (required), `multiple?: boolean`         | String (enum) / `[String!]!` |
 | `tags`     | `max?: number`, `suggestions?: boolean` (default true)                              | `[String!]!`      |
 | `json`     | none                                                                               | JSON              |
