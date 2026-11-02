@@ -81,7 +81,7 @@ describe('renderSchemaFile', () => {
       )
    })
 
-   it('types the reference of a self relation in both dialects', () => {
+   it('declares a self relation as a table foreign key in both dialects', () => {
       const config = sampleConfig()
       config.categories!.fields.parent = {
          label: 'Parent',
@@ -90,17 +90,22 @@ describe('renderSchemaFile', () => {
          onDelete: 'cascade',
       }
       const sqlite = renderSchemaFile(config, 'sqlite')
-      expect(sqlite).toContain("import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'")
       expect(sqlite).toContain(
-         "parent: text('parent').references((): AnySQLiteColumn => categories.id, { onDelete: 'cascade' })"
+         "import { foreignKey, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'"
+      )
+      expect(sqlite).toContain("parent: text('parent'),")
+      expect(sqlite).toContain(
+         "}, table => [\n  foreignKey({ columns: [table.parent], foreignColumns: [table.id] }).onDelete('cascade'),\n])"
       )
       const pg = renderSchemaFile(config, 'postgres')
-      expect(pg).toContain("import type { AnyPgColumn } from 'drizzle-orm/pg-core'")
-      expect(pg).toContain('references((): AnyPgColumn => categories.id')
+      expect(pg).toMatch(/import \{[^}]*\bforeignKey\b[^}]*\} from 'drizzle-orm\/pg-core'/)
+      expect(pg).toContain(
+         "foreignKey({ columns: [table.parent], foreignColumns: [table.id] }).onDelete('cascade')"
+      )
    })
 
-   it('imports no column type without a self relation', () => {
-      expect(renderSchemaFile(sampleConfig(), 'sqlite')).not.toContain('AnySQLiteColumn')
+   it('imports no foreign key helper without a self relation', () => {
+      expect(renderSchemaFile(sampleConfig(), 'sqlite')).not.toContain('foreignKey')
    })
 
    it('routes imports through the resolver', () => {

@@ -595,9 +595,11 @@ function columnExpr(key: string, field: FieldConfig, dialect: Dialect, table: st
          expr = `text('${col}').unique()`
          break
       case 'relation': {
-         const onDelete = field.onDelete ?? (field.required ? 'restrict' : 'set null')
-         const target = field.to === table ? `(): ${anyColumnType(dialect)}` : '()'
-         expr = `text('${col}').references(${target} => ${field.to}.id, { onDelete: '${onDelete}' })`
+         const onDelete = relationOnDelete(field)
+         expr =
+            field.to === table
+               ? `text('${col}')`
+               : `text('${col}').references(() => ${field.to}.id, { onDelete: '${onDelete}' })`
          if (field.cardinality === 'one-to-one') expr += '.unique()'
          break
       }
@@ -608,8 +610,8 @@ function columnExpr(key: string, field: FieldConfig, dialect: Dialect, table: st
    return `  ${key}: ${expr},`
 }
 
-function anyColumnType(dialect: Dialect) {
-   return dialect === 'postgres' ? 'AnyPgColumn' : 'AnySQLiteColumn'
+function relationOnDelete(field: FieldConfig) {
+   return field.onDelete ?? (field.required ? 'restrict' : 'set null')
 }
 
 function isSelfRelation(table: string, field: FieldConfig) {
@@ -636,6 +638,7 @@ function tableExpr(name: string, entry: CmsEntry, dialect: Dialect): string {
    const pg = dialect === 'postgres'
    const tableFn = pg ? 'pgTable' : 'sqliteTable'
    const lines: string[] = []
+   const selfReferences: string[] = []
 
    lines.push(`  id: text('id').primaryKey(),`)
 
@@ -646,6 +649,12 @@ function tableExpr(name: string, entry: CmsEntry, dialect: Dialect): string {
    )) {
       if (isManyToMany(field)) continue
       lines.push(columnExpr(key, field, dialect, name))
+      if (isSelfRelation(name, field))
+         selfReferences.push(
+            `foreignKey({ columns: [table.${key}], foreignColumns: [table.id] }).onDelete('${relationOnDelete(
+               field
+            )}')`
+         )
    }
 
    if (entry.drafts) lines.push(`  status: text('status').notNull().default('draft'),`)
@@ -653,7 +662,8 @@ function tableExpr(name: string, entry: CmsEntry, dialect: Dialect): string {
    if (isCollectionKind(entry)) lines.push(`  createdAt: ${nowExpr(pg, 'created_at')},`)
    lines.push(`  updatedAt: ${nowExpr(pg, 'updated_at')},`)
 
-   return `export const ${name} = ${tableFn}('${name}', {\n${lines.join('\n')}\n})`
+   const extra = selfReferences.length ? `, table => [\n  ${selfReferences.join(',\n  ')},\n]` : ''
+   return `export const ${name} = ${tableFn}('${name}', {\n${lines.join('\n')}\n}${extra})`
 }
 
 function joinTableExpr(name: string, key: string, field: FieldConfig, dialect: Dialect): string {
@@ -768,21 +778,17 @@ export function renderSchemaFile(
       core.add('jsonb')
    if (pg) core.add('timestamp')
    if (fields.some(isManyToMany) || rowsEntries.length) core.add('primaryKey')
-
-   const hasSelfRelation = derived.some(([name, entry]) =>
-      Object.values(entry.kind === 'page' ? pageColumnFields(entry) : entry.fields).some((field) =>
-         isSelfRelation(name, field)
+   if (
+      derived.some(([name, entry]) =>
+         Object.values(entry.kind === 'page' ? pageColumnFields(entry) : entry.fields).some(
+            (field) => isSelfRelation(name, field)
+         )
       )
    )
+      core.add('foreignKey')
+
    const imports = [
       ...(pg ? [] : [`import { sql } from '${resolveImport('drizzle-orm')}'`]),
-      ...(hasSelfRelation
-         ? [
-              `import type { ${anyColumnType(dialect)} } from '${resolveImport(
-                 `drizzle-orm/${pg ? 'pg-core' : 'sqlite-core'}`
-              )}'`,
-           ]
-         : []),
       `import { ${[...core].sort().join(', ')} } from '${resolveImport(
          `drizzle-orm/${pg ? 'pg-core' : 'sqlite-core'}`
       )}'`,
