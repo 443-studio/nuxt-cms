@@ -1,6 +1,22 @@
 # Changelog
 
 
+## v0.8.2
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.8.1...v0.8.2)
+
+### 🚀 Enhancements
+
+- Allow slug fields generated from translatable text ([34c11f9](https://github.com/443-studio/nuxt-cms/commit/34c11f9))
+
+### 🩹 Fixes
+
+- Generate self-referencing relations without TypeScript-only syntax ([4df6aab](https://github.com/443-studio/nuxt-cms/commit/4df6aab))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.8.1
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.8.0...v0.8.1)
