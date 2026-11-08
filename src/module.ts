@@ -274,7 +274,7 @@ async function loadCmsConfig(
       nuxt.options.alias['#cms-config'] = configPath
       const jiti = createJiti(import.meta.url, {
          moduleCache: false,
-         alias: { '#nuxt-cms': resolver.resolve('./runtime/shared/index') },
+         alias: { ...nuxt.options.alias, '#nuxt-cms': resolver.resolve('./runtime/shared/index') },
       })
       cmsConfig = normalizeCmsConfig(
          (await jiti.import(configPath, { default: true })) as CmsConfig,

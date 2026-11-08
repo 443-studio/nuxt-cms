@@ -127,6 +127,10 @@ Where the content-types file lives, relative to the project root and without ext
 (default `cms.config`, resolved to `cms.config.ts`). If the file is missing the module boots with an
 empty registry and logs a warning.
 
+The file can import project code through the Nuxt aliases (`~~/`, `@@/`, `~/`, `#shared`), for
+example `import { OPTIONS } from '~~/shared/options'`. Prefer them to relative paths: the app bundle
+then resolves these modules the same way as the rest of the project.
+
 ### `database`
 
 Selects the driver and its connection. `driver` switches the runtime client, the Drizzle dialect,
