@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.9.1
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.0...v0.9.1)
+
+### 🚀 Enhancements
+
+- Animated login aside, powered by link, account first in settings ([6c3dd41](https://github.com/443-studio/nuxt-cms/commit/6c3dd41))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.9.0
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.8.2...v0.9.0)
