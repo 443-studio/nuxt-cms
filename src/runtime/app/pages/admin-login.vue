@@ -5,12 +5,12 @@
          :submit-error="loginError"
          title="Welcome back"
          description="Sign in to manage your content."
-         footer="Powered by nuxt-cms"
-         aside-title="Your content, next to your code."
-         aside-description="Edit entries, pages and media for this site in one place."
       >
          <template #brand>
             <CmsBrandMark size="lg" hide-text />
+         </template>
+         <template #footer>
+            <CmsPoweredBy />
          </template>
       </KAuthLogin>
    </KRoot>

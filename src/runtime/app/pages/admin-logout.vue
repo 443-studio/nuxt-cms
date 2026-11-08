@@ -1,15 +1,11 @@
 <template>
    <KRoot class="cms-scope cms-canvas" :theme="theme" preset="default">
-      <KAuthLogout
-         :logout="clear"
-         :account="account"
-         login-to="/cms/login"
-         footer="Powered by nuxt-cms"
-         aside-title="Your content, next to your code."
-         aside-description="Edit entries, pages and media for this site in one place."
-      >
+      <KAuthLogout :logout="clear" :account="account" login-to="/cms/login">
          <template #brand>
             <CmsBrandMark size="lg" hide-text />
+         </template>
+         <template #footer>
+            <CmsPoweredBy />
          </template>
       </KAuthLogout>
    </KRoot>

@@ -244,10 +244,10 @@ only.
 
 The account button at the bottom of the sidebar opens **Settings**:
 
-- **General**: the theme (light, dark or system). The choice is kept in the `cms-theme` cookie of
-  the browser.
 - **Account**: your name and your password. The super admin account comes from the environment
   variables, so it has no form here.
+- **Appearance**: the theme (light, dark or system). The choice is kept in the `cms-theme` cookie
+  of the browser.
 - **Users** (super admin only): add accounts, set a new password, delete accounts.
 - **Content**: one item for each entry.
   - **Table columns** (collections only): show, hide and drag the columns of the table.

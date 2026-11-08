@@ -59,7 +59,6 @@
             <KAccountMenu
                :name="displayName"
                :email="email"
-               :icon="cmsIcon('ellipsis-horizontal')"
                :active="settingsOpen"
                aria-haspopup="dialog"
                aria-label="Open settings"

@@ -9,7 +9,7 @@
       close-label="Close settings"
       :on-sign-out="signOut"
    >
-      <template #section-general>
+      <template #section-appearance>
          <KAppearanceSettings
             :presets="false"
             theme-label="Theme"
@@ -104,13 +104,13 @@ const account = computed(() => ({
 }))
 
 const sections = computed<SettingsModalSection[]>(() => [
-   { id: 'general', label: 'General', icon: cmsIcon('cog-6-tooth') },
    {
       id: 'account',
       label: 'Account',
       icon: cmsIcon('user-circle'),
       description: 'Your profile and your password.',
    },
+   { id: 'appearance', label: 'Appearance', icon: cmsIcon('swatch') },
    ...(isSuperAdmin.value
       ? [
            {
@@ -130,7 +130,7 @@ const sections = computed<SettingsModalSection[]>(() => [
    })),
 ])
 
-const section = ref('general')
+const section = ref('account')
 const usersCreating = ref(false)
 const entryStatus = ref<EntryStatus>('idle')
 
