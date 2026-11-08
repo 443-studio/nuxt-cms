@@ -13,6 +13,7 @@ with `cms.admin.logo`, `cms.admin.title` and `cms.admin.subtitle`, see
 | --- | --- |
 | `/cms` | dashboard / entry-type index |
 | `/cms/login` | admin login |
+| `/cms/logout` | signs out, then opens the login page |
 | `/cms/media` | media library |
 | `/cms/:collection` | collection list, content list, single editor, or page list |
 | `/cms/:collection/new` | create entry or content item |
@@ -275,8 +276,10 @@ route middleware).
   the shared one. Later, **Settings → Account** changes the name and the password. When the super
   admin sets a new password for a user, the next sign-in shows the dialog again.
 - A deleted account loses access on its next request.
-- On a successful login at `/cms/login` a session cookie is set via
-  [`nuxt-auth-utils`](https://github.com/atinux/nuxt-auth-utils).
+- The login at `/cms/login` asks for the email first, then for the password. On a successful
+  login a session cookie is set via [`nuxt-auth-utils`](https://github.com/atinux/nuxt-auth-utils).
+- **Sign out** opens `/cms/logout`. The page clears the session and reloads `/cms/login`, which
+  offers to sign in again with the same account or with another account.
 - Email and password are compared with a timing-safe hash comparison.
 - **Login rate limiting:** after 5 failed attempts from one IP, or for one email, further attempts
   return `429` for 5 minutes. The lock always lasts 5 minutes and does not grow. Counters live

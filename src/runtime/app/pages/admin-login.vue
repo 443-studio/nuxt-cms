@@ -1,52 +1,31 @@
 <template>
    <KRoot class="cms-scope cms-canvas" :theme="theme" preset="default">
-      <KAuthLayout
+      <KAuthLogin
+         :submit="login"
+         :submit-error="loginError"
          title="Welcome back"
          description="Sign in to manage your content."
          footer="Powered by nuxt-cms"
+         aside-title="Your content, next to your code."
+         aside-description="Edit entries, pages and media for this site in one place."
       >
          <template #brand>
-            <CmsBrandMark size="lg" hide-text class="cms-auth-brand" />
+            <CmsBrandMark size="lg" hide-text />
          </template>
-
-         <KForm :form="form">
-            <KFormField label="Email" name="email" required>
-               <KInput
-                  v-model="form.values.email"
-                  type="email"
-                  :icon="cmsIcon('envelope')"
-                  autocomplete="username"
-                  placeholder="you@example.com"
-               />
-            </KFormField>
-            <KFormField label="Password" name="password" required>
-               <KInput
-                  v-model="form.values.password"
-                  type="password"
-                  icon="key"
-                  autocomplete="current-password"
-                  placeholder="••••••••"
-               />
-            </KFormField>
-            <KButton type="submit" label="Sign in" trailing-icon="arrow-right" size="lg" block />
-         </KForm>
-      </KAuthLayout>
+      </KAuthLogin>
    </KRoot>
 </template>
 
 <script setup lang="ts">
 import {
-   AuthLayout as KAuthLayout,
-   Button as KButton,
-   Form as KForm,
-   FormField as KFormField,
-   Input as KInput,
+   AuthLogin as KAuthLogin,
    Root as KRoot,
    provideTheme,
-   useForm,
+   type AuthCredentials,
+   type FormSubmitErrorResolver,
 } from '@xleddyl/443-components-vue'
 import { definePageMeta, navigateTo, useUserSession } from '#imports'
-import { cmsIcon, errorMessage } from '../utils/ui'
+import { errorMessage } from '../utils/ui'
 import { useCmsTheme } from '../composables/cms-theme'
 
 definePageMeta({ layout: false })
@@ -58,29 +37,18 @@ if (loggedIn.value) {
    await navigateTo('/cms', { replace: true })
 }
 
-const form = useForm({
-   schema: {
-      email: { initial: (): string | number | null | undefined => '' },
-      password: { initial: (): string | number | null | undefined => '' },
-   },
-   onSubmit: login,
-})
+async function login(credentials: AuthCredentials) {
+   await $fetch('/api/cms/auth/login', { method: 'POST', body: credentials })
+   window.location.replace('/cms')
+}
 
-async function login(values: {
-   email: string | number | null | undefined
-   password: string | number | null | undefined
-}) {
-   try {
-      await $fetch('/api/cms/auth/login', { method: 'POST', body: values })
-      window.location.replace('/cms')
-   } catch (e) {
-      const status = (e as { statusCode?: number }).statusCode
-      form.setError(
-         '',
+const loginError: FormSubmitErrorResolver = (error) => {
+   const status = (error as { statusCode?: number }).statusCode
+   return {
+      message:
          status === 401
             ? 'Invalid email or password.'
-            : errorMessage(e) ?? 'Login failed. Please try again.'
-      )
+            : errorMessage(error) ?? 'Login failed. Please try again.',
    }
 }
 </script>

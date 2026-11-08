@@ -30,6 +30,7 @@ const RESERVED_ENTRY_KEYS = [
    'admin',
    'auth',
    'login',
+   'logout',
    'media',
    'graphql',
    'settings',

@@ -981,6 +981,11 @@ export default defineNuxtModule<ModuleOptions>({
                file: resolver.resolve('./runtime/app/pages/admin-login.vue'),
             },
             {
+               name: 'cms-admin-logout',
+               path: '/cms/logout',
+               file: resolver.resolve('./runtime/app/pages/admin-logout.vue'),
+            },
+            {
                name: 'cms-admin-media',
                path: '/cms/media',
                file: resolver.resolve('./runtime/app/pages/admin-media.vue'),

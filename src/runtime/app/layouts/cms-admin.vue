@@ -88,7 +88,7 @@ import {
    Root as KRoot,
    provideTheme,
 } from '@xleddyl/443-components-vue'
-import { computed, navigateTo, ref, useRoute, useUserSession, watch } from '#imports'
+import { computed, navigateTo, ref, useRoute, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { cmsBrand } from '#cms-brand'
 import type { CmsSearchHit, CmsSearchKind, CmsSearchResponse } from '../../shared/search'
@@ -99,7 +99,6 @@ import { loadCmsSettings } from '../composables/cms-settings'
 import { cmsIcon } from '../utils/ui'
 
 const route = useRoute()
-const { clear } = useUserSession()
 const { email, displayName } = useCmsAccount()
 const theme = useCmsTheme()
 provideTheme(theme)
@@ -245,8 +244,7 @@ function openSettings() {
 
 async function logout() {
    settingsOpen.value = false
-   await clear()
-   await navigateTo('/cms/login')
+   await navigateTo('/cms/logout')
 }
 </script>
 

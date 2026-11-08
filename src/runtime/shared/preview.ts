@@ -18,7 +18,7 @@ export const CMS_PREVIEW_CHANNEL = 'nuxt-cms:preview'
 
 export const DEFAULT_CMS_PREVIEW_PATH = '/cms/preview'
 
-const RESERVED_ADMIN_SEGMENTS = new Set(['login', 'media'])
+const RESERVED_ADMIN_SEGMENTS = new Set(['login', 'logout', 'media'])
 
 export function previewPathErrors(path: string, entryNames: string[]): string[] {
    const match = /^\/cms\/([a-z0-9][a-z0-9-]*)$/.exec(path)

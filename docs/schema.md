@@ -867,8 +867,9 @@ export default defineCmsConfig({
 ## Validation rules (highlights)
 
 - Entry keys and field keys must be valid identifiers. The reserved entry names are `admin`,
-  `auth`, `login`, `media`, `graphql`, `settings`, `cms_media`, `cms_settings` and `cms_users`. The
-  automatic columns (`id`, `status`, `created_at`, `updated_at`) are reserved field names.
+  `auth`, `login`, `logout`, `media`, `graphql`, `settings`, `cms_media`, `cms_settings` and
+  `cms_users`. The automatic columns (`id`, `status`, `created_at`, `updated_at`) are reserved
+  field names.
 - `drafts` is only valid on collections; content entries always have drafts and do not take the
   option.
 - A content entry needs a non-empty `blocks` map and cannot declare a system field, `titleField`,

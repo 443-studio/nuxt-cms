@@ -197,7 +197,7 @@ cms: {
 The [visual editor](admin.md#visual-editor) shows a page of the site in an iframe.
 
 - `path` (default `/cms/preview`) is the route of that page. It must be one lowercase segment under
-  `/cms`, and it cannot be `login`, `media` or the name of an entry.
+  `/cms`, and it cannot be `login`, `logout`, `media` or the name of an entry.
 - `component` names a site component (as Nuxt auto-imports it) that wraps the body of every content
   item in the preview, for example the header of your article page. A content entry can override it
   with its own [`preview.component`](schema.md#preview-component). The build fails when the
