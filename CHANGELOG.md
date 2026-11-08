@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.9.0
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.8.2...v0.9.0)
+
+### 🚀 Enhancements
+
+- Two-step login and sign out page with 443-components 0.16 ([ad7a627](https://github.com/443-studio/nuxt-cms/commit/ad7a627))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.8.2
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.8.1...v0.8.2)
