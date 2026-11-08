@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.9.2
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.1...v0.9.2)
+
+### 🩹 Fixes
+
+- Static login aside with 443-components 0.16.51 ([7457d59](https://github.com/443-studio/nuxt-cms/commit/7457d59))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.9.1
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.0...v0.9.1)
