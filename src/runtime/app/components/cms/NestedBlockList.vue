@@ -1,28 +1,21 @@
 <template>
-   <div class="cms-nested-blocks">
-      <ul v-if="rows.length" class="cms-nested-blocks-list" role="list">
-         <li v-for="row in rows" :key="row.index">
-            <button
-               type="button"
-               class="cms-nested-block"
-               :aria-label="`Edit ${row.label}${row.invalid ? ', has errors' : ''}`"
-               @click="emit('select', row.index)"
-            >
-               <KIcon :name="cmsIcon(row.icon)" class="cms-nested-block-icon" />
-               <span class="cms-nested-block-text" :class="{ 'is-hidden': row.hidden }">
-                  <span class="cms-block-tree-label">{{ row.label }}</span>
-                  <span v-if="row.summary" class="cms-block-tree-summary">{{ row.summary }}</span>
-               </span>
-               <span v-if="row.invalid" class="cms-nested-block-invalid" aria-hidden="true" />
-               <KIcon
-                  v-if="row.hidden"
-                  :name="cmsIcon('eye-slash')"
-                  class="cms-block-tree-hidden"
-               />
-               <KIcon :name="cmsIcon('chevron-right')" class="cms-nested-block-chevron" />
-            </button>
-         </li>
-      </ul>
+   <KStack gap="sm">
+      <KTree
+         v-if="rows.length"
+         :nodes="nodes"
+         :selectable="false"
+         size="sm"
+         :label="field.label"
+         @select="(node: TreeNode) => emit('select', Number(node.id))"
+      >
+         <template #meta="{ node }">
+            <KIcon
+               v-if="rows[Number(node.id)]?.hidden"
+               :name="cmsIcon('eye-slash')"
+               label="Hidden"
+            />
+         </template>
+      </KTree>
       <div v-if="!readonly">
          <KButton
             :icon="cmsIcon('plus')"
@@ -36,14 +29,21 @@
             @click="(event: MouseEvent) => emit('insert', event.currentTarget as HTMLElement)"
          />
       </div>
-      <p v-else-if="!rows.length" class="cms-field-hint">No blocks.</p>
-   </div>
+      <KFieldMessage v-else-if="!rows.length" tone="neutral" :icon="false" message="No blocks." />
+   </KStack>
 </template>
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
 import { canAddBlock, isHiddenBlock } from '#nuxt-cms'
-import { Button as KButton, Icon as KIcon } from '@xleddyl/443-components-vue'
+import type { TreeNode } from '@xleddyl/443-components-vue'
+import {
+   Button as KButton,
+   FieldMessage as KFieldMessage,
+   Icon as KIcon,
+   Stack as KStack,
+   Tree as KTree,
+} from '@xleddyl/443-components-vue'
 import { computed } from '#imports'
 import type { CmsBlockValue } from '../../../shared/preview'
 import { blockSummary } from '../../../shared/preview'
@@ -76,6 +76,17 @@ const rows = computed(() =>
          invalid: props.invalid(index),
       }
    })
+)
+
+const nodes = computed<TreeNode[]>(() =>
+   rows.value.map((row) => ({
+      id: row.index,
+      label: row.label,
+      description: row.summary || undefined,
+      descriptionVariant: 'text',
+      icon: cmsIcon(row.icon),
+      invalid: row.invalid,
+   }))
 )
 
 const canAdd = computed(() => canAddBlock(props.field, list.value.length))

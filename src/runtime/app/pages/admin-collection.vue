@@ -167,39 +167,25 @@
             :lines="2"
             class="cms-list-loading"
          />
-         <div v-else-if="pageTree.length" class="cms-tree" role="list" aria-label="Pages">
-            <NuxtLink
-               v-for="(node, index) in pageTree"
-               :key="String(node.row.id)"
-               :to="`/cms/${name}/${node.row.id}`"
-               class="cms-tree-row"
-               role="listitem"
-               :style="{
-                  paddingLeft: `${1.125 + node.depth * 1.5}rem`,
-                  '--cms-row-delay': `${Math.min(index, 14) * 24}ms`,
-               }"
-            >
-               <KIcon
-                  v-if="node.depth"
-                  :name="cmsIcon('arrow-turn-left-up')"
-                  class="cms-tree-branch"
-               />
-               <span class="cms-tree-doc">
-                  <KIcon :name="cmsIcon('document-text')" />
-               </span>
-               <span class="cms-tree-text">
-                  <span class="cms-tree-title">{{ node.row.label }}</span>
-                  <span class="cms-tree-path">{{ node.row.path }}</span>
-               </span>
-               <CmsTranslationBadges
-                  v-if="pageTranslations"
-                  :progress="pageProgress(node.row)"
-                  class="cms-tree-translations"
-               />
-               <span class="cms-tree-meta">{{ lastEdit(node.row.updatedAt) }}</span>
-               <KIcon name="chevron-right" class="cms-tree-chevron" />
-            </NuxtLink>
-         </div>
+         <KTree
+            v-else-if="pageTree.length"
+            v-model:expanded="pageExpanded"
+            :nodes="pageTree"
+            :bordered="false"
+            :selectable="false"
+            label="Pages"
+            @select="(node: TreeNode) => navigateTo(`/cms/${name}/${node.id}`)"
+         >
+            <template #meta="{ node }">
+               <KStack direction="row" gap="sm" align="center">
+                  <CmsTranslationBadges
+                     v-if="pageTranslations"
+                     :progress="pageProgress(pageRows.get(String(node.id))!)"
+                  />
+                  <span>{{ node.meta }}</span>
+               </KStack>
+            </template>
+         </KTree>
          <KEmptyState
             v-else
             variant="plain"
@@ -294,6 +280,7 @@ import type {
    RowKey,
    TableColumn,
    TableSort,
+   TreeNode,
 } from '@xleddyl/443-components-vue'
 import {
    Button as KButton,
@@ -301,10 +288,11 @@ import {
    CommandButton as KCommandButton,
    DropdownMenu as KDropdownMenu,
    EmptyState as KEmptyState,
-   Icon as KIcon,
    ListPage as KListPage,
    PageHeader as KPageHeader,
    SkeletonList as KSkeletonList,
+   Stack as KStack,
+   Tree as KTree,
    routeHashValue,
    toast,
    useLeaveGuard,
@@ -540,18 +528,59 @@ function lastEdit(value: unknown) {
    })}`
 }
 
-const pageTree = computed(() => {
-   const byPath = new Set(rows.value.map((row) => String(row.path)))
-   const depthOf = (path: string) => {
-      let depth = 0
+const pageRows = computed(() => new Map(rows.value.map((row) => [String(row.id), row])))
+
+const pageTree = computed<TreeNode[]>(() => {
+   const byPath = new Map(rows.value.map((row) => [String(row.path), row]))
+   const parentOf = (path: string) => {
       let parent = pageParentPath(path)
       while (parent) {
-         if (byPath.has(parent)) depth++
+         const row = byPath.get(parent)
+         if (row) return String(row.id)
          parent = pageParentPath(parent)
       }
-      return depth
+      return null
    }
-   return rows.value.map((row) => ({ row, depth: depthOf(String(row.path)) }))
+   const children = new Map<string | null, Row[]>()
+   for (const row of rows.value) {
+      const parent = parentOf(String(row.path))
+      children.set(parent, [...(children.get(parent) ?? []), row])
+   }
+   const build = (parent: string | null): TreeNode[] =>
+      (children.get(parent) ?? []).map((row) => {
+         const nested = build(String(row.id))
+         return {
+            id: String(row.id),
+            label: String(row.label),
+            description: String(row.path),
+            meta: lastEdit(row.updatedAt),
+            icon: cmsIcon('document-text'),
+            children: nested.length ? nested : undefined,
+         }
+      })
+   return build(null)
+})
+
+const collapsedPages = ref<TreeNode['id'][]>([])
+
+const pageExpanded = computed<TreeNode['id'][]>({
+   get: () => [...pageTreeParents.value].filter((id) => !collapsedPages.value.includes(id)),
+   set: (ids) => {
+      collapsedPages.value = [...pageTreeParents.value].filter((id) => !ids.includes(id))
+   },
+})
+
+const pageTreeParents = computed(() => {
+   const ids = new Set<TreeNode['id']>()
+   const walk = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+         if (!node.children) continue
+         ids.add(node.id)
+         walk(node.children)
+      }
+   }
+   walk(pageTree.value)
+   return ids
 })
 const total = computed(() => (isList(data.value) ? data.value.total : 0))
 const relations = computed(() => (isList(data.value) ? data.value.relations ?? {} : {}))
