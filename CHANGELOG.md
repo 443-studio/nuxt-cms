@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.9.4
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.3...v0.9.4)
+
+### 🩹 Fixes
+
+- Single entries read the row they save instead of the first row of the table ([a396c09](https://github.com/443-studio/nuxt-cms/commit/a396c09))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.9.3
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.2...v0.9.3)
