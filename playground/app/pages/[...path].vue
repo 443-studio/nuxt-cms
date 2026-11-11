@@ -33,7 +33,11 @@ const locale = route.path.startsWith('/it/') ? 'it' : 'en'
 const { data: match } = await useCmsRoute(route.path, { locale })
 
 if (!match.value) {
-   throw createError({ statusCode: 404, statusMessage: 'Page not found', fatal: true })
+   throw createError({
+      statusCode: 404,
+      statusMessage: 'Page not found',
+      fatal: import.meta.client,
+   })
 }
 
 useCmsSeo(() => match.value?.item, { locale })

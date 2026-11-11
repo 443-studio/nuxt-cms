@@ -115,7 +115,7 @@ serve all of them from one catch-all page:
 <script setup lang="ts">
 const route = useRoute()
 const { data: match } = await useCmsRoute(route.path, { locale })
-if (!match.value) throw createError({ statusCode: 404, fatal: true })
+if (!match.value) throw createError({ statusCode: 404, fatal: import.meta.client })
 </script>
 
 <template>
