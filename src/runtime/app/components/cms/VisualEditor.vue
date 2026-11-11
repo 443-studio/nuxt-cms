@@ -218,7 +218,6 @@
                            :items="breadcrumbs"
                            label="Parent blocks"
                            ancestors
-                           class="cms-editor-crumbs"
                         />
                         <span class="cms-editor-block-title">
                            <span class="cms-editor-block-label">
