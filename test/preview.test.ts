@@ -14,9 +14,11 @@ import {
    canHideBlock,
    collectMediaKeys,
    duplicateBlock,
+   editorShortcut,
    emptyBlock,
    insertBlock,
    insertionIndex,
+   isApplePlatform,
    isTrustedPreviewEvent,
    moveBlock,
    moveTargetForInsertion,
@@ -30,6 +32,7 @@ import {
    removeBlock,
    selectionAfterMove,
    selectionAfterRemove,
+   shortcutApplies,
    toggleBlockHidden,
 } from '../src/runtime/shared/preview'
 import { buildEntrySchema } from '../src/runtime/shared/validation'
@@ -63,6 +66,11 @@ describe('preview message protocol', () => {
       for (const type of ['insert', 'duplicate', 'toggle-hidden', 'remove'] as const) {
          expect(parseFrameMessage(previewEnvelope({ type, index: 1 }))).toEqual({ type, index: 1 })
       }
+      for (const type of ['undo', 'redo', 'save'] as const) {
+         expect(parseFrameMessage(previewEnvelope({ type, index: 3, extra: true }))).toEqual({
+            type,
+         })
+      }
    })
 
    it('rejects foreign, unknown and malformed frame messages', () => {
@@ -72,6 +80,8 @@ describe('preview message protocol', () => {
       expect(parseFrameMessage(previewEnvelope({ type: 'remove', index: -1 }))).toBeNull()
       expect(parseFrameMessage(previewEnvelope({ type: 'remove', index: 1.5 }))).toBeNull()
       expect(parseFrameMessage(previewEnvelope({ type: 'move', from: 0, to: '1' }))).toBeNull()
+      expect(parseFrameMessage({ type: 'undo' })).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'UNDO' }))).toBeNull()
       expect(parseFrameMessage('ready')).toBeNull()
       expect(parseFrameMessage(null)).toBeNull()
    })
@@ -380,5 +390,90 @@ describe('required translatable values', () => {
       const messages = result.error!.issues.map((issue) => [issue.path.join('.'), issue.message])
       expect(messages).toContainEqual(['title', 'Required field'])
       expect(messages).toContainEqual(['body.0.body', 'Required field'])
+   })
+})
+
+describe('editor shortcuts', () => {
+   const none = { metaKey: false, ctrlKey: false, altKey: false, shiftKey: false }
+
+   function press(key: string, modifiers: Partial<typeof none> = {}) {
+      return { ...none, ...modifiers, key }
+   }
+
+   it('detects apple platforms', () => {
+      expect(isApplePlatform('MacIntel')).toBe(true)
+      expect(isApplePlatform('iPhone')).toBe(true)
+      expect(isApplePlatform('Win32')).toBe(false)
+      expect(isApplePlatform('Linux x86_64')).toBe(false)
+   })
+
+   it('maps the command key on apple platforms', () => {
+      expect(editorShortcut(press('z', { metaKey: true }), true)).toBe('undo')
+      expect(editorShortcut(press('Z', { metaKey: true, shiftKey: true }), true)).toBe('redo')
+      expect(editorShortcut(press('y', { metaKey: true }), true)).toBe('redo')
+      expect(editorShortcut(press('s', { metaKey: true }), true)).toBe('save')
+      expect(editorShortcut(press('d', { metaKey: true }), true)).toBe('duplicate')
+      expect(editorShortcut(press('ArrowUp', { metaKey: true }), true)).toBe('move-up')
+      expect(editorShortcut(press('ArrowDown', { metaKey: true }), true)).toBe('move-down')
+      expect(editorShortcut(press('z', { ctrlKey: true }), true)).toBeNull()
+   })
+
+   it('maps the control key elsewhere', () => {
+      expect(editorShortcut(press('z', { ctrlKey: true }), false)).toBe('undo')
+      expect(editorShortcut(press('z', { ctrlKey: true, shiftKey: true }), false)).toBe('redo')
+      expect(editorShortcut(press('y', { ctrlKey: true }), false)).toBe('redo')
+      expect(editorShortcut(press('s', { ctrlKey: true }), false)).toBe('save')
+      expect(editorShortcut(press('z', { metaKey: true }), false)).toBeNull()
+   })
+
+   it('maps plain keys', () => {
+      expect(editorShortcut(press('Delete'), true)).toBe('remove')
+      expect(editorShortcut(press('Backspace'), false)).toBe('remove')
+      expect(editorShortcut(press('Enter'), true)).toBe('insert-after')
+      expect(editorShortcut(press('Enter', { shiftKey: true }), true)).toBe('insert-before')
+      expect(editorShortcut(press('Escape'), true)).toBe('deselect')
+   })
+
+   it('ignores other combinations', () => {
+      expect(editorShortcut(press('z', { metaKey: true, altKey: true }), true)).toBeNull()
+      expect(editorShortcut(press('s', { metaKey: true, shiftKey: true }), true)).toBeNull()
+      expect(editorShortcut(press('y', { metaKey: true, shiftKey: true }), true)).toBeNull()
+      expect(editorShortcut(press('k', { metaKey: true }), true)).toBeNull()
+      expect(editorShortcut(press('Backspace', { shiftKey: true }), true)).toBeNull()
+      expect(editorShortcut(press('Backspace', { metaKey: true }), true)).toBeNull()
+      expect(editorShortcut(press('Enter', { ctrlKey: true }), true)).toBeNull()
+      expect(editorShortcut(press('a'), true)).toBeNull()
+   })
+
+   it('leaves fields to the browser except for save', () => {
+      const field = { editable: true, interactive: false, selected: true }
+      expect(shortcutApplies('save', field)).toBe(true)
+      for (const action of ['undo', 'redo', 'remove', 'duplicate', 'deselect'] as const)
+         expect(shortcutApplies(action, field)).toBe(false)
+   })
+
+   it('needs a selected block for block actions', () => {
+      const idle = { editable: false, interactive: false, selected: false }
+      expect(shortcutApplies('undo', idle)).toBe(true)
+      expect(shortcutApplies('redo', idle)).toBe(true)
+      for (const action of [
+         'remove',
+         'duplicate',
+         'move-up',
+         'move-down',
+         'insert-after',
+         'insert-before',
+         'deselect',
+      ] as const) {
+         expect(shortcutApplies(action, idle)).toBe(false)
+         expect(shortcutApplies(action, { ...idle, selected: true })).toBe(true)
+      }
+   })
+
+   it('keeps Enter for focused buttons and links', () => {
+      const button = { editable: false, interactive: true, selected: true }
+      expect(shortcutApplies('insert-after', button)).toBe(false)
+      expect(shortcutApplies('insert-before', button)).toBe(false)
+      expect(shortcutApplies('remove', button)).toBe(true)
    })
 })

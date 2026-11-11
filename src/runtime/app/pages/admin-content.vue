@@ -9,6 +9,7 @@
       :focus="focus"
       :locked="locked"
       content
+      @save="saveShortcut"
    >
       <template #start>
          <KButton
@@ -437,6 +438,10 @@ async function save(status?: Status, changes: Record<string, unknown> = {}, noti
    } finally {
       saving.value = false
    }
+}
+
+function saveShortcut() {
+   if (!saving.value) void save()
 }
 
 function pickRevert(before: Record<string, unknown>, changes: Record<string, unknown>) {

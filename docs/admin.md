@@ -229,9 +229,9 @@ The visual editor edits a body of blocks on top of the real site. It fills the w
 
 - **Top bar**: back, the title, the status badge (Draft, Published or Scheduled) and an "Unsaved
   changes" note, the language switch, the preview width (desktop or mobile, 390 px), and the
-  actions: **Schedule**, **Save**, **Publish** or **Unpublish**, and the `...` menu with the
-  [translation actions](#translations), **Share preview**, **Duplicate** and **Delete**. The
-  language switch marks how much of the item each language has.
+  actions: **Undo** and **Redo**, **Schedule**, **Save**, **Publish** or **Unpublish**, and the
+  `...` menu with the [translation actions](#translations), **Share preview**, **Duplicate** and
+  **Delete**. The language switch marks how much of the item each language has.
   **Schedule** picks a publish date and publishes the item: with a future date it stays hidden from
   the site until then. Save stays in the editor; the first save of a new item moves to its URL.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
@@ -249,10 +249,33 @@ fields. The toolbar of a block has a drag handle, move up and down, **Duplicate*
 delete. A **+** between two blocks, and before the first and after the last, opens the palette
 (label, icon and description of each block type) and inserts the block there. A hidden block is not
 drawn in the canvas: it stays in the block list with an eye icon, where **Show** brings it back.
+Deleting a block asks for no confirmation: undo brings it back. Deleting the whole item still asks.
 
-**Keyboard.** Every action is a button. In the canvas, focus the drag handle and press the up or
-down arrow to move the block; Escape clears the selection. In the block list, Alt with the up or
-down arrow moves the focused block. The block panel also has move up and move down buttons.
+**Undo and redo.** The editor keeps the last 100 changes of the open item, from the canvas and from
+the inspector forms alike. Typing in one field is one step once you pause. Undo restores the block
+selection of that moment too. The history starts when the item opens, and saving does not reset
+it; undoing back to the saved version clears the "Unsaved changes" note. The status (draft or
+published) is not part of the history.
+
+### Keyboard
+
+The same keys work in the canvas and in the rest of the editor, except while the focus is in a
+field (where the browser keeps its own undo) or in a dialog. ⌘ is Ctrl outside macOS.
+
+| Keys | Action |
+| --- | --- |
+| ⌘ Z | undo |
+| ⇧ ⌘ Z, ⌘ Y | redo |
+| ⌘ S | save (also inside a field) |
+| Delete, Backspace | delete the selected block |
+| ⌘ D | duplicate the selected block |
+| ⌘ ↑, ⌘ ↓ | move the selected block up or down |
+| Enter, ⇧ Enter | open the palette to add a block after or before the selected one |
+| Escape | clear the selection |
+
+Duplicate and add do nothing once the field holds `max` blocks. In the canvas you can also focus the
+drag handle of a block and press the up or down arrow to move it. In the block list, Alt with the
+up or down arrow moves the focused block. Every action is also a button.
 
 **Validation.** Save and Publish check the whole item first, `validate` hooks included. The first
 error opens its tab, selects the block that holds it and switches to the default language when the

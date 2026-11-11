@@ -110,7 +110,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '#imp
 import type { FieldConfig } from '../../shared/index'
 import { canAddBlock } from '../../shared/index'
 import type { CmsPreviewFrameMessage } from '../../shared/preview'
-import { canHideBlock, insertionIndex, moveTargetForInsertion } from '../../shared/preview'
+import {
+   canHideBlock,
+   editorShortcut,
+   insertionIndex,
+   moveTargetForInsertion,
+   shortcutApplies,
+} from '../../shared/preview'
+import { onApplePlatform, shortcutTarget } from '../utils/keyboard'
 
 interface Box {
    index: number
@@ -345,8 +352,38 @@ function onSubmit(event: Event) {
 }
 
 function onKeydown(event: KeyboardEvent) {
-   if (event.key === 'Escape' && props.selected !== null) {
-      emit('message', { type: 'select', index: null })
+   if (event.defaultPrevented || event.isComposing) return
+   const action = editorShortcut(event, onApplePlatform())
+   const index = props.selected
+   if (!action || !shortcutApplies(action, shortcutTarget(event, index !== null))) return
+   event.preventDefault()
+   if (action === 'undo' || action === 'redo' || action === 'save') {
+      emit('message', { type: action })
+      return
+   }
+   if (index === null) return
+   switch (action) {
+      case 'remove':
+         emit('message', { type: 'remove', index })
+         break
+      case 'duplicate':
+         if (canAdd.value) emit('message', { type: 'duplicate', index })
+         break
+      case 'move-up':
+      case 'move-down':
+         emitMove(index, action === 'move-up' ? index - 1 : index + 1)
+         break
+      case 'insert-after':
+      case 'insert-before':
+         if (canAdd.value)
+            emit('message', {
+               type: 'insert',
+               index: action === 'insert-after' ? index + 1 : index,
+            })
+         break
+      case 'deselect':
+         emit('message', { type: 'select', index: null })
+         break
    }
 }
 

@@ -1,5 +1,5 @@
 <template>
-   <div class="cms-editor">
+   <div ref="root" class="cms-editor">
       <header class="cms-editor-bar">
          <div class="cms-editor-bar-start">
             <slot name="start" />
@@ -23,6 +23,28 @@
             />
          </div>
          <div class="cms-editor-bar-end">
+            <KTooltip text="Undo" shortcut="mod+z">
+               <KButton
+                  :icon="cmsIcon('arrow-uturn-left')"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  aria-label="Undo"
+                  :disabled="!canUndo"
+                  @click="undo"
+               />
+            </KTooltip>
+            <KTooltip text="Redo" shortcut="mod+shift+z">
+               <KButton
+                  :icon="cmsIcon('arrow-uturn-right')"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  aria-label="Redo"
+                  :disabled="!canRedo"
+                  @click="redo"
+               />
+            </KTooltip>
             <slot name="actions" />
          </div>
       </header>
@@ -212,7 +234,7 @@
                                  :slug-source="slugSource(fields[key]!)"
                                  :entry-name="entryName"
                                  :field-key="key"
-                                 @update:model-value="(value: unknown) => setValue(key, value)"
+                                 @update:model-value="(value: unknown) => setValue(key, value, key)"
                               />
                            </KFormField>
                         </template>
@@ -250,6 +272,7 @@ import {
    SegmentedControl as KSegmentedControl,
    Stack as KStack,
    Tabs as KTabs,
+   Tooltip as KTooltip,
    useForm,
 } from '@xleddyl/443-components-vue'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from '#imports'
@@ -258,6 +281,7 @@ import type { CmsSearchFocus } from '../../../shared/search'
 import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
 import type {
    CmsBlockValue,
+   CmsEditorShortcut,
    CmsPreviewFrameMessage,
    CmsPreviewState,
 } from '../../../shared/preview'
@@ -266,6 +290,7 @@ import {
    canHideBlock,
    collectMediaKeys,
    duplicateBlock,
+   editorShortcut,
    emptyBlock,
    insertBlock,
    isTrustedPreviewEvent,
@@ -276,13 +301,15 @@ import {
    removeBlock,
    selectionAfterMove,
    selectionAfterRemove,
+   shortcutApplies,
    toggleBlockHidden,
 } from '../../../shared/preview'
 import { translationProgress } from '../../../shared/translations'
-import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
+import { useCmsHistory } from '../../composables/cms-history'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
+import { isInForeignOverlay, onApplePlatform, shortcutTarget } from '../../utils/keyboard'
 import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
@@ -305,10 +332,11 @@ const props = defineProps<{
 
 const state = defineModel<Record<string, unknown>>('state', { required: true })
 
+const emit = defineEmits<{ save: [] }>()
+
 const runtime = useCmsRuntime()
 const { i18n } = runtime
 const previewPath = runtime.previewPath ?? DEFAULT_CMS_PREVIEW_PATH
-const confirmAction = useCmsConfirm()
 const settings = useCmsSettingsState()
 
 const locale = ref(i18n.defaultLocale)
@@ -317,6 +345,7 @@ const selected = ref<number | null>(null)
 const paletteOpen = ref(false)
 const paletteIndex = ref(0)
 const frame = ref<HTMLIFrameElement | null>(null)
+const root = ref<HTMLElement | null>(null)
 const library = shallowRef(new Map<string, MediaItem>())
 
 const blocksField = computed(() => props.fields[props.fieldKey]!)
@@ -420,7 +449,8 @@ const sections = computed(() => {
 
 const translations = computed(() => translationProgress(props.fields, state.value, i18n))
 
-function setValue(key: string, value: unknown) {
+function setValue(key: string, value: unknown, coalesce?: string) {
+   change(coalesce)
    state.value = { ...state.value, [key]: value }
 }
 
@@ -482,9 +512,8 @@ function toggleHidden(index: number) {
    setBlocks(toggleBlockHidden(blocks.value, index, blockConfigAt(index)))
 }
 
-async function remove(index: number) {
-   const label = blockConfigAt(index)?.label ?? 'block'
-   if (!(await confirmAction(`Delete this ${label.toLowerCase()} block?`))) return
+function remove(index: number) {
+   if (!blocks.value[index]) return
    setBlocks(removeBlock(blocks.value, index))
    selected.value = selectionAfterRemove(selected.value, index)
 }
@@ -493,7 +522,55 @@ function updateBlockField(key: string, value: unknown) {
    const index = selected.value
    const current = index === null ? undefined : blocks.value[index]
    if (index === null || !current) return
-   setBlocks(blocks.value.map((item, i) => (i === index ? { ...current, [key]: value } : item)))
+   const list = blocks.value.map((item, i) => (i === index ? { ...current, [key]: value } : item))
+   setValue(props.fieldKey, list.length ? list : null, `${props.fieldKey}.${index}.${key}`)
+}
+
+const { canUndo, canRedo, change, undo, redo } = useCmsHistory({
+   state: () => state.value,
+   selected: () => selected.value,
+   restore: (values, index) => {
+      state.value = values
+      if (index !== selected.value) select(index)
+   },
+   omit: props.content ? ['status'] : [],
+})
+
+function runShortcut(event: KeyboardEvent) {
+   if (event.defaultPrevented || event.isComposing || paletteOpen.value) return
+   if (isInForeignOverlay(event.target, root.value)) return
+   const action = editorShortcut(event, onApplePlatform())
+   const index = selected.value
+   if (!action || !shortcutApplies(action, shortcutTarget(event, index !== null))) return
+   event.preventDefault()
+   if (action === 'undo') undo()
+   else if (action === 'redo') redo()
+   else if (action === 'save') emit('save')
+   else if (index !== null) runBlockShortcut(action, index)
+}
+
+function runBlockShortcut(action: CmsEditorShortcut, index: number) {
+   switch (action) {
+      case 'remove':
+         remove(index)
+         break
+      case 'duplicate':
+         duplicate(index)
+         break
+      case 'move-up':
+      case 'move-down':
+         moveSelected(action === 'move-up' ? -1 : 1)
+         break
+      case 'insert-after':
+         openPalette(index + 1)
+         break
+      case 'insert-before':
+         openPalette(index)
+         break
+      case 'deselect':
+         select(null)
+         break
+   }
 }
 
 const media = computed(() =>
@@ -546,7 +623,16 @@ function onFrameMessage(message: CmsPreviewFrameMessage) {
          toggleHidden(message.index)
          break
       case 'remove':
-         void remove(message.index)
+         remove(message.index)
+         break
+      case 'undo':
+         undo()
+         break
+      case 'redo':
+         redo()
+         break
+      case 'save':
+         emit('save')
          break
    }
 }
@@ -584,12 +670,14 @@ function applyFocus(focus: CmsSearchFocus) {
 
 onMounted(() => {
    window.addEventListener('message', onMessage)
+   document.addEventListener('keydown', runShortcut)
    void loadLibrary()
    if (props.focus) applyFocus(props.focus)
 })
 
 onBeforeUnmount(() => {
    window.removeEventListener('message', onMessage)
+   document.removeEventListener('keydown', runShortcut)
 })
 
 const validateHook = computed(() =>

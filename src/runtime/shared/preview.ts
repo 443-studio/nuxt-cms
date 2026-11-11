@@ -93,6 +93,9 @@ export type CmsPreviewFrameMessage =
    | { type: 'duplicate'; index: number }
    | { type: 'toggle-hidden'; index: number }
    | { type: 'remove'; index: number }
+   | { type: 'undo' }
+   | { type: 'redo' }
+   | { type: 'save' }
 
 export type CmsPreviewEnvelope<T> = T & { channel: typeof CMS_PREVIEW_CHANNEL }
 
@@ -119,7 +122,10 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
    const focus = message.focus === true ? { focus: true } : {}
    switch (message.type) {
       case 'ready':
-         return { type: 'ready' }
+      case 'undo':
+      case 'redo':
+      case 'save':
+         return { type: message.type }
       case 'select':
          return message.index === null || isIndex(message.index)
             ? { type: 'select', index: message.index, ...focus }
@@ -159,6 +165,67 @@ export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
          selected: state.selected as number | null,
       },
    }
+}
+
+export type CmsEditorShortcut =
+   | 'undo'
+   | 'redo'
+   | 'save'
+   | 'remove'
+   | 'duplicate'
+   | 'move-up'
+   | 'move-down'
+   | 'insert-after'
+   | 'insert-before'
+   | 'deselect'
+
+export interface CmsShortcutKey {
+   key: string
+   metaKey: boolean
+   ctrlKey: boolean
+   altKey: boolean
+   shiftKey: boolean
+}
+
+export interface CmsShortcutTarget {
+   editable: boolean
+   interactive: boolean
+   selected: boolean
+}
+
+export function isApplePlatform(platform: string): boolean {
+   return /mac|iphone|ipad|ipod/i.test(platform)
+}
+
+export function editorShortcut(event: CmsShortcutKey, apple: boolean): CmsEditorShortcut | null {
+   if (event.altKey) return null
+   const key = event.key.toLowerCase()
+   const mod = apple ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+   if (mod) {
+      if (key === 'z') return event.shiftKey ? 'redo' : 'undo'
+      if (event.shiftKey) return null
+      if (key === 'y') return 'redo'
+      if (key === 's') return 'save'
+      if (key === 'd') return 'duplicate'
+      if (key === 'arrowup') return 'move-up'
+      if (key === 'arrowdown') return 'move-down'
+      return null
+   }
+   if (event.metaKey || event.ctrlKey) return null
+   if (key === 'enter') return event.shiftKey ? 'insert-before' : 'insert-after'
+   if (event.shiftKey) return null
+   if (key === 'delete' || key === 'backspace') return 'remove'
+   if (key === 'escape') return 'deselect'
+   return null
+}
+
+export function shortcutApplies(action: CmsEditorShortcut, target: CmsShortcutTarget): boolean {
+   if (action === 'save') return true
+   if (target.editable) return false
+   if (action === 'undo' || action === 'redo') return true
+   if (!target.selected) return false
+   if (action === 'insert-after' || action === 'insert-before') return !target.interactive
+   return true
 }
 
 export function isTrustedPreviewEvent(
