@@ -4,12 +4,13 @@
       variant="outline"
       padding="none"
       class="cms-media-single"
-      :class="{ 'is-missing': missing }"
+      :class="{ 'is-missing': missing, 'is-disabled': disabled }"
    >
       <button
          type="button"
          class="cms-media-single-preview"
          aria-label="Replace media"
+         :disabled="disabled || undefined"
          @click="openGallery"
       >
          <img v-if="kind === 'image' && url" :src="url" alt="" loading="lazy" />
@@ -24,7 +25,7 @@
       </button>
       <div class="cms-media-single-bar">
          <span class="cms-media-single-name" :title="model">{{ mediaFilename(model) }}</span>
-         <KStack direction="row" gap="none" align="center">
+         <KStack v-if="!disabled" direction="row" gap="none" align="center">
             <KButton
                :icon="cmsIcon('arrow-path')"
                size="xs"
@@ -45,7 +46,13 @@
       </div>
    </KCard>
 
-   <button v-else type="button" class="cms-media-single-add" @click="openGallery">
+   <button
+      v-else
+      type="button"
+      class="cms-media-single-add"
+      :disabled="disabled || undefined"
+      @click="openGallery"
+   >
       <KIcon :name="cmsIcon('photo')" />
       <span>Choose</span>
    </button>
@@ -75,6 +82,7 @@ import {
    Icon as KIcon,
    Modal as KModal,
    Stack as KStack,
+   useFieldControl,
 } from '@xleddyl/443-components-vue'
 import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
@@ -91,6 +99,8 @@ const model = defineModel<string | null>({ required: true })
 const { mediaBaseUrl } = useCmsRuntime()
 const mediaKeys = useCmsMediaKeys()
 
+const { disabled } = useFieldControl()
+
 const galleryOpen = ref(false)
 const pickerFolder = useState<string | null>('cms-media-picker-folder', () => null)
 
@@ -101,10 +111,12 @@ function onSelect(item: { key: string }) {
 }
 
 function openGallery() {
+   if (disabled.value) return
    galleryOpen.value = true
 }
 
 function clear() {
+   if (disabled.value) return
    model.value = null
 }
 

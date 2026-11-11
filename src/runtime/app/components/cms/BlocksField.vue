@@ -11,10 +11,15 @@
                'is-drop-target': dropIndex === index && dragIndex !== index,
                'is-missing': hasMissingMedia(item),
                'is-media-only': mediaOnly,
+               'is-disabled': disabled,
             }"
-            draggable="true"
-            :tabindex="mediaOnly ? 0 : undefined"
-            :aria-label="mediaOnly ? `${barTitle(item)}, use the arrow keys to reorder` : undefined"
+            :draggable="disabled ? undefined : 'true'"
+            :tabindex="mediaOnly && !disabled ? 0 : undefined"
+            :aria-label="
+               mediaOnly && !disabled
+                  ? `${barTitle(item)}, use the arrow keys to reorder`
+                  : undefined
+            "
             @dragstart="onDragStart(index, $event)"
             @dragover.prevent="dropIndex = index"
             @dragleave="onDragLeave(index)"
@@ -58,6 +63,7 @@
                      <KIcon name="exclamation-triangle" />
                   </span>
                   <button
+                     v-if="!disabled"
                      type="button"
                      class="cms-block-remove"
                      :aria-label="`Remove ${barTitle(item)}`"
@@ -71,6 +77,7 @@
 
             <div v-if="!mediaOnly" class="cms-block-bar">
                <button
+                  v-if="!disabled"
                   type="button"
                   class="cms-block-grip"
                   :aria-label="`Reorder ${labelOf(item)}, use the arrow keys`"
@@ -88,6 +95,7 @@
                   <KIcon name="exclamation-triangle" />
                </span>
                <KButton
+                  v-if="!disabled"
                   icon="trash"
                   size="xs"
                   variant="ghost"
@@ -98,7 +106,7 @@
             </div>
          </div>
 
-         <KDropdownMenu v-if="canAdd && addItems.length > 1" :items="addItems">
+         <KDropdownMenu v-if="canAdd && !disabled && addItems.length > 1" :items="addItems">
             <button type="button" class="cms-block-add">
                <KIcon name="plus" />
                <span>Add</span>
@@ -108,7 +116,7 @@
             v-else
             type="button"
             class="cms-block-add"
-            :disabled="!canAdd"
+            :disabled="!canAdd || disabled"
             :title="canAdd ? undefined : countHint"
             @click="addFirst"
          >
@@ -119,7 +127,7 @@
 
       <p v-if="countHint" class="cms-field-hint">{{ countHint }}</p>
 
-      <div v-if="visual">
+      <div v-if="visual && !disabled">
          <KButton
             label="Open visual editor"
             :icon="cmsIcon('window')"
@@ -193,7 +201,11 @@
          </KStack>
 
          <template #footer>
+            <KStack v-if="disabled" direction="row" justify="end">
+               <KButton label="Done" @click="editorOpen = false" />
+            </KStack>
             <KStack
+               v-else
                direction="row"
                justify="between"
                gap="sm"
@@ -270,6 +282,7 @@ import {
    Icon as KIcon,
    Modal as KModal,
    Stack as KStack,
+   useFieldControl,
 } from '@xleddyl/443-components-vue'
 import { computed, ref, useState } from '#imports'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
@@ -287,6 +300,7 @@ const model = defineModel<Record<string, unknown>[] | null>({ required: true })
 
 const { mediaBaseUrl, i18n } = useCmsRuntime()
 const mediaKeys = useCmsMediaKeys()
+const { disabled } = useFieldControl()
 
 const blocks = computed(() => props.field.blocks ?? {})
 const items = computed(() => (Array.isArray(model.value) ? model.value : []))
@@ -332,6 +346,7 @@ const visual = computed(() => {
 const visualOpen = ref(false)
 
 function onVisualUpdate(state: Record<string, unknown>) {
+   if (disabled.value) return
    const value = props.fieldKey ? state[props.fieldKey] : null
    model.value = Array.isArray(value) && value.length ? (value as Record<string, unknown>[]) : null
 }
@@ -346,7 +361,7 @@ const pickerFolder = useState<string | null>('cms-media-picker-folder', () => nu
 
 function addMedia(media: { key: string }) {
    const target = mediaOnly.value
-   if (!target || !canAdd.value) return
+   if (!target || !canAdd.value || disabled.value) return
    mediaKeys.remember(media.key)
    model.value = [...items.value, { type: target.type, [target.key]: media.key }]
    pickerOpen.value = false
@@ -436,7 +451,7 @@ function isHidden(item: Record<string, unknown>) {
 
 function updateField(index: number, key: string, value: unknown) {
    const current = items.value[index]
-   if (!current) return
+   if (!current || disabled.value) return
    const updated = { ...current, [key]: value }
    uids.set(updated, uidFor(current))
    model.value = items.value.map((item, i) => (i === index ? updated : item))
@@ -444,7 +459,7 @@ function updateField(index: number, key: string, value: unknown) {
 
 function add(type: string) {
    const block = blocks.value[type]
-   if (!block || !canAdd.value) return
+   if (!block || !canAdd.value || disabled.value) return
    const empty = Object.fromEntries(Object.keys(block.fields).map((k) => [k, null]))
    const index = items.value.length
    model.value = [...items.value, { type, ...empty }]
@@ -452,7 +467,7 @@ function add(type: string) {
 }
 
 function onTileKey(event: KeyboardEvent, index: number) {
-   if (!mediaOnly.value) return
+   if (!mediaOnly.value || disabled.value) return
    const action =
       event.key === 'ArrowLeft'
          ? () => move(index, -1)
@@ -471,7 +486,7 @@ function onPreviewClick(index: number) {
 }
 
 function addFirst() {
-   if (!canAdd.value) return
+   if (!canAdd.value || disabled.value) return
    if (mediaOnly.value) {
       pickerOpen.value = true
       return
@@ -481,13 +496,14 @@ function addFirst() {
 }
 
 function remove(index: number) {
+   if (disabled.value) return
    const next = items.value.filter((_, i) => i !== index)
    model.value = next.length ? next : null
 }
 
 function duplicate(index: number) {
    const current = items.value[index]
-   if (!current || !canAdd.value) return
+   if (!current || !canAdd.value || disabled.value) return
    const copy = JSON.parse(JSON.stringify(current)) as Record<string, unknown>
    const next = [...items.value]
    next.splice(index + 1, 0, copy)
@@ -499,7 +515,7 @@ function move(index: number, delta: number) {
 }
 
 function moveTo(from: number, to: number) {
-   if (from === to || to < 0 || to >= items.value.length) return
+   if (disabled.value || from === to || to < 0 || to >= items.value.length) return
    const next = [...items.value]
    const [item] = next.splice(from, 1)
    next.splice(to, 0, item!)
@@ -510,6 +526,10 @@ const dragIndex = ref<number | null>(null)
 const dropIndex = ref<number | null>(null)
 
 function onDragStart(index: number, event: DragEvent) {
+   if (disabled.value) {
+      event.preventDefault()
+      return
+   }
    dragIndex.value = index
    if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move'
@@ -578,7 +598,7 @@ function moveCurrent(delta: number) {
 }
 
 function toggleHiddenCurrent() {
-   if (editorIndex.value === null || !editorItem.value) return
+   if (editorIndex.value === null || !editorItem.value || disabled.value) return
    const index = editorIndex.value
    const current = items.value[index]
    if (!current) return

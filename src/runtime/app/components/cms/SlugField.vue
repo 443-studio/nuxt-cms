@@ -17,6 +17,7 @@
             tone="neutral"
             aria-label="Regenerate slug"
             title="Regenerate slug"
+            :disabled="disabled"
             @click="regenerate"
          />
       </template>
@@ -24,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { Button as KButton, Input as KInput } from '@xleddyl/443-components-vue'
+import { Button as KButton, Input as KInput, useFieldControl } from '@xleddyl/443-components-vue'
 import { ref, watch } from '#imports'
 import { slugify } from '#nuxt-cms'
 
@@ -32,17 +33,20 @@ const props = defineProps<{ source?: string | null }>()
 
 const model = defineModel<string | null>({ required: true })
 
+const { disabled } = useFieldControl()
+
 const touched = ref(!!model.value)
 
 watch(
    () => props.source,
    (value) => {
-      if (touched.value) return
+      if (touched.value || disabled.value) return
       model.value = value ? slugify(value) : null
    }
 )
 
 function regenerate() {
+   if (disabled.value) return
    model.value = props.source ? slugify(props.source) : null
    touched.value = false
 }
