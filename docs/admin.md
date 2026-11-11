@@ -401,8 +401,10 @@ Copy, Cut and Paste after are also in the `...` menu of a block, in the tree and
 Blocks go to the system clipboard as JSON text and to a copy kept by the admin, which is used when
 the browser denies the clipboard or it holds something else. You can paste into another item, into
 another content type that uses the same blocks, or into the tiles of a `blocks` field. Only the
-block types of the target field are pasted: unknown fields are dropped, values are checked like the
-form, and a full field takes as many as fit. A toast says what was pasted and what was skipped. Paste
+block types of the target field are pasted: unknown fields are dropped, each value is brought to
+the shape of its field (type, languages, select options, media keys, links; a value of the wrong
+type is emptied), and a full field takes as many as fit. Values that break a rule of the target
+(length, `min`/`max`, date or email format) are kept, and the form shows the error when you save. A toast says what was pasted and what was skipped. Paste
 matches blocks by type name only, since you choose where to paste: a block pasted into a field whose
 block of that name has other fields keeps only the values that fit. In a text field, or with text
 selected, the keys copy and paste text as usual.
@@ -414,7 +416,7 @@ selected, the keys copy and paste text as usual.
 [block picker](#block-picker) of every field that has all the block types of a preset, with the
 same schema, lists it under **Presets**, with its name and its number of blocks: picking it inserts
 a copy, the same way a paste does (one undo step, as many blocks as fit under `max`, unknown fields
-dropped, values checked). So a preset saved in a news item can be inserted into another news item,
+dropped, values shaped to the fields). So a preset saved in a news item can be inserted into another news item,
 or into a blog item when both use the same blocks.
 
 The preset keeps a signature of each of its block types, computed from the field keys, the field

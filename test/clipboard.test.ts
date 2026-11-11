@@ -140,26 +140,47 @@ describe('pasted values', () => {
       ).toEqual({ url: '/about', label: { en: 'About', it: 'Chi siamo' } })
       expect(pastedFieldValue(link, { url: 'javascript:alert(1)' }, I18N)).toBeNull()
       expect(pastedFieldValue(link, 'https://example.com', I18N)).toBeNull()
+      expect(pastedFieldValue(link, { url: '/a', entry: 'news', id: '7' }, I18N)).toBeNull()
+      expect(
+         pastedFieldValue({ ...link, external: false }, { url: 'https://example.com' }, I18N)
+      ).toBeNull()
+      expect(
+         pastedFieldValue({ ...link, to: ['pages'] }, { entry: 'news', id: '7' }, I18N)
+      ).toBeNull()
+      expect(
+         pastedFieldValue(localized, { url: '/a', label: { en: 'A', fr: 'B', it: 3 } }, I18N)
+      ).toEqual({ url: '/a', label: { en: 'A' } })
    })
 
-   it('checks scalar values against the field type like the form', () => {
+   it('coerces scalar values to the field type and keeps rule breaks for the form', () => {
       const stat = blocks.stat!.fields
       expect(pastedFieldValue(stat.value!, 3, I18N)).toBe(3)
-      expect(pastedFieldValue(stat.value!, 3.5, I18N)).toBeNull()
+      expect(pastedFieldValue(stat.value!, 3.5, I18N)).toBe(3.5)
       expect(pastedFieldValue(stat.value!, '3', I18N)).toBeNull()
       expect(pastedFieldValue(stat.visible!, true, I18N)).toBe(true)
       expect(pastedFieldValue(stat.visible!, 'yes', I18N)).toBeNull()
       expect(pastedFieldValue(stat.day!, '2026-01-02', I18N)).toBe('2026-01-02')
-      expect(pastedFieldValue(stat.day!, 'tomorrow', I18N)).toBeNull()
-      expect(pastedFieldValue(stat.at!, '2026-01-02T10:00:00Z', I18N)).toBe(
-         '2026-01-02T10:00:00.000Z'
-      )
+      expect(pastedFieldValue(stat.day!, 'tomorrow', I18N)).toBe('tomorrow')
+      expect(pastedFieldValue(stat.day!, 7, I18N)).toBeNull()
+      expect(pastedFieldValue(stat.at!, '2026-01-02T10:00:00Z', I18N)).toBe('2026-01-02T10:00:00Z')
       expect(pastedFieldValue(stat.email!, 'a@b.co', I18N)).toBe('a@b.co')
-      expect(pastedFieldValue(stat.email!, 'nope', I18N)).toBeNull()
+      expect(pastedFieldValue(stat.email!, 'nope', I18N)).toBe('nope')
       expect(pastedFieldValue(stat.tone!, 'calm', I18N)).toBe('calm')
       expect(pastedFieldValue(stat.tone!, 'other', I18N)).toBeNull()
       expect(pastedFieldValue(stat.data!, { a: [1, 2] }, I18N)).toEqual({ a: [1, 2] })
       expect(pastedFieldValue(stat.value!, undefined, I18N)).toBeNull()
+   })
+
+   it('keeps values that break the target bounds so the form shows the error', () => {
+      const short: FieldConfig = { label: 'Short', type: 'text', max: 3 }
+      const localized: FieldConfig = { ...short, translatable: true }
+      const count: FieldConfig = { label: 'Count', type: 'number', min: 10 }
+      expect(pastedFieldValue(short, 'Too long', I18N)).toBe('Too long')
+      expect(pastedFieldValue(localized, { en: 'Hi', it: 'Troppo lungo' }, I18N)).toEqual({
+         en: 'Hi',
+         it: 'Troppo lungo',
+      })
+      expect(pastedFieldValue(count, 2, I18N)).toBe(2)
    })
 
    it('keeps an empty required value for the form to flag', () => {

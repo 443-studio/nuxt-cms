@@ -170,6 +170,30 @@ describe('buildPreset', () => {
       expect(built).toEqual({ error: 'Not a block of this field: hero' })
    })
 
+   it('keeps values that break a field rule so the form reports them after insert', () => {
+      const bounded: FieldConfig = {
+         ...field,
+         blocks: {
+            quote: {
+               label: 'Quote',
+               fields: {
+                  text: { label: 'Text', type: 'text', max: 3 },
+                  author: { label: 'Author', type: 'email' },
+               },
+            },
+         },
+      }
+      const built = buildPreset(
+         { name: 'X', items: [{ type: 'quote', text: 'Too long', author: 'nope' }] },
+         bounded,
+         I18N,
+         meta
+      )
+      expect('preset' in built && built.preset.items).toEqual([
+         { type: 'quote', text: 'Too long', author: 'nope' },
+      ])
+   })
+
    it('does not apply max when saving', () => {
       const items = Array.from({ length: 5 }, () => ({ type: 'quote', text: 'a' }))
       const built = buildPreset({ name: 'X', items }, field, I18N, meta)

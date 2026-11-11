@@ -1,8 +1,17 @@
 import type { BlockConfig, CmsI18n, FieldConfig } from './index'
-import { BLOCK_HIDDEN_KEY, declaresHiddenField, isTranslatableField } from './index'
+import {
+   BLOCK_HIDDEN_KEY,
+   allowsExternalLinks,
+   declaredLinkTargets,
+   declaresHiddenField,
+   isTranslatableField,
+   linkUrlError,
+   selectOptionValues,
+} from './index'
+import type { CmsLinkValue } from './links'
 import type { CmsBlockValue } from './preview'
 import { CMS_CLIPBOARD_MAX_LENGTH } from './preview'
-import { blockFieldValue } from './validation'
+import { objectKeySchema } from './validation'
 
 export const CMS_CLIPBOARD_KIND = 'blocks'
 
@@ -62,14 +71,25 @@ export function parseClipboardText(text: unknown): CmsBlockValue[] | null {
    return items.length ? items : null
 }
 
-function localizedShape(raw: unknown, i18n: CmsI18n): Record<string, string> | null {
-   if (typeof raw === 'string') return raw ? { [i18n.defaultLocale]: raw } : null
+function isMediaKey(value: unknown): value is string {
+   return objectKeySchema.safeParse(value).success
+}
+
+function localizedShape(
+   raw: unknown,
+   i18n: CmsI18n,
+   accepts: (value: unknown) => value is string
+): Record<string, string> | null {
+   if (typeof raw === 'string') return raw && accepts(raw) ? { [i18n.defaultLocale]: raw } : null
    if (!isRecord(raw)) return null
    const entries = Object.entries(raw).filter(
-      (pair): pair is [string, string] =>
-         i18n.locales.includes(pair[0]) && typeof pair[1] === 'string'
+      (pair): pair is [string, string] => i18n.locales.includes(pair[0]) && accepts(pair[1])
    )
    return entries.length ? Object.fromEntries(entries) : null
+}
+
+function isString(value: unknown): value is string {
+   return typeof value === 'string'
 }
 
 function plainShape(field: FieldConfig, raw: unknown, i18n: CmsI18n): unknown {
@@ -79,15 +99,88 @@ function plainShape(field: FieldConfig, raw: unknown, i18n: CmsI18n): unknown {
    return Object.values(raw).find((entry) => typeof entry === 'string') ?? null
 }
 
+function trimmedText(value: unknown): string {
+   return typeof value === 'string' ? value.trim() : ''
+}
+
+function linkLabelShape(
+   field: FieldConfig,
+   raw: unknown,
+   i18n: CmsI18n
+): string | Record<string, string> | undefined {
+   if (!field.withLabel || raw == null) return undefined
+   if (field.translatable && i18n.locales.length) {
+      const label = localizedShape(raw, i18n, isString)
+      if (!label) return undefined
+      const kept = Object.entries(label)
+         .map(([locale, text]) => [locale, text.trim()] as const)
+         .filter(([, text]) => !!text)
+      return kept.length ? Object.fromEntries(kept) : undefined
+   }
+   const text = trimmedText(plainShape({ ...field, type: 'text' }, raw, i18n))
+   return text || undefined
+}
+
+function linkShape(field: FieldConfig, raw: unknown, i18n: CmsI18n): CmsLinkValue | null {
+   if (!isRecord(raw)) return null
+   const url = trimmedText(raw.url)
+   const entry = trimmedText(raw.entry)
+   const id = trimmedText(raw.id)
+   const label = linkLabelShape(field, raw.label, i18n)
+   const extra: CmsLinkValue = {
+      ...(label !== undefined ? { label } : {}),
+      ...(raw.newTab === true ? { newTab: true } : {}),
+   }
+   if (url && !entry && !id) {
+      if (!allowsExternalLinks(field) || linkUrlError(url)) return null
+      return { url, ...extra }
+   }
+   if (url || !entry || !id) return null
+   const targets = declaredLinkTargets(field)
+   if (targets && !targets.includes(entry)) return null
+   return { entry, id, ...extra }
+}
+
+function scalarShape(field: FieldConfig, raw: unknown): unknown {
+   if (raw === undefined || raw === null) return null
+   switch (field.type) {
+      case 'json':
+         return raw
+      case 'number':
+         return typeof raw === 'number' && Number.isFinite(raw) ? raw : null
+      case 'boolean':
+         return typeof raw === 'boolean' ? raw : null
+      case 'media':
+         return isMediaKey(raw) ? raw : null
+      case 'select': {
+         const options = selectOptionValues(field)
+         if (field.multiple) {
+            if (!Array.isArray(raw)) return null
+            const values = [...new Set(raw.filter((value) => options.includes(value)))]
+            return values.length ? values : null
+         }
+         return typeof raw === 'string' && options.includes(raw) ? raw : null
+      }
+      case 'tags': {
+         if (!Array.isArray(raw)) return null
+         const values = raw.filter(isString)
+         return values.length ? values : null
+      }
+      default:
+         return typeof raw === 'string' ? raw : null
+   }
+}
+
 export function pastedFieldValue(field: FieldConfig, raw: unknown, i18n: CmsI18n): unknown {
    if (field.type === 'blocks') {
       if (!Array.isArray(raw)) return null
       const { list } = pasteBlocks([], 0, raw.filter(isBlockItem), field, i18n)
       return list.length ? list : null
    }
-   const localized = isTranslatableField(field) && i18n.locales.length > 0
-   const shaped = localized ? localizedShape(raw, i18n) : plainShape(field, raw, i18n)
-   return blockFieldValue(field, shaped, i18n)
+   if (field.type === 'link') return linkShape(field, raw, i18n)
+   if (isTranslatableField(field) && i18n.locales.length > 0)
+      return localizedShape(raw, i18n, field.type === 'media' ? isMediaKey : isString)
+   return scalarShape(field, plainShape(field, raw, i18n))
 }
 
 export function pastedBlock(
