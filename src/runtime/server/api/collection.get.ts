@@ -8,6 +8,7 @@ import { listOrderBy, listWhere, readListFilters } from '../utils/list-query'
 import { readPages } from '../utils/page-storage'
 import { attachManyToMany, relationTitles } from '../utils/relations'
 import { requireAdmin } from '../utils/require-admin'
+import { singleRowFirst } from '../utils/single-row'
 
 const querySchema = z.object({
    limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -24,7 +25,11 @@ export default defineEventHandler(async (event) => {
    const db = useDb()
 
    if (entry.kind === 'single') {
-      const rows = (await db.select().from(table).limit(1)) as Record<string, unknown>[]
+      const rows = (await db
+         .select()
+         .from(table)
+         .orderBy(singleRowFirst(idColumn(table), entry.id))
+         .limit(1)) as Record<string, unknown>[]
       await attachManyToMany(db, name, entry, rows)
       return decodeRows(entry, rows)[0] ?? null
    }

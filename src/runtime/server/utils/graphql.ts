@@ -56,6 +56,7 @@ import {
    listFilterValues,
 } from './list-filter'
 import { getContentI18n, resolveTable, tableColumns } from './registry'
+import { singleRowFirst } from './single-row'
 import { visibilityConditions } from './visibility'
 
 const MAX_LIMIT = 100
@@ -495,6 +496,7 @@ export function buildCmsSchema() {
                .select()
                .from(table)
                .where(published.length ? and(...published) : undefined)
+               .orderBy(singleRowFirst(tableColumns(table).id!, entry.id))
                .limit(1)
             return row ? localizeRow(entry, row as Record<string, unknown>, locale) : null
          }
