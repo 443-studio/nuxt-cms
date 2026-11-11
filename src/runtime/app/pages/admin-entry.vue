@@ -1,9 +1,11 @@
 <template>
    <div class="k-page cms-page">
-      <KPageHeader :title="headerTitle" :icon="cmsIcon(config.icon ?? 'window')">
-         <template #title>
-            <KBreadcrumbs :items="trail" size="lg" label="Page" />
-         </template>
+      <KPageHeader
+         :trail="breadcrumb"
+         trail-label="Page"
+         :title="headerTitle"
+         :icon="cmsIcon(config.icon ?? 'window')"
+      >
          <template v-if="drafts" #badge>
             <CmsStatusBadge :published="published" />
          </template>
@@ -69,7 +71,6 @@ import {
 } from '#imports'
 import type { BreadcrumbItem } from '@xleddyl/443-components-vue'
 import {
-   Breadcrumbs as KBreadcrumbs,
    Button as KButton,
    Card as KCard,
    PageHeader as KPageHeader,
@@ -145,8 +146,6 @@ const breadcrumb = ((): BreadcrumbItem[] => {
    }
    return links
 })()
-
-const trail: BreadcrumbItem[] = [...breadcrumb, { label: pageRoute?.label ?? config.label }]
 
 const isNew = !isPage && id === undefined
 const drafts = !isPage && !!config.drafts

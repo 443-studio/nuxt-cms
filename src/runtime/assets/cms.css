@@ -220,50 +220,6 @@ body:has(.cms-scope) {
    margin-inline: auto;
 }
 
-.cms-list-card {
-   overflow: hidden;
-}
-
-.cms-list-toolbar {
-   display: flex;
-   flex-wrap: wrap;
-   align-items: center;
-   justify-content: space-between;
-   gap: 0.5rem 1rem;
-   padding: 0.75rem 1.125rem;
-   border-bottom: 1px solid var(--k-line);
-}
-
-.cms-list-toolbar-start,
-.cms-list-toolbar-end {
-   display: flex;
-   flex-wrap: wrap;
-   align-items: center;
-   gap: 0.5rem;
-   min-width: 0;
-}
-
-.cms-list-toolbar-start {
-   flex: 1 1 18rem;
-}
-
-.cms-list-search {
-   flex: 1 1 12rem;
-   max-width: 18rem;
-}
-
-.cms-list-footer {
-   display: flex;
-   flex: 1;
-   flex-wrap: wrap;
-   align-items: center;
-   gap: 0.75rem;
-}
-
-.cms-list-pagination {
-   flex: 1;
-}
-
 .cms-list-loading {
    padding: 1rem 1.125rem;
 }

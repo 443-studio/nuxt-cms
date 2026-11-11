@@ -1,5 +1,5 @@
 import { ROUTE_LOCATION_KEY, useRouteState } from '@xleddyl/443-components-vue'
-import { computed, provide, ref, useState } from '#imports'
+import { computed, provide, ref } from '#imports'
 
 export const CMS_NEW_RECORD = 'new'
 
@@ -7,10 +7,6 @@ export const CMS_MEDIA_ROUTE_KEY = 'media'
 
 export function provideCmsRouteLocation() {
    provide(ROUTE_LOCATION_KEY, 'hash')
-}
-
-export function useCmsNavigationPending() {
-   return useState<boolean>('k-navigation-pending', () => false)
 }
 
 export function useCmsRouteFlag(key: string, value = 'open') {

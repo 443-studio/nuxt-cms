@@ -117,6 +117,7 @@ import {
    provideFormConfig,
    provideTheme,
 } from '@xleddyl/443-components-vue'
+import { useNavigationPending } from '@xleddyl/443-components-vue/nuxt/composables'
 import { computed, navigateTo, ref, useRoute, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { cmsBrand } from '#cms-brand'
@@ -125,7 +126,7 @@ import { CMS_SEARCH_MIN_LENGTH, normalizeSearchQuery } from '../../shared/search
 import { useCmsTheme } from '../composables/cms-theme'
 import { useCmsAccount } from '../composables/cms-account'
 import { useCmsPermissions } from '../composables/cms-permissions'
-import { provideCmsRouteLocation, useCmsNavigationPending } from '../composables/cms-route'
+import { provideCmsRouteLocation } from '../composables/cms-route'
 import { loadCmsSettings } from '../composables/cms-settings'
 import { useCmsSettingsSections } from '../composables/cms-settings-sections'
 import { cmsIcon, cmsSubmitError } from '../utils/ui'
@@ -138,7 +139,7 @@ provideTheme(theme)
 provideCmsRouteLocation()
 provideFormConfig({ submitError: cmsSubmitError })
 const navOpen = ref(false)
-const navigationPending = useCmsNavigationPending()
+const navigationPending = useNavigationPending()
 const settingsSections = useCmsSettingsSections()
 
 const content = computed(() => (route.meta.content as ShellContent | undefined) ?? 'fill')
