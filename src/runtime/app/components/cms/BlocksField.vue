@@ -360,7 +360,7 @@ import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../s
 import type { CmsPresetDetails } from '../../../shared/presets'
 import { CMS_PRESET_ICON, presetInsertNotice } from '../../../shared/presets'
 import type { CmsBlockValue, CmsClipboardAction } from '../../../shared/preview'
-import { blockSummary, clipboardActionApplies } from '../../../shared/preview'
+import { blockSummary, clipboardActionApplies, emptyBlock } from '../../../shared/preview'
 import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
 import { useCmsPermissions } from '../../composables/cms-permissions'
@@ -570,9 +570,8 @@ function isHidden(item: Record<string, unknown>) {
 function add(type: string) {
    const block = blocks.value[type]
    if (!block || !canAdd.value || disabled.value) return
-   const empty = Object.fromEntries(Object.keys(block.fields).map((k) => [k, null]))
    const index = items.value.length
-   model.value = [...items.value, { type, ...empty }]
+   model.value = [...items.value, emptyBlock(type, block)]
    openEditor(index)
 }
 

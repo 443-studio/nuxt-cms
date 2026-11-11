@@ -420,7 +420,10 @@ A nested `<CmsBlocks>` knows its parent block: it inherits `entry` and `annotate
 name of the field from the prop you pass it (pass `field="columns"` when you pass a filtered or
 copied list). With `annotate`, nested roots get `data-cms-block-path` (`body.2.columns.0`),
 `data-cms-block-parent` (`body.2`) and `data-cms-block-type`, but no `data-cms-block`, so
-`data-cms-block` keeps meaning a top-level block.
+`data-cms-block` keeps meaning a top-level block. The visual editor finds blocks at every level by
+`data-cms-block-path`. Keep the nested `<CmsBlocks>` rendered when its list is empty: in the editor
+preview it shows an **Add a block** placeholder there (empty nested lists reach the preview as `[]`),
+and on the site it renders nothing.
 
 ### Marking fields
 
@@ -440,7 +443,7 @@ registered by the module:
 `<CmsField>` renders the tag given by `as` (default `span`) with its slot; attributes like `class`
 pass through. Both add `data-cms-field` only inside the editor preview: on the public site they
 render nothing extra. Inside a block, the name is a field of that block (the block is the nearest
-`data-cms-block` ancestor). Outside every block, for example in a
+`data-cms-block-path` ancestor, so a field of a nested block belongs to that nested block). Outside every block, for example in a
 [preview component](schema.md#preview-component), the name is a field of the item (`title`,
 `excerpt`, an extra field). Unknown names and private fields are ignored.
 

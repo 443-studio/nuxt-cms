@@ -2,10 +2,10 @@ import { getCurrentScope, onScopeDispose, readonly, ref, watch } from '#imports'
 import type { CmsHistoryOptions } from '../../shared/history'
 import { createCmsHistory } from '../../shared/history'
 
-export function useCmsHistory(options: Omit<CmsHistoryOptions, 'onUpdate'>) {
+export function useCmsHistory<S = number | null>(options: Omit<CmsHistoryOptions<S>, 'onUpdate'>) {
    const canUndo = ref(false)
    const canRedo = ref(false)
-   const history = createCmsHistory({
+   const history = createCmsHistory<S>({
       ...options,
       onUpdate: (status) => {
          canUndo.value = status.canUndo

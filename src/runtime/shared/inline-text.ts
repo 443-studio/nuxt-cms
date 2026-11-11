@@ -1,3 +1,5 @@
+import type { CmsBlockPath } from './block-paths'
+import { formatBlockPath, updateBlockAt, walkBlocks } from './block-paths'
 import type { FieldConfig } from './index'
 import { decodeTranslatableValue, isFieldVisible, isTranslatableField } from './index'
 
@@ -13,7 +15,7 @@ export interface CmsInlineNode {
 }
 
 export interface CmsInlineOverride {
-   index: number | null
+   path: CmsBlockPath | null
    key: string
    value: unknown
    settled: boolean
@@ -65,15 +67,15 @@ export function fitInlineInsertion(text: string, room: number): string {
    return text.slice(0, Math.max(room, 0))
 }
 
-export function inlineFieldPath(index: number | null, key: string): string {
-   return index === null ? key : `${index}.${key}`
+export function inlineFieldPath(path: CmsBlockPath | null, key: string): string {
+   return path ? `${formatBlockPath(path)}.${key}` : key
 }
 
 export interface CmsInlineLockOptions {
    fields: Record<string, FieldConfig> | null
    values: Record<string, unknown>
-   blocksField: FieldConfig
-   blocks: readonly Record<string, unknown>[]
+   blocksFields: Record<string, FieldConfig>
+   blocksValues: Record<string, unknown>
    locked?: readonly string[]
 }
 
@@ -84,11 +86,10 @@ export function lockedInlineFields(options: CmsInlineLockOptions): string[] {
       if (options.locked?.includes(key) || !isFieldVisible(field, options.values, options.fields!))
          paths.push(key)
    }
-   options.blocks.forEach((item, index) => {
-      const fields = options.blocksField.blocks?.[String(item.type)]?.fields ?? {}
-      for (const [key, field] of Object.entries(fields)) {
-         if (isInlineTextField(field) && !isFieldVisible(field, item, fields))
-            paths.push(inlineFieldPath(index, key))
+   walkBlocks(options.blocksFields, options.blocksValues, ({ item, block, path }) => {
+      for (const [key, field] of Object.entries(block.fields)) {
+         if (isInlineTextField(field) && !isFieldVisible(field, item, block.fields))
+            paths.push(inlineFieldPath(path, key))
       }
    })
    return paths
@@ -119,15 +120,15 @@ export function applyInlineOverride<T extends Record<string, unknown>>(
    override: CmsInlineOverride | null
 ): { blocks: T[]; item: Record<string, unknown> | null } {
    if (!override) return { blocks: [...blocks], item }
-   if (override.index === null)
+   if (!override.path)
       return {
          blocks: [...blocks],
          item: item ? { ...item, [override.key]: override.value } : item,
       }
-   return {
-      blocks: blocks.map((block, index) =>
-         index === override.index ? { ...block, [override.key]: override.value } : block
-      ),
-      item,
-   }
+   const root = String(override.path[0])
+   const updated = updateBlockAt({ [root]: blocks }, override.path, (block) => ({
+      ...block,
+      [override.key]: override.value,
+   }))
+   return { blocks: [...((updated[root] as T[] | null) ?? [])], item }
 }

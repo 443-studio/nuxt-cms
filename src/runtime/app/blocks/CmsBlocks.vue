@@ -6,12 +6,26 @@
       :parent="parentOf(block)"
       :attrs="annotating ? annotation(block) : null"
    />
+   <button
+      v-if="placeholder"
+      type="button"
+      class="cms-preview-empty-button is-nested"
+      :data-cms-insert="placeholder"
+   >
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+         <path
+            d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"
+         />
+      </svg>
+      <span>Add a block</span>
+   </button>
 </template>
 
 <script setup lang="ts">
 import type { PropType } from 'vue'
 import type { CmsBlockEntryName } from '#cms-types'
 import { computed, inject, toRaw } from '#imports'
+import { cmsPreviewEditable } from '../preview/field-marker'
 import { CMS_BLOCK_PARENT, CmsBlockNode } from './node'
 import type { CmsBlockItem, CmsBlockParent, ResolvedCmsBlock } from './resolve'
 import { cmsBlockAnnotation, cmsBlockScope, cmsBlockTypeName, resolveCmsBlocks } from './resolve'
@@ -61,6 +75,12 @@ const resolved = computed(() =>
       field: scope.value.schemaPath ?? undefined,
       onMissing: warnMissing,
    })
+)
+
+const placeholder = computed(() =>
+   parent?.value && annotating.value && cmsPreviewEditable.value && !resolved.value.length
+      ? `${scope.value.listPath}.${props.blocks?.length ?? 0}`
+      : null
 )
 
 function parentOf(block: ResolvedCmsBlock): CmsBlockParent & { annotate: boolean } {

@@ -17,9 +17,7 @@
                <button
                   type="button"
                   class="cms-preview-empty-button"
-                  data-cms-preview-keep
-                  :data-cms-insert="state.blocks.length"
-                  @click="post({ type: 'insert', index: state.blocks.length })"
+                  :data-cms-insert="`${state.field}.${state.blocks.length}`"
                >
                   <KIcon name="plus" />
                   <span>Add a block</span>
@@ -37,9 +35,7 @@
                <button
                   type="button"
                   class="cms-preview-empty-button"
-                  data-cms-preview-keep
-                  :data-cms-insert="state.blocks.length"
-                  @click="post({ type: 'insert', index: state.blocks.length })"
+                  :data-cms-insert="`${state.field}.${state.blocks.length}`"
                >
                   <KIcon name="plus" />
                   <span>Add a block</span>
@@ -56,7 +52,6 @@
             :locale="state.locale"
             :editable="state.editable"
             :locked-fields="state.lockedFields"
-            :total="state.blocks.length"
             :selected="state.selected"
             :highlighted="highlighted"
             :version="version"
@@ -72,7 +67,7 @@
 
 <script setup lang="ts">
 import type { CmsBlockEntryName } from '#cms-types'
-import type { CmsConfig } from '#nuxt-cms'
+import type { CmsBlockPath, CmsConfig } from '#nuxt-cms'
 import {
    canAddBlock,
    contentItemPath,
@@ -90,6 +85,7 @@ import {
    ref,
    shallowRef,
    useHead,
+   watch,
 } from '#imports'
 import { Icon as KIcon } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
@@ -108,7 +104,7 @@ import type { CmsBlockItem } from '../blocks/resolve'
 import { useCmsLinkTargets } from '../composables/cms-link-targets'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import PreviewOverlay from '../preview/PreviewOverlay.vue'
-import { cmsFieldMarking } from '../preview/field-marker'
+import { cmsFieldMarking, cmsPreviewEditable } from '../preview/field-marker'
 
 definePageMeta({ middleware: 'cms-auth' })
 
@@ -116,7 +112,7 @@ const { i18n } = useCmsRuntime()
 
 const state = shallowRef<CmsPreviewState | null>(null)
 const version = ref(0)
-const highlighted = ref<number | null>(null)
+const highlighted = shallowRef<CmsBlockPath | null>(null)
 const overlay = ref<InstanceType<typeof PreviewOverlay> | null>(null)
 const standalone = ref(false)
 const inline = shallowRef<CmsInlineOverride | null>(null)
@@ -200,7 +196,8 @@ const wrapper = computed(() =>
 
 function post(message: CmsPreviewFrameMessage) {
    if (window.parent === window) return
-   window.parent.postMessage(previewEnvelope(message), window.location.origin)
+   const plain = JSON.parse(JSON.stringify(message)) as CmsPreviewFrameMessage
+   window.parent.postMessage(previewEnvelope(plain), window.location.origin)
 }
 
 function onMessage(event: MessageEvent) {
@@ -214,10 +211,10 @@ function onMessage(event: MessageEvent) {
          version.value++
          break
       case 'highlight':
-         highlighted.value = message.index
+         highlighted.value = message.path
          break
       case 'reveal':
-         void overlay.value?.reveal(message.index)
+         void overlay.value?.reveal(message.path)
          break
    }
 }
@@ -229,8 +226,16 @@ onMounted(() => {
    post({ type: 'ready' })
 })
 
+watch(
+   () => !!state.value?.editable && !!field.value,
+   (editable) => {
+      cmsPreviewEditable.value = editable
+   }
+)
+
 onBeforeUnmount(() => {
    cmsFieldMarking.value = false
+   cmsPreviewEditable.value = false
    window.removeEventListener('message', onMessage)
 })
 </script>
@@ -271,6 +276,11 @@ onBeforeUnmount(() => {
 .cms-preview-outline.is-selected {
    border: 2px solid var(--cms-preview-accent);
    box-shadow: 0 0 0 4px color-mix(in oklab, var(--cms-preview-accent) 14%, transparent);
+}
+
+.cms-preview-outline.is-drop-target {
+   border: 2px dashed var(--cms-preview-accent);
+   background: color-mix(in oklab, var(--cms-preview-accent) 6%, transparent);
 }
 
 .cms-preview-label {
@@ -434,6 +444,11 @@ onBeforeUnmount(() => {
    box-shadow: 0 0 0 3px color-mix(in oklab, var(--cms-preview-accent) 20%, transparent);
 }
 
+.cms-preview-dropline.is-vertical {
+   width: 3px;
+   margin: 0 0 0 -1.5px;
+}
+
 .cms-preview-grabbing,
 .cms-preview-grabbing * {
    cursor: grabbing !important;
@@ -470,6 +485,25 @@ onBeforeUnmount(() => {
 .cms-preview-empty-button svg {
    width: 18px;
    height: 18px;
+}
+
+.cms-preview-empty-button.is-nested {
+   justify-content: center;
+   width: 100%;
+   min-height: 56px;
+   padding: 10px 14px;
+   font-size: 13px;
+   opacity: 0.8;
+}
+
+.cms-preview-empty-button.is-nested:hover {
+   opacity: 1;
+   background: color-mix(in oklab, #5b5bd6 6%, transparent);
+}
+
+.cms-preview-empty-button.is-nested svg {
+   width: 16px;
+   height: 16px;
 }
 
 .cms-preview-notice {

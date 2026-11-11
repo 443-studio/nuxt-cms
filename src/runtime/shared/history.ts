@@ -6,38 +6,38 @@ export interface CmsHistoryStatus {
    canRedo: boolean
 }
 
-export interface CmsHistoryOptions {
+export interface CmsHistoryOptions<S = number | null> {
    state: () => Record<string, unknown>
-   selected: () => number | null
-   restore: (state: Record<string, unknown>, selected: number | null) => void
+   selected: () => S
+   restore: (state: Record<string, unknown>, selected: S) => void
    omit?: readonly string[]
    max?: number
    delay?: number
    onUpdate?: (status: CmsHistoryStatus) => void
 }
 
-interface Entry {
+interface Entry<S> {
    json: string
-   selected: number | null
-   before: number | null
+   selected: S
+   before: S
 }
 
-interface Intent {
+interface Intent<S> {
    key: string | null
-   before: number | null
+   before: S
    held: boolean
 }
 
-export function createCmsHistory(options: CmsHistoryOptions) {
+export function createCmsHistory<S = number | null>(options: CmsHistoryOptions<S>) {
    const max = options.max ?? CMS_HISTORY_MAX
    const delay = options.delay ?? CMS_HISTORY_DELAY
    const omitted = new Set(options.omit ?? [])
 
    const status: CmsHistoryStatus = { canUndo: false, canRedo: false }
 
-   let entries: Entry[] = []
+   let entries: Entry<S>[] = []
    let index = 0
-   let intent: Intent | null = null
+   let intent: Intent<S> | null = null
    let timer: ReturnType<typeof setTimeout> | undefined
 
    function serialize(): string {
@@ -126,7 +126,7 @@ export function createCmsHistory(options: CmsHistoryOptions) {
       refresh()
    }
 
-   function apply(entry: Entry, selected: number | null) {
+   function apply(entry: Entry<S>, selected: S) {
       const values = JSON.parse(entry.json) as Record<string, unknown>
       options.restore({ ...options.state(), ...values }, selected)
       refresh()

@@ -5,27 +5,39 @@ import {
    renderBlocksFile,
 } from '../src/blocks-codegen'
 import { validateConfig } from '../src/schema-codegen'
-import type { CmsConfig } from '../src/runtime/shared/index'
-import { normalizeCmsConfig } from '../src/runtime/shared/index'
+import type { BlockConfig, CmsConfig, FieldConfig } from '../src/runtime/shared/index'
+import {
+   formatBlockPath,
+   insertBlocks as insertBlockList,
+   moveBlock as moveBlockAt,
+   movedBlockPath,
+   normalizeCmsConfig,
+   pathAfterInsert,
+   pathAfterMove,
+   pathAfterRemove,
+   updateBlockAt,
+} from '../src/runtime/shared/index'
 import type { CmsBlockValue, CmsPreviewMedia } from '../src/runtime/shared/preview'
 import {
    CMS_CLIPBOARD_MAX_LENGTH,
    CMS_PREVIEW_CHANNEL,
-   blockErrorIndexes,
+   blockErrorPaths,
+   blockTreeVisits,
+   canMoveBlock,
    blockSummary,
    canHideBlock,
    clipboardActionApplies,
    collectMediaKeys,
-   duplicateBlock,
+   duplicateBlockAt,
+   editorIssueKeys,
    editorShortcut,
    emptyBlock,
-   insertBlock,
    insertionIndex,
    isApplePlatform,
    isFieldKey,
    isTrustedPreviewEvent,
-   moveBlock,
-   moveTargetForInsertion,
+   firstBlockError,
+   isHorizontalList,
    parseFrameMessage,
    parseHostMessage,
    previewBlocks,
@@ -34,12 +46,10 @@ import {
    previewItem,
    previewMedia,
    previewPathErrors,
-   removeBlock,
-   selectionAfterMove,
-   selectionAfterRemove,
    shortcutApplies,
-   stableBlockIds,
-   toggleBlockHidden,
+   readMessagePath,
+   stableBlockTreeIds,
+   toggleBlockHiddenAt,
 } from '../src/runtime/shared/preview'
 import { buildEntrySchema } from '../src/runtime/shared/validation'
 import type { CmsInlineNode } from '../src/runtime/shared/inline-text'
@@ -64,6 +74,53 @@ const config = normalizeCmsConfig(contentConfig(), I18N)
 const news = config.news!
 const body = news.fields.body!
 
+function nestedFields(): Record<string, FieldConfig> {
+   const leaves: Record<string, BlockConfig> = {
+      text: {
+         label: 'Text',
+         fields: { heading: { label: 'Heading', type: 'text', translatable: true } },
+      },
+      cta: {
+         label: 'Call to action',
+         fields: {
+            style: { label: 'Style', type: 'select', options: ['plain', 'button'] },
+            label: { label: 'Label', type: 'text', showIf: { field: 'style', eq: 'button' } },
+         },
+      },
+   }
+   const other: Record<string, BlockConfig> = {
+      text: { label: 'Text', fields: { heading: { label: 'Heading', type: 'text' } } },
+   }
+   return {
+      title: { label: 'Title', type: 'text' },
+      body: {
+         label: 'Body',
+         type: 'blocks',
+         blocks: {
+            ...leaves,
+            columns: {
+               label: 'Columns',
+               fields: {
+                  items: { label: 'Items', type: 'blocks', blocks: leaves, max: 2 },
+                  extra: { label: 'Extra', type: 'blocks', blocks: other },
+               },
+            },
+            hero: {
+               label: 'Hero',
+               fields: {
+                  slides: {
+                     label: 'Slides',
+                     type: 'blocks',
+                     min: 2,
+                     blocks: { slide: leaves.text! },
+                  },
+               },
+            },
+         },
+      },
+   }
+}
+
 function media(key: string): CmsPreviewMedia {
    return previewMedia(key, undefined, '/images')
 }
@@ -76,15 +133,22 @@ describe('preview message protocol', () => {
       })
    })
 
-   it('accepts well formed frame messages', () => {
+   it('accepts well formed frame messages with block paths', () => {
+      const nested = ['body', 2, 'columns', 0]
       expect(parseFrameMessage(previewEnvelope({ type: 'ready' }))).toEqual({ type: 'ready' })
-      expect(parseFrameMessage(previewEnvelope({ type: 'select', index: null }))).toEqual({
+      expect(parseFrameMessage(previewEnvelope({ type: 'select', path: null }))).toEqual({
          type: 'select',
-         index: null,
+         path: null,
+      })
+      expect(parseFrameMessage(previewEnvelope({ type: 'select', path: nested }))).toEqual({
+         type: 'select',
+         path: nested,
       })
       expect(
-         parseFrameMessage(previewEnvelope({ type: 'move', from: 2, to: 0, focus: true }))
-      ).toEqual({ type: 'move', from: 2, to: 0, focus: true })
+         parseFrameMessage(
+            previewEnvelope({ type: 'move', from: ['body', 2], to: nested, focus: true })
+         )
+      ).toEqual({ type: 'move', from: ['body', 2], to: nested, focus: true })
       for (const type of [
          'insert',
          'duplicate',
@@ -94,37 +158,88 @@ describe('preview message protocol', () => {
          'cut',
          'paste',
       ] as const) {
-         expect(parseFrameMessage(previewEnvelope({ type, index: 1 }))).toEqual({ type, index: 1 })
-      }
-      for (const type of ['undo', 'redo', 'save'] as const) {
-         expect(parseFrameMessage(previewEnvelope({ type, index: 3, extra: true }))).toEqual({
+         expect(parseFrameMessage(previewEnvelope({ type, path: ['body', 1] }))).toEqual({
             type,
+            path: ['body', 1],
+         })
+         expect(parseFrameMessage(previewEnvelope({ type, path: nested }))).toEqual({
+            type,
+            path: nested,
          })
       }
+      for (const type of ['undo', 'redo', 'save'] as const) {
+         expect(
+            parseFrameMessage(previewEnvelope({ type, path: ['body', 3], extra: true }))
+         ).toEqual({ type })
+      }
+   })
+
+   it('reads strict block paths from messages', () => {
+      expect(readMessagePath(['body', 0])).toEqual(['body', 0])
+      expect(readMessagePath(['body', 1, 'columns', 0, 'content', 2])).toEqual([
+         'body',
+         1,
+         'columns',
+         0,
+         'content',
+         2,
+      ])
+      for (const broken of [
+         null,
+         'body.0',
+         [],
+         ['body'],
+         ['body', 1, 'columns'],
+         ['body', -1],
+         ['body', 1.5],
+         ['body', '1'],
+         [0, 'body'],
+         ['body', Number.MAX_SAFE_INTEGER + 1],
+         ['body', 0, 'a.b', 0],
+         ['body', 0, 'x'.repeat(101), 0],
+         ['body', 0, 'columns', 0, 'content', 0, 'deep', 0],
+      ]) {
+         expect(readMessagePath(broken)).toBeNull()
+      }
+      const source = ['body', 0]
+      const read = readMessagePath(source)
+      expect(read).not.toBe(source)
    })
 
    it('carries the clipboard text of a paste from the frame', () => {
       expect(
-         parseFrameMessage(previewEnvelope({ type: 'paste', index: 2, text: '{"a":1}' }))
-      ).toEqual({ type: 'paste', index: 2, text: '{"a":1}' })
-      expect(parseFrameMessage(previewEnvelope({ type: 'copy', index: 0, text: 'x' }))).toEqual({
-         type: 'copy',
-         index: 0,
-      })
-      expect(parseFrameMessage(previewEnvelope({ type: 'paste', index: 1, text: 3 }))).toBeNull()
+         parseFrameMessage(previewEnvelope({ type: 'paste', path: ['body', 2], text: '{"a":1}' }))
+      ).toEqual({ type: 'paste', path: ['body', 2], text: '{"a":1}' })
+      expect(
+         parseFrameMessage(previewEnvelope({ type: 'copy', path: ['body', 0], text: 'x' }))
+      ).toEqual({ type: 'copy', path: ['body', 0] })
+      expect(
+         parseFrameMessage(previewEnvelope({ type: 'paste', path: ['body', 1], text: 3 }))
+      ).toBeNull()
       expect(parseFrameMessage(previewEnvelope({ type: 'paste', text: 'x' }))).toBeNull()
-      expect(parseFrameMessage(previewEnvelope({ type: 'cut', index: -1 }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'cut', path: ['body', -1] }))).toBeNull()
       const long = 'x'.repeat(CMS_CLIPBOARD_MAX_LENGTH + 1)
-      expect(parseFrameMessage(previewEnvelope({ type: 'paste', index: 0, text: long }))).toBeNull()
+      expect(
+         parseFrameMessage(previewEnvelope({ type: 'paste', path: ['body', 0], text: long }))
+      ).toBeNull()
    })
 
    it('rejects foreign, unknown and malformed frame messages', () => {
       expect(parseFrameMessage({ type: 'ready' })).toBeNull()
       expect(parseFrameMessage({ channel: 'other', type: 'ready' })).toBeNull()
       expect(parseFrameMessage(previewEnvelope({ type: 'navigate' }))).toBeNull()
-      expect(parseFrameMessage(previewEnvelope({ type: 'remove', index: -1 }))).toBeNull()
-      expect(parseFrameMessage(previewEnvelope({ type: 'remove', index: 1.5 }))).toBeNull()
-      expect(parseFrameMessage(previewEnvelope({ type: 'move', from: 0, to: '1' }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'remove', index: 1 }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'remove', path: ['body'] }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'remove', path: 'body.1' }))).toBeNull()
+      expect(
+         parseFrameMessage(
+            previewEnvelope({ type: 'remove', path: ['body', 0, 'a', 0, 'b', 0, 'c', 0] })
+         )
+      ).toBeNull()
+      expect(
+         parseFrameMessage(previewEnvelope({ type: 'move', from: ['body', 0], to: ['body'] }))
+      ).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'select', path: undefined }))).toBeNull()
       expect(parseFrameMessage({ type: 'undo' })).toBeNull()
       expect(parseFrameMessage(previewEnvelope({ type: 'UNDO' }))).toBeNull()
       expect(parseFrameMessage('ready')).toBeNull()
@@ -139,7 +254,7 @@ describe('preview message protocol', () => {
          blocks: [{ type: 'text' }, 'junk', null],
          item: { title: { en: 'Hi' } },
          media: {},
-         selected: 0,
+         selected: ['body', 0, 'columns', 1],
       }
       expect(parseHostMessage(previewEnvelope({ type: 'render', state }))).toEqual({
          type: 'render',
@@ -163,7 +278,7 @@ describe('preview message protocol', () => {
          )
          return message?.type === 'render' ? message.state.lockedFields : undefined
       }
-      expect(parse(['title', '0.heading', 3, null])).toEqual(['title', '0.heading'])
+      expect(parse(['title', 'body.0.heading', 3, null])).toEqual(['title', 'body.0.heading'])
       expect(parse('title')).toEqual([])
       expect(parse(undefined)).toEqual([])
    })
@@ -206,7 +321,8 @@ describe('preview message protocol', () => {
          { ...valid, blocks: {} },
          { ...valid, item: [] },
          { ...valid, media: null },
-         { ...valid, selected: -2 },
+         { ...valid, selected: 0 },
+         { ...valid, selected: ['body'] },
          { ...valid, locale: undefined },
       ]) {
          expect(parseHostMessage(previewEnvelope({ type: 'render', state: broken }))).toBeNull()
@@ -216,80 +332,89 @@ describe('preview message protocol', () => {
    })
 
    it('parses highlight and reveal host messages', () => {
-      expect(parseHostMessage(previewEnvelope({ type: 'highlight', index: 2 }))).toEqual({
+      expect(parseHostMessage(previewEnvelope({ type: 'highlight', path: ['body', 2] }))).toEqual({
          type: 'highlight',
-         index: 2,
+         path: ['body', 2],
       })
-      expect(parseHostMessage(previewEnvelope({ type: 'highlight', index: null }))).toEqual({
+      expect(parseHostMessage(previewEnvelope({ type: 'highlight', path: null }))).toEqual({
          type: 'highlight',
-         index: null,
+         path: null,
       })
-      expect(parseHostMessage(previewEnvelope({ type: 'reveal', index: 0, extra: 1 }))).toEqual({
-         type: 'reveal',
-         index: 0,
-      })
-      for (const index of [-1, 1.5, '1', undefined]) {
-         expect(parseHostMessage(previewEnvelope({ type: 'highlight', index }))).toBeNull()
+      expect(
+         parseHostMessage(
+            previewEnvelope({ type: 'reveal', path: ['body', 0, 'columns', 1], extra: 1 })
+         )
+      ).toEqual({ type: 'reveal', path: ['body', 0, 'columns', 1] })
+      for (const path of [['body', -1], ['body', 1.5], 'body.1', undefined, 2]) {
+         expect(parseHostMessage(previewEnvelope({ type: 'highlight', path }))).toBeNull()
       }
-      expect(parseHostMessage(previewEnvelope({ type: 'reveal', index: null }))).toBeNull()
-      expect(parseHostMessage({ type: 'highlight', index: 1 })).toBeNull()
+      expect(parseHostMessage(previewEnvelope({ type: 'reveal', path: null }))).toBeNull()
+      expect(parseHostMessage({ type: 'highlight', path: ['body', 1] })).toBeNull()
    })
 
    it('parses hover frame messages', () => {
-      expect(parseFrameMessage(previewEnvelope({ type: 'hover', index: 3 }))).toEqual({
+      expect(parseFrameMessage(previewEnvelope({ type: 'hover', path: ['body', 3] }))).toEqual({
          type: 'hover',
-         index: 3,
+         path: ['body', 3],
       })
-      expect(parseFrameMessage(previewEnvelope({ type: 'hover', index: null }))).toEqual({
+      expect(parseFrameMessage(previewEnvelope({ type: 'hover', path: null }))).toEqual({
          type: 'hover',
-         index: null,
+         path: null,
       })
-      expect(parseFrameMessage(previewEnvelope({ type: 'hover', index: -1 }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'hover', path: ['body', -1] }))).toBeNull()
       expect(parseFrameMessage(previewEnvelope({ type: 'hover' }))).toBeNull()
    })
 
    it('parses focus-field frame messages for block and entry fields', () => {
       expect(
-         parseFrameMessage(previewEnvelope({ type: 'focus-field', index: 2, key: 'heading' }))
-      ).toEqual({ type: 'focus-field', index: 2, key: 'heading' })
+         parseFrameMessage(
+            previewEnvelope({ type: 'focus-field', path: ['body', 2, 'items', 0], key: 'heading' })
+         )
+      ).toEqual({ type: 'focus-field', path: ['body', 2, 'items', 0], key: 'heading' })
       expect(
          parseFrameMessage(
-            previewEnvelope({ type: 'focus-field', index: null, key: 'title', extra: 1 })
+            previewEnvelope({ type: 'focus-field', path: null, key: 'title', extra: 1 })
          )
-      ).toEqual({ type: 'focus-field', index: null, key: 'title' })
+      ).toEqual({ type: 'focus-field', path: null, key: 'title' })
+      const path = ['body', 0]
       for (const broken of [
-         { index: -1, key: 'heading' },
-         { index: '1', key: 'heading' },
+         { path: ['body', -1], key: 'heading' },
+         { path: 1, key: 'heading' },
          { key: 'heading' },
-         { index: 0 },
-         { index: 0, key: '' },
-         { index: 0, key: 'body.0' },
-         { index: 0, key: '__proto__ x' },
-         { index: 0, key: 'x'.repeat(101) },
-         { index: 0, key: 3 },
+         { path },
+         { path, key: '' },
+         { path, key: 'body.0' },
+         { path, key: '__proto__ x' },
+         { path, key: 'x'.repeat(101) },
+         { path, key: 3 },
       ]) {
          expect(parseFrameMessage(previewEnvelope({ type: 'focus-field', ...broken }))).toBeNull()
       }
    })
 
    it('parses field-input frame messages', () => {
-      const message = { type: 'field-input', index: 1, key: 'heading', locale: 'it', value: 'Ciao' }
+      const message = {
+         type: 'field-input',
+         path: ['body', 1, 'items', 0],
+         key: 'heading',
+         locale: 'it',
+         value: 'Ciao',
+      }
       expect(parseFrameMessage(previewEnvelope(message))).toEqual(message)
-      expect(parseFrameMessage(previewEnvelope({ ...message, index: null, commit: true }))).toEqual(
-         {
-            ...message,
-            index: null,
-            commit: true,
-         }
-      )
+      expect(parseFrameMessage(previewEnvelope({ ...message, path: null, commit: true }))).toEqual({
+         ...message,
+         path: null,
+         commit: true,
+      })
       expect(parseFrameMessage(previewEnvelope({ ...message, commit: 'yes' }))).toEqual(message)
       expect(parseFrameMessage(previewEnvelope({ ...message, value: '' }))).toEqual({
          ...message,
          value: '',
       })
       for (const broken of [
-         { index: -1 },
-         { index: undefined },
+         { path: ['body', -1] },
+         { path: undefined },
+         { path: 1 },
          { key: 'a.b' },
          { locale: '' },
          { locale: 'it it' },
@@ -337,65 +462,61 @@ describe('field targets', () => {
       expect(isFieldKey(null)).toBe(false)
    })
 
-   it('resolves a block field from the block type', () => {
-      expect(
+   const root = { body }
+   const values = { body: [{ type: 'text', heading: null }] }
+
+   it('resolves a block field from the block at the path', () => {
+      const at = (path: (string | number)[] | null, key: string, data: object = values) =>
          previewFieldConfig(
-            { index: 0, key: 'heading', blockType: 'text' },
-            body,
+            { path, key },
+            root,
+            data as Record<string, unknown>,
             news.fields,
             'body'
          )
-      ).toMatchObject({ label: 'Heading', type: 'text' })
+      expect(at(['body', 0], 'heading')).toMatchObject({ label: 'Heading', type: 'text' })
+      expect(at(['body', 0], 'caption')).toBeUndefined()
+      expect(at(['body', 0], 'heading', { body: [{ type: 'nope' }] })).toBeUndefined()
+      expect(at(['body', 3], 'heading')).toBeUndefined()
+      expect(at(['body', 0], 'constructor')).toBeUndefined()
+   })
+
+   it('resolves a field of a nested block', () => {
+      const fields = nestedFields()
+      const data = { body: [{ type: 'columns', items: [{ type: 'text', heading: null }] }] }
       expect(
          previewFieldConfig(
-            { index: 0, key: 'caption', blockType: 'text' },
-            body,
-            news.fields,
+            { path: ['body', 0, 'items', 0], key: 'heading' },
+            { body: fields.body! },
+            data,
+            null,
             'body'
          )
-      ).toBeUndefined()
+      ).toMatchObject({ label: 'Heading' })
       expect(
          previewFieldConfig(
-            { index: 0, key: 'heading', blockType: 'nope' },
-            body,
-            news.fields,
-            'body'
-         )
-      ).toBeUndefined()
-      expect(
-         previewFieldConfig({ index: 0, key: 'heading' }, body, news.fields, 'body')
-      ).toBeUndefined()
-      expect(
-         previewFieldConfig(
-            { index: 0, key: 'constructor', blockType: 'text' },
-            body,
-            news.fields,
+            { path: ['body', 0, 'items', 1], key: 'heading' },
+            { body: fields.body! },
+            data,
+            null,
             'body'
          )
       ).toBeUndefined()
    })
 
    it('resolves an entry field without a block, never the blocks field itself', () => {
-      expect(
-         previewFieldConfig({ index: null, key: 'title' }, body, news.fields, 'body')
-      ).toMatchObject({ type: 'text', translatable: true })
-      expect(
-         previewFieldConfig({ index: null, key: 'excerpt' }, body, news.fields, 'body')
-      ).toMatchObject({ label: 'Summary', textarea: true })
-      expect(
-         previewFieldConfig({ index: null, key: 'body' }, body, news.fields, 'body')
-      ).toBeUndefined()
-      expect(previewFieldConfig({ index: null, key: 'title' }, body, null, 'body')).toBeUndefined()
-      expect(
-         previewFieldConfig({ index: null, key: 'missing' }, body, news.fields, 'body')
-      ).toBeUndefined()
+      const at = (key: string, fields: Record<string, FieldConfig> | null = news.fields) =>
+         previewFieldConfig({ path: null, key }, root, values, fields, 'body')
+      expect(at('title')).toMatchObject({ type: 'text', translatable: true })
+      expect(at('excerpt')).toMatchObject({ label: 'Summary', textarea: true })
+      expect(at('body')).toBeUndefined()
+      expect(at('title', null)).toBeUndefined()
+      expect(at('missing')).toBeUndefined()
       const secret = {
          ...news.fields,
          notes: { label: 'Notes', type: 'text' as const, private: true },
       }
-      expect(
-         previewFieldConfig({ index: null, key: 'notes' }, body, secret, 'body')
-      ).toBeUndefined()
+      expect(at('notes', secret)).toBeUndefined()
    })
 })
 
@@ -495,7 +616,7 @@ describe('inline text editing', () => {
       const item = { title: 'Title' }
       expect(applyInlineOverride(blocks, item, null)).toEqual({ blocks, item })
       const block = applyInlineOverride(blocks, item, {
-         index: 1,
+         path: ['body', 1],
          key: 'heading',
          value: 'Frozen',
          settled: false,
@@ -504,7 +625,7 @@ describe('inline text editing', () => {
       expect(block.blocks[0]).toBe(blocks[0])
       expect(block.item).toBe(item)
       const entry = applyInlineOverride(blocks, item, {
-         index: null,
+         path: null,
          key: 'title',
          value: 'Draft',
          settled: true,
@@ -512,12 +633,23 @@ describe('inline text editing', () => {
       expect(entry).toEqual({ blocks, item: { title: 'Draft' } })
       expect(
          applyInlineOverride(blocks, null, {
-            index: null,
+            path: null,
             key: 'title',
             value: 'x',
             settled: false,
          }).item
       ).toBeNull()
+      const nested = [{ type: 'columns', items: [{ type: 'text', heading: 'Left' }] }]
+      const inner = applyInlineOverride(nested, null, {
+         path: ['body', 0, 'items', 0],
+         key: 'heading',
+         value: 'Edited',
+         settled: false,
+      })
+      expect(inner.blocks).toEqual([
+         { type: 'columns', items: [{ type: 'text', heading: 'Edited' }] },
+      ])
+      expect(nested[0]!.items[0]!.heading).toBe('Left')
    })
 })
 
@@ -571,29 +703,61 @@ describe('inline editing limits', () => {
          { type: 'cta', style: 'button' },
          { type: 'unknown' },
       ]
+      const blocksFields = { body: blocksField }
       expect(
          lockedInlineFields({
             fields,
             values: { kind: 'a' },
-            blocksField,
-            blocks,
+            blocksFields,
+            blocksValues: { body: blocks },
             locked: ['code'],
          })
-      ).toEqual(['code', 'note', inlineFieldPath(0, 'label')])
+      ).toEqual(['code', 'note', inlineFieldPath(['body', 0], 'label')])
       expect(
-         lockedInlineFields({ fields: null, values: {}, blocksField, blocks: blocks.slice(1) })
+         lockedInlineFields({
+            fields: null,
+            values: {},
+            blocksFields,
+            blocksValues: { body: blocks.slice(1) },
+         })
       ).toEqual([])
       expect(inlineFieldPath(null, 'title')).toBe('title')
-      expect(inlineFieldPath(2, 'title')).toBe('2.title')
+      expect(inlineFieldPath(['body', 2], 'title')).toBe('body.2.title')
+      expect(inlineFieldPath(['body', 2, 'items', 0], 'title')).toBe('body.2.items.0.title')
+   })
+
+   it('locks hidden text fields of nested blocks by their path', () => {
+      const fields = nestedFields()
+      const values = {
+         body: [
+            {
+               type: 'columns',
+               items: [
+                  { type: 'cta', style: 'plain' },
+                  { type: 'cta', style: 'button' },
+               ],
+            },
+         ],
+      }
+      expect(
+         lockedInlineFields({
+            fields: null,
+            values: {},
+            blocksFields: { body: fields.body! },
+            blocksValues: values,
+         })
+      ).toEqual(['body.0.items.0.label'])
    })
 })
 
-describe('block list operations', () => {
-   const list: CmsBlockValue[] = [
-      { type: 'text', heading: 'a' },
-      { type: 'image', image: null },
-      { type: 'text', heading: 'c' },
-   ]
+describe('block path operations', () => {
+   const values = (): Record<string, unknown> => ({
+      body: [
+         { type: 'text', heading: 'a' },
+         { type: 'image', image: null },
+         { type: 'text', heading: { en: 'c' } },
+      ],
+   })
 
    it('builds an empty block with every field set to null', () => {
       expect(emptyBlock('text', body.blocks!.text!)).toEqual({
@@ -603,93 +767,178 @@ describe('block list operations', () => {
       })
    })
 
-   it('inserts at a clamped position without mutating the list', () => {
-      const item = { type: 'image' }
-      expect(insertBlock(list, 1, item)[1]).toBe(item)
-      expect(insertBlock(list, 99, item).at(-1)).toBe(item)
-      expect(insertBlock(list, -5, item)[0]).toBe(item)
-      expect(list).toHaveLength(3)
-   })
-
-   it('moves a block and ignores out of range moves', () => {
-      expect(moveBlock(list, 0, 2).map((item) => item.heading ?? item.type)).toEqual([
-         'image',
-         'c',
-         'a',
-      ])
-      expect(moveBlock(list, 2, 0).map((item) => item.heading ?? item.type)).toEqual([
-         'c',
-         'a',
-         'image',
-      ])
-      expect(moveBlock(list, 0, 3)).toEqual(list)
-      expect(moveBlock(list, -1, 0)).toEqual(list)
+   it('starts a nested list with its minimum when it holds a single block type', () => {
+      const fields = nestedFields()
+      expect(emptyBlock('hero', fields.body!.blocks!.hero!)).toEqual({
+         type: 'hero',
+         slides: [
+            { type: 'slide', heading: null },
+            { type: 'slide', heading: null },
+         ],
+      })
+      expect(emptyBlock('columns', fields.body!.blocks!.columns!)).toEqual({
+         type: 'columns',
+         items: null,
+         extra: null,
+      })
    })
 
    it('duplicates a block as a deep copy right after it', () => {
-      const nested = [{ type: 'text', heading: { en: 'x' } }]
-      const next = duplicateBlock(nested, 0)
-      expect(next).toHaveLength(2)
-      expect(next[1]).toEqual(nested[0])
-      expect(next[1]).not.toBe(nested[0])
-      expect(next[1]!.heading).not.toBe(nested[0]!.heading)
-      expect(duplicateBlock(nested, 5)).toEqual(nested)
-   })
-
-   it('removes a block', () => {
-      expect(removeBlock(list, 1).map((item) => item.type)).toEqual(['text', 'text'])
+      const data = values()
+      const next = duplicateBlockAt(data, ['body', 2])
+      const list = next.body as CmsBlockValue[]
+      expect(list).toHaveLength(4)
+      expect(list[3]).toEqual(list[2])
+      expect(list[3]).not.toBe(list[2])
+      expect(list[3]!.heading).not.toBe(list[2]!.heading)
+      expect(duplicateBlockAt(data, ['body', 5])).toBe(data)
    })
 
    it('toggles the implicit hidden flag unless the block declares its own', () => {
-      const hidden = toggleBlockHidden(list, 0, body.blocks!.text)
-      expect(hidden[0]).toEqual({ type: 'text', heading: 'a', hidden: true })
-      expect(toggleBlockHidden(hidden, 0, body.blocks!.text)[0]).toEqual(list[0])
+      const data = values()
+      const hidden = toggleBlockHiddenAt(data, ['body', 0], body.blocks!.text)
+      expect((hidden.body as CmsBlockValue[])[0]).toEqual({
+         type: 'text',
+         heading: 'a',
+         hidden: true,
+      })
+      const shown = toggleBlockHiddenAt(hidden, ['body', 0], body.blocks!.text)
+      expect((shown.body as CmsBlockValue[])[0]).toEqual({ type: 'text', heading: 'a' })
       const own = { label: 'X', fields: { hidden: { label: 'Hidden', type: 'boolean' as const } } }
       expect(canHideBlock(own)).toBe(false)
-      expect(toggleBlockHidden(list, 0, own)).toEqual(list)
+      expect(toggleBlockHiddenAt(data, ['body', 0], own)).toBe(data)
       expect(canHideBlock(undefined)).toBe(false)
    })
 
-   it('keeps the selection on the same block after a move or removal', () => {
-      expect(selectionAfterMove(1, 1, 3)).toBe(3)
-      expect(selectionAfterMove(2, 0, 3)).toBe(1)
-      expect(selectionAfterMove(2, 4, 0)).toBe(3)
-      expect(selectionAfterMove(2, 3, 4)).toBe(2)
-      expect(selectionAfterMove(null, 0, 1)).toBeNull()
-      expect(selectionAfterRemove(2, 2)).toBeNull()
-      expect(selectionAfterRemove(3, 1)).toBe(2)
-      expect(selectionAfterRemove(0, 1)).toBe(0)
+   it('follows a path through removals, inserts and moves', () => {
+      expect(pathAfterRemove(['body', 2], ['body', 1])).toEqual(['body', 1])
+      expect(pathAfterRemove(['body', 1], ['body', 1])).toBeNull()
+      expect(pathAfterRemove(['body', 1, 'items', 0], ['body', 1])).toBeNull()
+      expect(pathAfterRemove(['body', 3, 'items', 0], ['body', 1])).toEqual(['body', 2, 'items', 0])
+      expect(pathAfterRemove(['body', 0], ['body', 1])).toEqual(['body', 0])
+      expect(pathAfterRemove(['body', 1, 'items', 2], ['body', 1, 'items', 0])).toEqual([
+         'body',
+         1,
+         'items',
+         1,
+      ])
+      expect(pathAfterInsert(['body', 1], ['body'], 1)).toEqual(['body', 2])
+      expect(pathAfterInsert(['body', 1], ['body'], 2)).toEqual(['body', 1])
+      expect(pathAfterInsert(['body', 1, 'items', 0], ['body'], 0, 3)).toEqual([
+         'body',
+         4,
+         'items',
+         0,
+      ])
+      expect(pathAfterInsert(['body', 1], ['body', 1, 'items'], 0)).toEqual(['body', 1])
+      expect(movedBlockPath(['body', 0], ['body'], 3)).toEqual(['body', 2])
+      expect(movedBlockPath(['body', 0], ['body'], 1)).toBeNull()
+      expect(movedBlockPath(['body', 0], ['body', 2, 'items'], 0)).toEqual(['body', 1, 'items', 0])
+      expect(movedBlockPath(['body', 2], ['body', 2, 'items'], 0)).toBeNull()
+      expect(pathAfterMove(['body', 0, 'items', 1], ['body', 0], ['body'], 3)).toEqual([
+         'body',
+         2,
+         'items',
+         1,
+      ])
+      expect(pathAfterMove(['body', 2], ['body', 0], ['body'], 3)).toEqual(['body', 1])
+      expect(pathAfterMove(['body', 1, 'items', 0], ['body', 0], ['body', 1, 'items'], 0)).toEqual([
+         'body',
+         0,
+         'items',
+         1,
+      ])
+      expect(pathAfterMove(['body', 0, 'items', 1], ['body', 0, 'items', 0], ['body'], 0)).toEqual([
+         'body',
+         1,
+         'items',
+         0,
+      ])
+      expect(pathAfterMove(['body', 4], ['body', 0], ['body'], 1)).toEqual(['body', 4])
    })
 
-   it('keeps block ids stable across edits, moves and inserts', () => {
-      let next = 0
-      const create = () => ++next
-      const a = { type: 'text' }
-      const b = { type: 'text' }
-      const c = { type: 'image' }
-      const ids = stableBlockIds([], [], [a, b, c], create)
-      expect(ids).toEqual([1, 2, 3])
-      const edited = { ...b, heading: 'x' }
-      expect(stableBlockIds([a, b, c], ids, [a, edited, c], create)).toEqual([1, 2, 3])
-      expect(stableBlockIds([a, b, c], ids, [c, a, b], create)).toEqual([3, 1, 2])
-      const added = { type: 'quote' }
-      expect(stableBlockIds([a, b, c], ids, [a, added, b, c], create)).toEqual([1, 4, 2, 3])
-      expect(stableBlockIds([a, b, c], ids, [a, c], create)).toEqual([1, 3])
-      expect(stableBlockIds([a, b], [1, 2], [a, a], create)).toEqual([1, 2])
-      expect(stableBlockIds([a], [1], [a, a], create)).toEqual([1, 5])
+   it('allows a move into a list that takes the block type, its signature and has room', () => {
+      const fields = nestedFields()
+      const data = {
+         body: [
+            { type: 'text', heading: null },
+            { type: 'columns', items: [{ type: 'cta' }], extra: [{ type: 'text' }] },
+            { type: 'columns', items: [{ type: 'text' }, { type: 'text' }] },
+         ],
+      }
+      expect(canMoveBlock(fields, data, ['body', 0], ['body', 1, 'items'])).toBe(true)
+      expect(canMoveBlock(fields, data, ['body', 0], ['body', 2, 'items'])).toBe(false)
+      expect(canMoveBlock(fields, data, ['body', 2, 'items', 0], ['body', 2, 'items'])).toBe(true)
+      expect(canMoveBlock(fields, data, ['body', 1, 'items', 0], ['body'])).toBe(true)
+      expect(canMoveBlock(fields, data, ['body', 0], ['body', 1, 'extra'])).toBe(false)
+      expect(canMoveBlock(fields, data, ['body', 1], ['body', 2, 'items'])).toBe(false)
+      expect(canMoveBlock(fields, data, ['body', 1], ['body', 1, 'items'])).toBe(false)
+      expect(canMoveBlock(fields, data, ['body', 9], ['body'])).toBe(false)
+      expect(canMoveBlock(fields, data, ['body', 0], ['body', 0, 'items'])).toBe(false)
    })
 
-   it('turns a drop position into a move target', () => {
-      const boxes = [
-         { index: 0, top: 0, bottom: 100 },
-         { index: 2, top: 100, bottom: 200 },
+   it('keeps tree ids stable across edits, moves and inserts at every level', () => {
+      const fields = nestedFields()
+      let counter = 0
+      const create = () => ++counter
+      const leaf = { type: 'text', heading: null }
+      const cta = { type: 'cta' }
+      const columns = { type: 'columns', items: [leaf, cta] }
+      const first = { body: [{ type: 'text' }, columns] }
+      const one = stableBlockTreeIds(blockTreeVisits(fields, first), null, create)
+      expect([...one.ids.entries()]).toEqual([
+         ['body.0', 1],
+         ['body.1', 2],
+         ['body.1.items.0', 3],
+         ['body.1.items.1', 4],
+      ])
+      const edited = updateBlockAt(first, ['body', 1, 'items', 1], (item) => ({ ...item, x: 1 }))
+      const two = stableBlockTreeIds(blockTreeVisits(fields, edited), one.snapshot, create)
+      expect([...two.ids.values()]).toEqual([1, 2, 3, 4])
+      const moved = moveBlockAt(edited, ['body', 1, 'items', 0], ['body'], 0)
+      const three = stableBlockTreeIds(blockTreeVisits(fields, moved), two.snapshot, create)
+      expect([...three.ids.entries()]).toEqual([
+         ['body.0', 3],
+         ['body.1', 1],
+         ['body.2', 2],
+         ['body.2.items.0', 4],
+      ])
+      const added = insertBlockList(moved, ['body', 2, 'items'], 0, [{ type: 'text' }])
+      const four = stableBlockTreeIds(blockTreeVisits(fields, added), three.snapshot, create)
+      expect(four.ids.get('body.2.items.0')).toBe(5)
+      expect(four.ids.get('body.2.items.1')).toBe(4)
+   })
+
+   it('lists every block of the tree in order, unknown types included', () => {
+      const fields = nestedFields()
+      const visits = blockTreeVisits(fields, {
+         body: [{ type: 'columns', items: [{ type: 'text' }] }, { type: 'gone' }, 'junk'],
+      })
+      expect(visits.map((visit) => [formatBlockPath(visit.path), visit.block?.label])).toEqual([
+         ['body.0', 'Columns'],
+         ['body.0.items.0', 'Text'],
+         ['body.1', undefined],
+      ])
+   })
+
+   it('turns a drop position into an insertion index in vertical and horizontal lists', () => {
+      const column = [
+         { index: 0, top: 0, bottom: 100, left: 0, right: 300 },
+         { index: 2, top: 100, bottom: 200, left: 0, right: 300 },
       ]
-      expect(insertionIndex(boxes, 10, 3)).toBe(0)
-      expect(insertionIndex(boxes, 60, 3)).toBe(2)
-      expect(insertionIndex(boxes, 190, 3)).toBe(3)
-      expect(insertionIndex([], 10, 4)).toBe(4)
-      expect(moveTargetForInsertion(0, 3)).toBe(2)
-      expect(moveTargetForInsertion(2, 0)).toBe(0)
+      expect(isHorizontalList(column)).toBe(false)
+      expect(insertionIndex(column, { x: 10, y: 10 }, 3)).toBe(0)
+      expect(insertionIndex(column, { x: 10, y: 60 }, 3)).toBe(2)
+      expect(insertionIndex(column, { x: 10, y: 190 }, 3)).toBe(3)
+      expect(insertionIndex([], { x: 0, y: 10 }, 4)).toBe(4)
+      const row = [
+         { index: 0, top: 0, bottom: 100, left: 0, right: 100 },
+         { index: 1, top: 0, bottom: 100, left: 120, right: 220 },
+      ]
+      expect(isHorizontalList(row)).toBe(true)
+      expect(insertionIndex(row, { x: 40, y: 90 }, 2)).toBe(0)
+      expect(insertionIndex(row, { x: 80, y: 10 }, 2)).toBe(1)
+      expect(insertionIndex(row, { x: 200, y: 10 }, 2)).toBe(2)
    })
 })
 
@@ -762,6 +1011,19 @@ describe('preview data', () => {
       expect(previewBlocks(body, null, 'en', 'en', {})).toEqual([])
    })
 
+   it('hands empty nested lists to the preview as empty arrays', () => {
+      const fields = nestedFields()
+      const blocks = previewBlocks(
+         fields.body!,
+         [{ type: 'columns', items: null, extra: [{ type: 'text', heading: 'x' }] }],
+         'en',
+         'en',
+         {}
+      )
+      expect(blocks[0]!.items).toEqual([])
+      expect(blocks[0]!.extra).toEqual([{ type: 'text', heading: 'x' }])
+   })
+
    it('localizes the item for the preview wrapper', () => {
       const map = { 'covers/lake.jpg': media('covers/lake.jpg') }
       const item = previewItem(news.fields, values, 'it', 'en', map)
@@ -829,18 +1091,69 @@ describe('preview data', () => {
       )
    })
 
-   it('maps form error keys to block indexes', () => {
+   it('maps form error keys to the paths of the blocks that hold them', () => {
       const errors = {
          title: 'Required',
          body: 'Too few blocks',
          'body.0.heading': 'Required',
          'body.2': 'Invalid block',
          'body.3.heading': undefined,
+         'body.4.columns.1.content.0.heading': 'Too long',
+         'body.5.columns': 'Too few blocks',
          'bodyx.4': 'Other field',
          'body.x': 'Not an index',
       }
-      expect([...blockErrorIndexes(errors, 'body')].sort()).toEqual([0, 2])
-      expect(blockErrorIndexes({}, 'body').size).toBe(0)
+      expect([...blockErrorPaths(errors, 'body')].sort()).toEqual([
+         'body.0',
+         'body.2',
+         'body.4',
+         'body.4.columns.1',
+         'body.4.columns.1.content.0',
+         'body.5',
+      ])
+      expect(blockErrorPaths({}, 'body').size).toBe(0)
+   })
+
+   it('finds the first invalid block in document order, at any depth', () => {
+      expect(
+         firstBlockError(
+            {
+               title: 'Required',
+               'body.10.heading': 'Required',
+               'body.2.columns.1.content.0.heading': 'Too long',
+               'body.2.columns.0': 'Invalid',
+            },
+            'body'
+         )
+      ).toEqual({ path: ['body', 2, 'columns', 0] })
+      expect(firstBlockError({ 'body.3.columns': 'Too few' }, 'body')).toEqual({
+         path: ['body', 3],
+         key: 'columns',
+      })
+      expect(firstBlockError({ 'body.1.items.0.heading': 'Required', body: 'x' }, 'body')).toEqual({
+         path: ['body', 1, 'items', 0],
+         key: 'heading',
+      })
+      expect(firstBlockError({ body: 'Too few' }, 'body')).toBeNull()
+   })
+
+   it('keys an issue by its field and by the path of the field in its block', () => {
+      const fields = nestedFields()
+      const values = {
+         body: [{ type: 'columns', items: [{ type: 'text', heading: { en: 'x' } }] }],
+      }
+      const keys = (path: unknown[]) => editorIssueKeys(fields, values, path, 'body')
+      expect(keys(['title'])).toEqual(['title'])
+      expect(keys(['title', 'en'])).toEqual(['title'])
+      expect(keys(['body'])).toEqual(['body'])
+      expect(keys(['body', 0])).toEqual(['body', 'body.0'])
+      expect(keys(['body', 0, 'items'])).toEqual(['body', 'body.0.items'])
+      expect(keys(['body', 0, 'items', 0, 'heading', 'en'])).toEqual([
+         'body',
+         'body.0.items.0.heading',
+      ])
+      expect(keys(['body', 0, 'items', 0])).toEqual(['body', 'body.0.items.0'])
+      expect(keys([])).toEqual([])
    })
 })
 

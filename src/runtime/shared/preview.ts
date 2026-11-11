@@ -8,7 +8,21 @@ import {
    isTranslatableField,
    isTranslatableMediaField,
    localizeBlocks,
+   blockAt,
+   blockListAt,
+   blockListPath,
+   blockPathIndex,
+   blockPathStartsWith,
+   blocksFieldAt,
+   canAddBlock,
+   formatBlockPath,
+   insertBlocks,
+   isBlockListPath,
    mapBlocks,
+   parentBlockPath,
+   parseBlockPath,
+   sameBlockPath,
+   updateBlockAt,
    walkBlocks,
    mediaFilename,
    mediaPublicUrl,
@@ -19,6 +33,9 @@ import {
    resolveCmsLink,
 } from './index'
 import { CMS_INLINE_TEXT_MAX_LENGTH } from './inline-text'
+import type { CmsBlockPath, CmsBlockPathSegment } from './block-paths'
+import { MAX_BLOCKS_DEPTH, isBlockItemPath, resolveBlockPath } from './block-paths'
+import { blockSignature } from './block-signature'
 
 export type CmsPreviewLinkResolver = (value: unknown) => CmsLink | null
 
@@ -83,32 +100,32 @@ export interface CmsPreviewState {
    blocks: CmsBlockValue[]
    item: Record<string, unknown> | null
    media: Record<string, CmsPreviewMedia>
-   selected: number | null
+   selected: CmsBlockPath | null
    editable: boolean
    lockedFields: string[]
 }
 
 export type CmsPreviewHostMessage =
    | { type: 'render'; state: CmsPreviewState }
-   | { type: 'highlight'; index: number | null }
-   | { type: 'reveal'; index: number }
+   | { type: 'highlight'; path: CmsBlockPath | null }
+   | { type: 'reveal'; path: CmsBlockPath }
 
 export type CmsPreviewFrameMessage =
    | { type: 'ready' }
-   | { type: 'select'; index: number | null; focus?: boolean }
-   | { type: 'hover'; index: number | null }
-   | { type: 'insert'; index: number }
-   | { type: 'move'; from: number; to: number; focus?: boolean }
-   | { type: 'duplicate'; index: number }
-   | { type: 'toggle-hidden'; index: number }
-   | { type: 'remove'; index: number }
-   | { type: 'copy'; index: number }
-   | { type: 'cut'; index: number }
-   | { type: 'paste'; index: number; text?: string }
-   | { type: 'focus-field'; index: number | null; key: string }
+   | { type: 'select'; path: CmsBlockPath | null; focus?: boolean }
+   | { type: 'hover'; path: CmsBlockPath | null }
+   | { type: 'insert'; path: CmsBlockPath }
+   | { type: 'move'; from: CmsBlockPath; to: CmsBlockPath; focus?: boolean }
+   | { type: 'duplicate'; path: CmsBlockPath }
+   | { type: 'toggle-hidden'; path: CmsBlockPath }
+   | { type: 'remove'; path: CmsBlockPath }
+   | { type: 'copy'; path: CmsBlockPath }
+   | { type: 'cut'; path: CmsBlockPath }
+   | { type: 'paste'; path: CmsBlockPath; text?: string }
+   | { type: 'focus-field'; path: CmsBlockPath | null; key: string }
    | {
         type: 'field-input'
-        index: number | null
+        path: CmsBlockPath | null
         key: string
         locale: string
         value: string
@@ -130,14 +147,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
    return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-function isIndex(value: unknown): value is number {
-   return typeof value === 'number' && Number.isInteger(value) && value >= 0
-}
-
 const FIELD_KEY = /^[a-z_]\w{0,99}$/i
 
 export function isFieldKey(value: unknown): value is string {
    return typeof value === 'string' && FIELD_KEY.test(value)
+}
+
+export function readMessagePath(value: unknown): CmsBlockPath | null {
+   if (!Array.isArray(value) || value.length > MAX_BLOCKS_DEPTH * 2) return null
+   const valid = value.every((segment, position) =>
+      position % 2 === 0
+         ? isFieldKey(segment)
+         : typeof segment === 'number' && Number.isSafeInteger(segment) && segment >= 0
+   )
+   return valid && isBlockItemPath(value) ? [...(value as CmsBlockPathSegment[])] : null
+}
+
+function readOptionalPath(value: unknown): CmsBlockPath | null | undefined {
+   return value === null ? null : readMessagePath(value) ?? undefined
 }
 
 function envelope(data: unknown): Record<string, unknown> | null {
@@ -148,19 +175,28 @@ function envelope(data: unknown): Record<string, unknown> | null {
 const LOCALE_CODE = /^[a-z0-9_-]{1,35}$/i
 
 function parseFieldInput(message: Record<string, unknown>): CmsPreviewFrameMessage | null {
-   if (message.index !== null && !isIndex(message.index)) return null
-   if (!isFieldKey(message.key)) return null
+   const path = readOptionalPath(message.path)
+   if (path === undefined || !isFieldKey(message.key)) return null
    if (typeof message.locale !== 'string' || !LOCALE_CODE.test(message.locale)) return null
    if (typeof message.value !== 'string' || message.value.length > CMS_INLINE_TEXT_MAX_LENGTH)
       return null
    return {
       type: 'field-input',
-      index: message.index,
+      path,
       key: message.key,
       locale: message.locale,
       value: message.value,
       ...(message.commit === true ? { commit: true } : {}),
    }
+}
+
+function parsePaste(message: Record<string, unknown>): CmsPreviewFrameMessage | null {
+   const path = readMessagePath(message.path)
+   if (!path) return null
+   if (message.text === undefined) return { type: 'paste', path }
+   return typeof message.text === 'string' && message.text.length <= CMS_CLIPBOARD_MAX_LENGTH
+      ? { type: 'paste', path, text: message.text }
+      : null
 }
 
 export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null {
@@ -174,36 +210,37 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
       case 'save':
          return { type: message.type }
       case 'select':
-         return message.index === null || isIndex(message.index)
-            ? { type: 'select', index: message.index, ...focus }
-            : null
-      case 'hover':
-         return message.index === null || isIndex(message.index)
-            ? { type: 'hover', index: message.index }
-            : null
-      case 'move':
-         return isIndex(message.from) && isIndex(message.to)
-            ? { type: 'move', from: message.from, to: message.to, ...focus }
-            : null
+      case 'hover': {
+         const path = readOptionalPath(message.path)
+         if (path === undefined) return null
+         return message.type === 'select'
+            ? { type: 'select', path, ...focus }
+            : { type: 'hover', path }
+      }
+      case 'move': {
+         const from = readMessagePath(message.from)
+         const to = readMessagePath(message.to)
+         return from && to ? { type: 'move', from, to, ...focus } : null
+      }
       case 'insert':
       case 'duplicate':
       case 'toggle-hidden':
       case 'remove':
       case 'copy':
-      case 'cut':
-         return isIndex(message.index) ? { type: message.type, index: message.index } : null
-      case 'focus-field':
-         return (message.index === null || isIndex(message.index)) && isFieldKey(message.key)
-            ? { type: 'focus-field', index: message.index, key: message.key }
+      case 'cut': {
+         const path = readMessagePath(message.path)
+         return path ? { type: message.type, path } : null
+      }
+      case 'focus-field': {
+         const path = readOptionalPath(message.path)
+         return path !== undefined && isFieldKey(message.key)
+            ? { type: 'focus-field', path, key: message.key }
             : null
+      }
       case 'field-input':
          return parseFieldInput(message)
       case 'paste':
-         if (!isIndex(message.index)) return null
-         if (message.text === undefined) return { type: 'paste', index: message.index }
-         return typeof message.text === 'string' && message.text.length <= CMS_CLIPBOARD_MAX_LENGTH
-            ? { type: 'paste', index: message.index, text: message.text }
-            : null
+         return parsePaste(message)
       default:
          return null
    }
@@ -212,19 +249,22 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
 export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
    const message = envelope(data)
    if (!message) return null
-   if (message.type === 'highlight')
-      return message.index === null || isIndex(message.index)
-         ? { type: 'highlight', index: message.index }
-         : null
-   if (message.type === 'reveal')
-      return isIndex(message.index) ? { type: 'reveal', index: message.index } : null
+   if (message.type === 'highlight') {
+      const path = readOptionalPath(message.path)
+      return path === undefined ? null : { type: 'highlight', path }
+   }
+   if (message.type === 'reveal') {
+      const path = readMessagePath(message.path)
+      return path ? { type: 'reveal', path } : null
+   }
    if (message.type !== 'render' || !isRecord(message.state)) return null
    const state = message.state
    if (typeof state.entry !== 'string' || typeof state.field !== 'string') return null
    if (typeof state.locale !== 'string' || !Array.isArray(state.blocks)) return null
    if (state.item !== null && !isRecord(state.item)) return null
    if (!isRecord(state.media)) return null
-   if (state.selected !== null && !isIndex(state.selected)) return null
+   const selected = readOptionalPath(state.selected)
+   if (selected === undefined) return null
    return {
       type: 'render',
       state: {
@@ -234,7 +274,7 @@ export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
          blocks: state.blocks.filter(isRecord),
          item: state.item as Record<string, unknown> | null,
          media: state.media as Record<string, CmsPreviewMedia>,
-         selected: state.selected as number | null,
+         selected,
          editable: state.editable !== false,
          lockedFields: Array.isArray(state.lockedFields)
             ? state.lockedFields.filter((path): path is string => typeof path === 'string')
@@ -244,19 +284,20 @@ export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
 }
 
 export interface CmsFieldTarget {
-   index: number | null
+   path: CmsBlockPath | null
    key: string
 }
 
 export function previewFieldConfig(
-   target: CmsFieldTarget & { blockType?: string | null },
-   blocksField: FieldConfig | undefined,
+   target: CmsFieldTarget,
+   blocksFields: Record<string, FieldConfig>,
+   blocksValues: Record<string, unknown>,
    entryFields: Record<string, FieldConfig> | null | undefined,
    blocksKey: string
 ): FieldConfig | undefined {
    if (!isFieldKey(target.key)) return undefined
-   if (target.index !== null) {
-      const block = target.blockType ? blocksField?.blocks?.[target.blockType] : undefined
+   if (target.path) {
+      const block = resolveBlockPath(blocksFields, blocksValues, target.path)?.block
       return block && Object.hasOwn(block.fields, target.key) ? block.fields[target.key] : undefined
    }
    if (!entryFields || target.key === blocksKey || !Object.hasOwn(entryFields, target.key))
@@ -351,89 +392,92 @@ export function isTrustedPreviewEvent(
    return !!source && event.origin === origin && event.source === source
 }
 
-function clamp(index: number, length: number) {
-   return Math.min(Math.max(index, 0), length)
-}
-
 export function emptyBlock(type: string, block: BlockConfig): CmsBlockValue {
-   return { type, ...Object.fromEntries(Object.keys(block.fields).map((key) => [key, null])) }
+   const item: CmsBlockValue = { type }
+   for (const [key, field] of Object.entries(block.fields))
+      item[key] = field.type === 'blocks' ? starterBlocks(field) : null
+   return item
 }
 
-export function insertBlock(
-   list: readonly CmsBlockValue[],
-   index: number,
-   item: CmsBlockValue
-): CmsBlockValue[] {
-   const next = [...list]
-   next.splice(clamp(index, list.length), 0, item)
-   return next
+function starterBlocks(field: FieldConfig): CmsBlockValue[] | null {
+   const types = Object.entries(field.blocks ?? {})
+   const count = Math.min(field.min ?? 0, field.max ?? Number.POSITIVE_INFINITY)
+   if (types.length !== 1 || count < 1) return null
+   const [type, block] = types[0]!
+   return Array.from({ length: count }, () => emptyBlock(type, block))
 }
 
-export function moveBlock(
-   list: readonly CmsBlockValue[],
-   from: number,
-   to: number
-): CmsBlockValue[] {
-   if (from === to || from < 0 || from >= list.length || to < 0 || to >= list.length)
-      return [...list]
-   const next = [...list]
-   const [item] = next.splice(from, 1)
-   next.splice(to, 0, item!)
-   return next
-}
-
-export function duplicateBlock(list: readonly CmsBlockValue[], index: number): CmsBlockValue[] {
-   const item = list[index]
-   if (!item) return [...list]
-   return insertBlock(list, index + 1, JSON.parse(JSON.stringify(item)) as CmsBlockValue)
-}
-
-export function removeBlock(list: readonly CmsBlockValue[], index: number): CmsBlockValue[] {
-   return list.filter((_, i) => i !== index)
+export function duplicateBlockAt(
+   values: Record<string, unknown>,
+   path: CmsBlockPath
+): Record<string, unknown> {
+   const item = blockAt(values, path)
+   if (!item) return values
+   const copy = JSON.parse(JSON.stringify(item)) as CmsBlockValue
+   return insertBlocks(values, blockListPath(path), blockPathIndex(path) + 1, [copy])
 }
 
 export function canHideBlock(block: BlockConfig | undefined): boolean {
    return !!block && !declaresHiddenField(block)
 }
 
-export function toggleBlockHidden(
-   list: readonly CmsBlockValue[],
-   index: number,
+export function toggleBlockHiddenAt(
+   values: Record<string, unknown>,
+   path: CmsBlockPath,
    block: BlockConfig | undefined
-): CmsBlockValue[] {
-   const item = list[index]
-   if (!item || !canHideBlock(block)) return [...list]
-   const { [BLOCK_HIDDEN_KEY]: _hidden, ...rest } = item
-   const updated = isHiddenBlock(item) ? rest : { ...rest, [BLOCK_HIDDEN_KEY]: true }
-   return list.map((current, i) => (i === index ? updated : current))
+): Record<string, unknown> {
+   if (!canHideBlock(block)) return values
+   return updateBlockAt(values, path, (item) => {
+      const { [BLOCK_HIDDEN_KEY]: _hidden, ...rest } = item
+      return isHiddenBlock(item) ? rest : { ...rest, [BLOCK_HIDDEN_KEY]: true }
+   })
 }
 
-export function selectionAfterMove(selected: number | null, from: number, to: number) {
-   if (selected === null) return null
-   if (selected === from) return to
-   if (from < selected && to >= selected) return selected - 1
-   if (from > selected && to <= selected) return selected + 1
-   return selected
+export function canMoveBlock(
+   fields: Record<string, FieldConfig>,
+   values: Record<string, unknown>,
+   from: CmsBlockPath,
+   toList: CmsBlockPath
+): boolean {
+   const source = resolveBlockPath(fields, values, from)
+   if (!source?.block || !isBlockListPath(toList) || blockPathStartsWith(toList, from)) return false
+   const target = blocksFieldAt(fields, values, toList)
+   const type = String(source.item.type)
+   const blocks = target?.blocks ?? {}
+   if (!target || !Object.hasOwn(blocks, type)) return false
+   if (sameBlockPath(blockListPath(from), toList)) return true
+   if (blockSignature(blocks[type]!) !== blockSignature(source.block)) return false
+   return canAddBlock(target, blockListAt(values, toList)?.length ?? 0)
 }
 
-export function selectionAfterRemove(selected: number | null, index: number) {
-   if (selected === null || selected === index) return null
-   return selected > index ? selected - 1 : selected
+export interface CmsDropBox {
+   index: number
+   top: number
+   bottom: number
+   left: number
+   right: number
 }
 
-export function moveTargetForInsertion(from: number, insertAt: number): number {
-   return insertAt > from ? insertAt - 1 : insertAt
+export function isHorizontalList(boxes: readonly CmsDropBox[]): boolean {
+   return boxes.some((box, position) => {
+      const next = boxes[position + 1]
+      return !!next && next.left >= box.right - 1 && next.top < box.bottom - 1
+   })
 }
 
 export function insertionIndex(
-   blocks: readonly { index: number; top: number; bottom: number }[],
-   y: number,
+   boxes: readonly CmsDropBox[],
+   point: { x: number; y: number },
    total: number
 ): number {
-   for (const block of blocks) {
-      if (y < (block.top + block.bottom) / 2) return block.index
+   const horizontal = isHorizontalList(boxes)
+   for (const box of boxes) {
+      const before = horizontal
+         ? point.x < (box.left + box.right) / 2
+         : point.y < (box.top + box.bottom) / 2
+      if (before) return box.index
    }
-   const last = blocks[blocks.length - 1]
+   const last = boxes[boxes.length - 1]
    return last ? last.index + 1 : total
 }
 
@@ -487,7 +531,21 @@ export function previewBlocks(
    if (!Array.isArray(value)) return []
    const localized = localizeBlocks(field, value, locale, defaultLocale)
    const resolved = resolveBlocksMedia(field, localized, (key) => media[key] ?? null)
-   return previewBlockLinks(field, resolved as CmsBlockValue[], resolveLink)
+   return previewNestedLists(
+      field,
+      previewBlockLinks(field, resolved as CmsBlockValue[], resolveLink)
+   )
+}
+
+function previewNestedLists(field: FieldConfig, items: CmsBlockValue[]): CmsBlockValue[] {
+   return mapBlocks(field, items, (item, block) => {
+      const empty = Object.entries(block?.fields ?? {}).filter(
+         ([key, nested]) => nested.type === 'blocks' && !Array.isArray(item[key])
+      )
+      return empty.length
+         ? { ...item, ...Object.fromEntries(empty.map(([key]) => [key, []])) }
+         : item
+   }) as CmsBlockValue[]
 }
 
 export function previewItem(
@@ -619,49 +677,175 @@ function nestedBlockSummary(
    return count ? `${count} ${count === 1 ? 'block' : 'blocks'}` : ''
 }
 
-export function blockErrorIndexes(
-   errors: Record<string, string | undefined | null>,
-   fieldKey: string
-): Set<number> {
-   const indexes = new Set<number>()
-   const prefix = `${fieldKey}.`
-   for (const [key, message] of Object.entries(errors)) {
-      if (!message || !key.startsWith(prefix)) continue
-      const index = Number(key.slice(prefix.length).split('.')[0])
-      if (isIndex(index)) indexes.add(index)
+function itemPrefixes(segments: readonly string[]): string[] {
+   const prefixes: string[] = []
+   for (let end = 2; end <= segments.length; end += 2) {
+      if (!/^\d+$/.test(segments[end - 1]!)) break
+      prefixes.push(segments.slice(0, end).join('.'))
    }
-   return indexes
+   return prefixes
 }
 
-export function stableBlockIds<T>(
-   previous: readonly CmsBlockValue[],
-   previousIds: readonly T[],
-   next: readonly CmsBlockValue[],
-   createId: () => T
-): T[] {
-   const known = new Map<CmsBlockValue, T>()
-   previous.forEach((item, index) => {
-      const id = previousIds[index]
-      if (id !== undefined && !known.has(item)) known.set(item, id)
-   })
-   const kept = new Set(next)
-   const used = new Set<T>()
-   const ids = next.map((item) => {
-      const id = known.get(item)
-      if (id === undefined || used.has(id)) return undefined
-      used.add(id)
-      return id
-   })
-   return ids.map((id, index) => {
-      if (id !== undefined) return id
-      const replaced = previous[index]
-      const candidate = previousIds[index]
-      if (replaced && !kept.has(replaced) && candidate !== undefined && !used.has(candidate)) {
-         used.add(candidate)
-         return candidate
+export function blockErrorPaths(
+   errors: Record<string, string | undefined | null>,
+   fieldKey: string
+): Set<string> {
+   const paths = new Set<string>()
+   for (const [key, message] of Object.entries(errors)) {
+      if (!message || !key.startsWith(`${fieldKey}.`)) continue
+      for (const prefix of itemPrefixes(key.split('.'))) paths.add(prefix)
+   }
+   return paths
+}
+
+function compareErrorKeys(a: string, b: string): number {
+   const left = a.split('.')
+   const right = b.split('.')
+   for (let position = 0; position < Math.min(left.length, right.length); position++) {
+      const x = left[position]!
+      const y = right[position]!
+      if (x === y) continue
+      if (/^\d+$/.test(x) && /^\d+$/.test(y)) return Number(x) - Number(y)
+      return 0
+   }
+   return left.length - right.length
+}
+
+export function firstBlockError(
+   errors: Record<string, string | undefined | null>,
+   fieldKey: string
+): { path: CmsBlockPath; key?: string } | null {
+   const keys = Object.keys(errors)
+      .filter((key) => errors[key] && key.startsWith(`${fieldKey}.`))
+      .sort(compareErrorKeys)
+   for (const key of keys) {
+      const segments = key.split('.')
+      const deepest = itemPrefixes(segments).at(-1)
+      const path = deepest ? parseBlockPath(deepest) : null
+      if (!path) continue
+      const next = segments[path.length]
+      return next ? { path, key: next } : { path }
+   }
+   return null
+}
+
+export function editorIssueKeys(
+   fields: Record<string, FieldConfig>,
+   values: Record<string, unknown>,
+   path: readonly unknown[],
+   fieldKey: string
+): string[] {
+   const [head] = path
+   if (typeof head !== 'string' && typeof head !== 'number') return []
+   const keys = [String(head)]
+   if (String(head) !== fieldKey || typeof path[1] !== 'number') return keys
+   let end = 2
+   while (end <= MAX_BLOCKS_DEPTH * 2) {
+      const item = path.slice(0, end) as CmsBlockPathSegment[]
+      const next = path[end]
+      if (typeof next !== 'string' && typeof next !== 'number') {
+         keys.push(formatBlockPath(item))
+         break
       }
-      const fresh = createId()
-      used.add(fresh)
-      return fresh
+      const block = resolveBlockPath(fields, values, item)?.block
+      const field = block && Object.hasOwn(block.fields, next) ? block.fields[next] : undefined
+      if (field?.type === 'blocks' && typeof path[end + 1] === 'number') {
+         end += 2
+         continue
+      }
+      keys.push(`${formatBlockPath(item)}.${String(next)}`)
+      break
+   }
+   return keys
+}
+
+export interface CmsBlockTreeVisit {
+   path: CmsBlockPath
+   item: CmsBlockValue
+   block: BlockConfig | undefined
+   field: FieldConfig
+}
+
+export function blockTreeVisits(
+   fields: Record<string, FieldConfig>,
+   values: Record<string, unknown> | null | undefined,
+   prefix: CmsBlockPath = []
+): CmsBlockTreeVisit[] {
+   const visits: CmsBlockTreeVisit[] = []
+   for (const [key, field] of Object.entries(fields)) {
+      const list = values?.[key]
+      if (field?.type !== 'blocks' || !Array.isArray(list)) continue
+      list.forEach((item: unknown, index) => {
+         if (!isRecord(item)) return
+         const block = field.blocks?.[String(item.type)]
+         const path = [...prefix, key, index]
+         visits.push({ path, item, block, field })
+         if (block) visits.push(...blockTreeVisits(block.fields, item, path))
+      })
+   }
+   return visits
+}
+
+export interface CmsBlockIdSnapshot<T> {
+   items: Map<CmsBlockValue, T>
+   lists: Map<string, { items: CmsBlockValue[]; ids: T[] }>
+}
+
+function listKeyOf<T>(path: CmsBlockPath, ids: Map<string, T>): string {
+   const parent = parentBlockPath(path)
+   const owner = parent ? ids.get(formatBlockPath(parent)) : 'root'
+   return `${String(owner)}:${String(path.at(-2))}`
+}
+
+function replacedId<T>(
+   before: { items: CmsBlockValue[]; ids: T[] } | undefined,
+   item: CmsBlockValue,
+   index: number,
+   present: Set<CmsBlockValue>,
+   used: Set<T>
+): T | undefined {
+   let best: { id: T; distance: number } | undefined
+   before?.items.forEach((candidate, position) => {
+      const id = before.ids[position]
+      if (id === undefined || used.has(id) || present.has(candidate)) return
+      if (candidate.type !== item.type) return
+      const distance = Math.abs(position - index)
+      if (!best || distance < best.distance) best = { id, distance }
    })
+   return best?.id
+}
+
+export function stableBlockTreeIds<T>(
+   visits: readonly CmsBlockTreeVisit[],
+   previous: CmsBlockIdSnapshot<T> | null,
+   createId: () => T
+): { ids: Map<string, T>; snapshot: CmsBlockIdSnapshot<T> } {
+   const present = new Set(visits.map((visit) => visit.item))
+   const used = new Set<T>()
+   const assigned = new Map<number, T>()
+   visits.forEach((visit, position) => {
+      const id = previous?.items.get(visit.item)
+      if (id === undefined || used.has(id)) return
+      used.add(id)
+      assigned.set(position, id)
+   })
+   const ids = new Map<string, T>()
+   const snapshot: CmsBlockIdSnapshot<T> = { items: new Map(), lists: new Map() }
+   visits.forEach((visit, position) => {
+      const listKey = listKeyOf(visit.path, ids)
+      const index = blockPathIndex(visit.path)
+      let id = assigned.get(position)
+      if (id === undefined) {
+         id = replacedId(previous?.lists.get(listKey), visit.item, index, present, used)
+         id ??= createId()
+         used.add(id)
+      }
+      ids.set(formatBlockPath(visit.path), id)
+      if (!snapshot.items.has(visit.item)) snapshot.items.set(visit.item, id)
+      const list = snapshot.lists.get(listKey) ?? { items: [], ids: [] }
+      list.items[index] = visit.item
+      list.ids[index] = id
+      snapshot.lists.set(listKey, list)
+   })
+   return { ids, snapshot }
 }

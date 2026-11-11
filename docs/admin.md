@@ -66,8 +66,8 @@ blocks as a breadcrumb in the title (**Columns › Column › Text**): click a p
 up one level. Move, **Duplicate**, **Hide** and **Remove** of the editor act on the open block in
 its own list. After a failed save, tiles holding an invalid field are outlined in red at every level,
 and the field shows its message when you open its block. A tile whose block only holds other blocks
-previews the first text of its nested blocks, or their count. In the visual editor the inspector
-of the selected block shows its nested fields as tiles too.
+previews the first text of its nested blocks, or their count. The visual editor edits nested blocks
+directly: see [Nested blocks in the visual editor](#nested-blocks-in-the-visual-editor).
 
 **Media lists.** A `blocks` field with one block type that has one `media` field (for example a
 photo gallery) is edited as a media list. **+** opens the media library and adds the file you pick.
@@ -332,23 +332,55 @@ field (where the browser keeps its own undo) or in a dialog. ⌘ is Ctrl outside
 | ⌘ D | duplicate the selected block |
 | ⌘ ↑, ⌘ ↓ | move the selected block up or down |
 | Enter, ⇧ Enter | open the block picker to add a block after or before the selected one |
-| Escape | clear the selection |
+| Escape | select the parent block, or clear the selection of a top-level block |
 | ⌘ C, ⌘ X | copy or cut the selected block |
 | ⌘ V | paste after the selected block, or at the end |
 
 Duplicate and add do nothing once the field holds `max` blocks. In the canvas you can also focus the
-drag handle of a block and press the up or down arrow to move it. In the block tree, Alt with the
+drag handle of a block and press the arrow keys to move it (left and right work too, for blocks
+side by side). In the block tree, Alt with the
 up or down arrow moves the focused block. In the [block picker](#block-picker), ↑ and ↓ move
 through the results, Enter picks and Escape closes. Every action is also a button or a menu item,
 and every change from the tree, the menus and the canvas is one undo step.
 
 **Validation.** Save and Publish check the whole item first, `validate` hooks included. The first
-error selects the block that holds it, or opens its tab, shows the panel it is in and switches to
+error selects the block that holds it, at any depth, and scrolls to its field, or opens its tab, shows the panel it is in and switches to
 the default language when the field is translatable. A count marks every tab with an error and a
 red dot every block with one in the tree. An error or a warning that names no field shows at the
 top of the inspector, an error of the body itself (for example too few blocks)
 shows at the top of the block tree, and one that names a block shows above the fields of that
 block. Leaving with unsaved changes asks for a confirmation.
+
+### Nested blocks in the visual editor
+
+A block with its own [`blocks` field](schema.md#nested-blocks) (columns, accordion panels) is edited
+like the top level, at every depth:
+
+- **Tree.** Its items are nested rows under it, with an arrow to fold them (containers start
+  open, and selecting a block opens its ancestors). A block with several nested `blocks` fields
+  shows one group row per field, labeled with the field, with **+** to add at its end. An empty
+  nested list shows an **Add a block** row. Drag a row into another list, or press Alt with an
+  arrow key (left and right move out of and into the block above). A drop is only accepted where
+  the field takes that block type with the same fields and has room under its `max`. The red dot
+  of an invalid block also shows on every block that contains it, and a hidden block dims
+  everything inside it. The `...` menu of a block adds **Add to** each of its nested fields.
+- **Canvas.** Hover and click pick the innermost block under the pointer. A nested block has its
+  own outline, label and toolbar (shown just above it), with a button to select its parent; its
+  arrows are left and right when its list is side by side. The **+** buttons appear between the
+  blocks of the list you hover or select, and inside the selected block. An empty nested list
+  shows an **Add a block** placeholder in the canvas (in the editor only, never on the site). Drag
+  a block by its handle into another column: the drop goes to the deepest list under the pointer
+  that takes it, outlined while you drag.
+- **Inspector.** The header shows the parent blocks as a breadcrumb (**Columns › Column**): click
+  one to select it. A nested `blocks` field is a short list of its blocks: click one to select it,
+  **Add a block** opens the picker for that list.
+- **Picker, paste and presets** work on the list you add to: its blocks, its `max`, its presets.
+  A block copied from inside a column pastes at the top level when the body takes that block, and
+  a toast says what was skipped otherwise. A new block whose nested field has a `min` and one
+  block type starts with that many (a new **Columns** has its two columns).
+
+Undo, redo and the selection follow the block through every move, insert and delete. In a read
+only editor nested blocks can be selected and copied, nothing more.
 
 ### Block picker
 

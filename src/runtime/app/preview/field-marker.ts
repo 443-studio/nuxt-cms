@@ -5,6 +5,8 @@ export const CMS_FIELD_ATTRIBUTE = 'data-cms-field'
 
 export const cmsFieldMarking = shallowRef(false)
 
+export const cmsPreviewEditable = shallowRef(false)
+
 function mark(element: HTMLElement, name: unknown) {
    if (!cmsFieldMarking.value) return
    if (typeof name === 'string' && name) element.setAttribute(CMS_FIELD_ATTRIBUTE, name)

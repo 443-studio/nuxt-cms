@@ -72,11 +72,12 @@
                <CmsBlockTree
                   :items="blocks"
                   :field="blocksField"
+                  :field-key="fieldKey"
                   :locale="locale"
                   :selected="selected"
                   :highlighted="canvasHover"
                   :errors="blockErrors"
-                  :can-add="canAdd && !readonly"
+                  :can-add="canAddTo"
                   :label="blocksField.label"
                   :menu="blockMenu"
                   :readonly="readonly"
@@ -98,7 +99,7 @@
                   aria-haspopup="dialog"
                   @click="
                      (event: MouseEvent) =>
-                        openPalette(blocks.length, event.currentTarget as HTMLElement)
+                        openPalette([fieldKey], blocks.length, event.currentTarget as HTMLElement)
                   "
                />
                <p v-else class="cms-field-hint">{{ maxReached }}</p>
@@ -204,12 +205,19 @@
                :disabled="readonly"
                class="cms-editor-inspector"
             >
-               <template v-if="selectedItem && selected !== null">
+               <template v-if="selectedItem && selected">
                   <div class="cms-editor-block-head">
                      <span class="cms-editor-block-icon" aria-hidden="true">
                         <KIcon :name="cmsIcon(selectedBlock?.icon ?? 'rectangle-stack')" />
                      </span>
                      <div class="cms-editor-block-heading">
+                        <KBreadcrumbs
+                           v-if="breadcrumbs.length"
+                           :items="breadcrumbs"
+                           label="Parent blocks"
+                           ancestors
+                           class="cms-editor-crumbs"
+                        />
                         <span class="cms-editor-block-title">
                            <span class="cms-editor-block-label">
                               {{ selectedBlock?.label ?? selectedItem.type }}
@@ -217,7 +225,7 @@
                            <KBadge v-if="isHiddenBlock(selectedItem)" size="sm" label="Hidden" />
                         </span>
                         <span class="cms-editor-block-subtitle">
-                           {{ selectedSummary || `Block ${selected + 1} of ${blocks.length}` }}
+                           {{ selectedSummary || selectedPosition }}
                         </span>
                      </div>
                      <KDropdownMenu :items="blockMenu(selected)" placement="bottom-end">
@@ -243,14 +251,10 @@
                   <div ref="panelBody" class="cms-editor-panel-body">
                      <KFormAlerts />
                      <KFieldMessage
-                        v-if="form.errors[`${fieldKey}.${selected}`]"
-                        :message="form.errors[`${fieldKey}.${selected}`]"
+                        v-if="form.errors[selectedName]"
+                        :message="form.errors[selectedName]"
                      />
-                     <KFieldMessage
-                        v-else
-                        tone="warning"
-                        :message="form.warnings[`${fieldKey}.${selected}`]"
-                     />
+                     <KFieldMessage v-else tone="warning" :message="form.warnings[selectedName]" />
                      <CmsFormSections
                         v-if="selectedBlock"
                         ref="sectionsRef"
@@ -260,7 +264,7 @@
                      >
                         <template #field="{ fieldKey: blockKey }">
                            <KFormField
-                              :name="`${fieldKey}.${selected}.${blockKey}`"
+                              :name="`${selectedName}.${blockKey}`"
                               :label="selectedBlock.fields[blockKey]!.label"
                               :description="selectedBlock.fields[blockKey]!.description"
                               :icon="cmsIcon(fieldIcon(selectedBlock.fields[blockKey]!))"
@@ -268,7 +272,18 @@
                               :data-cms-field="blockKey"
                               :class="{ 'cms-search-focus': highlighted === blockKey }"
                            >
+                              <CmsNestedBlockList
+                                 v-if="selectedBlock.fields[blockKey]!.type === 'blocks'"
+                                 :field="selectedBlock.fields[blockKey]!"
+                                 :items="selectedItem[blockKey]"
+                                 :locale="locale"
+                                 :invalid="(index: number) => childInvalid(blockKey, index)"
+                                 :readonly="readonly"
+                                 @select="(index: number) => selectChild(blockKey, index)"
+                                 @insert="(anchor: HTMLElement) => insertChild(blockKey, anchor)"
+                              />
                               <CmsFieldInput
+                                 v-else
                                  :model-value="selectedItem[blockKey]"
                                  :field="selectedBlock.fields[blockKey]!"
                                  :locale="locale"
@@ -348,8 +363,8 @@
       <CmsBlockPickerPopover
          v-model:open="paletteOpen"
          :anchor="paletteAnchor"
-         :blocks="blocksField.blocks ?? {}"
-         :disabled-reason="canAdd ? undefined : maxReached"
+         :blocks="pickerField?.blocks ?? {}"
+         :disabled-reason="canAddTo(picker.list) ? undefined : maxReachedIn(picker.list)"
          :paste-count="pasteCount"
          :presets="presets"
          @pick="insertFromPalette"
@@ -368,16 +383,36 @@
 </template>
 
 <script setup lang="ts">
-import type { CmsConfig, CmsFormLayout, FieldConfig, MediaItem } from '#nuxt-cms'
+import type { CmsBlockPath, CmsConfig, CmsFormLayout, FieldConfig, MediaItem } from '#nuxt-cms'
 import {
+   blockAt,
    blockFormLayout,
+   blockListAt,
+   blockListPath,
+   blockPathIndex,
+   blockSchemaPath,
+   blocksFieldAt,
    canAddBlock,
+   formatBlockPath,
+   insertBlocks,
+   isBlockListPath,
    isFieldVisible,
    isHiddenBlock,
    isTranslatableField,
+   moveBlock,
+   movedBlockPath,
+   parentBlockPath,
+   pathAfterInsert,
+   pathAfterMove,
+   pathAfterRemove,
+   removeBlock,
+   resolveBlockPath,
    slugSourceValue,
+   updateBlockAt,
+   updateBlockList,
 } from '#nuxt-cms'
 import type {
+   BreadcrumbItem,
    FormIssuePath,
    MenuItems,
    OverlayAnchorTarget,
@@ -385,6 +420,7 @@ import type {
 } from '@xleddyl/443-components-vue'
 import {
    Badge as KBadge,
+   Breadcrumbs as KBreadcrumbs,
    Button as KButton,
    DropdownMenu as KDropdownMenu,
    EmptyState as KEmptyState,
@@ -435,26 +471,24 @@ import type {
 } from '../../../shared/preview'
 import {
    DEFAULT_CMS_PREVIEW_PATH,
-   blockErrorIndexes,
+   blockErrorPaths,
    blockSummary,
    canHideBlock,
+   canMoveBlock,
    clipboardActionApplies,
    collectMediaKeys,
-   duplicateBlock,
+   duplicateBlockAt,
+   editorIssueKeys,
    editorShortcut,
    emptyBlock,
-   insertBlock,
+   firstBlockError,
    isTrustedPreviewEvent,
-   moveBlock,
    parseFrameMessage,
    previewEnvelope,
    previewFieldConfig,
    previewMedia,
-   removeBlock,
-   selectionAfterMove,
-   selectionAfterRemove,
    shortcutApplies,
-   toggleBlockHidden,
+   toggleBlockHiddenAt,
 } from '../../../shared/preview'
 import { translationProgress } from '../../../shared/translations'
 import { useCmsClipboard } from '../../composables/cms-clipboard'
@@ -476,6 +510,7 @@ import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 type EditorPane = 'blocks' | 'preview' | 'fields'
 type EntryTab = 'content' | 'seo'
+type Values = Record<string, unknown>
 
 const SEO_KEYS = ['seoTitle', 'seoDescription', 'seoImage', 'seoNoindex']
 
@@ -510,11 +545,14 @@ const bodyId = `${useId()}-body`
 const locale = ref(i18n.defaultLocale)
 const device = ref<CmsPreviewDevice>('desktop')
 const pane = ref<EditorPane>('preview')
-const selected = ref<number | null>(null)
-const canvasHover = ref<number | null>(null)
+const selected = shallowRef<CmsBlockPath | null>(null)
+const canvasHover = shallowRef<CmsBlockPath | null>(null)
 const canvasWidth = ref<number | null>(null)
 const paletteOpen = ref(false)
-const paletteIndex = ref(0)
+const picker = shallowRef<{ list: CmsBlockPath; index: number }>({
+   list: [props.fieldKey],
+   index: 0,
+})
 const paletteAnchor = shallowRef<OverlayAnchorTarget | null>(null)
 const frame = ref<HTMLIFrameElement | null>(null)
 const frameBox = ref<HTMLElement | null>(null)
@@ -531,6 +569,28 @@ const blocks = computed<CmsBlockValue[]>(() => {
    return Array.isArray(value) ? (value as CmsBlockValue[]) : []
 })
 
+function inField(path: CmsBlockPath | null | undefined): path is CmsBlockPath {
+   return !!path && path[0] === props.fieldKey
+}
+
+function listField(list: CmsBlockPath) {
+   return inField(list) ? blocksFieldAt(props.fields, state.value, list) : null
+}
+
+function listLength(list: CmsBlockPath) {
+   return blockListAt(state.value, list)?.length ?? 0
+}
+
+function canAddTo(list: CmsBlockPath) {
+   const field = listField(list)
+   return !!field && !props.readonly && canAddBlock(field, listLength(list))
+}
+
+function maxReachedIn(list: CmsBlockPath) {
+   const max = listField(list)?.max ?? 0
+   return `This field holds at most ${max} ${max === 1 ? 'block' : 'blocks'}.`
+}
+
 const canAdd = computed(() => canAddBlock(blocksField.value, blocks.value.length))
 
 const blockCount = computed(() => {
@@ -538,24 +598,47 @@ const blockCount = computed(() => {
    return max === undefined ? String(blocks.value.length) : `${blocks.value.length} / ${max}`
 })
 
-const maxReached = computed(() => {
-   const max = blocksField.value.max ?? 0
-   return `This field holds at most ${max} ${max === 1 ? 'block' : 'blocks'}.`
-})
+const maxReached = computed(() => maxReachedIn([props.fieldKey]))
 
-const selectedItem = computed(() =>
-   selected.value === null ? undefined : blocks.value[selected.value]
-)
+function locate(path: CmsBlockPath | null) {
+   return inField(path) ? resolveBlockPath(props.fields, state.value, path) : null
+}
 
-const selectedBlock = computed(() =>
-   selectedItem.value ? blocksField.value.blocks?.[String(selectedItem.value.type)] : undefined
-)
+const selectedLocation = computed(() => locate(selected.value))
+
+const selectedItem = computed(() => selectedLocation.value?.item)
+
+const selectedBlock = computed(() => selectedLocation.value?.block)
+
+const selectedName = computed(() => (selected.value ? formatBlockPath(selected.value) : ''))
 
 const selectedSummary = computed(() =>
    selectedItem.value
       ? blockSummary(selectedBlock.value, selectedItem.value, locale.value, i18n.defaultLocale)
       : ''
 )
+
+const selectedPosition = computed(() => {
+   const path = selected.value
+   if (!path) return ''
+   return `Block ${blockPathIndex(path) + 1} of ${listLength(blockListPath(path))}`
+})
+
+function blockLabelAt(path: CmsBlockPath) {
+   const location = locate(path)
+   return location?.block?.label ?? String(location?.item.type ?? '')
+}
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => {
+   const path = selected.value
+   if (!path) return []
+   const items: BreadcrumbItem[] = []
+   for (let end = 2; end < path.length; end += 2) {
+      const ancestor = path.slice(0, end)
+      items.push({ label: blockLabelAt(ancestor), onClick: () => selectFromTree(ancestor) })
+   }
+   return items
+})
 
 const seoKeys = computed(() => SEO_KEYS.filter((key) => Object.hasOwn(props.fields, key)))
 
@@ -604,7 +687,7 @@ const paneItems = computed(() => [
    {
       value: 'blocks',
       label: 'Blocks',
-      ...errorBadge(blockErrors.value.size + (blocksFieldError.value ? 1 : 0)),
+      ...errorBadge(topLevelErrorCount.value + (blocksFieldError.value ? 1 : 0)),
    },
    { value: 'preview', label: 'Preview' },
    {
@@ -640,7 +723,7 @@ function isBlockFieldShown(key: string) {
 }
 
 const selectedKey = computed(() =>
-   selected.value === null ? '' : `${selected.value}-${String(selectedItem.value?.type)}`
+   selected.value ? `${selectedName.value}-${String(selectedItem.value?.type)}` : ''
 )
 
 const selectedLayout = computed<CmsFormLayout>(() =>
@@ -668,8 +751,24 @@ function setValue(key: string, value: unknown, coalesce?: string, hold = false) 
    state.value = { ...state.value, [key]: value }
 }
 
-function setBlocks(list: CmsBlockValue[]) {
-   setValue(props.fieldKey, list.length ? list : null)
+function commitValues(next: Values, coalesce?: string, hold = false) {
+   if (props.readonly || next === state.value) return false
+   change(coalesce, hold)
+   state.value = next
+   return true
+}
+
+function remapPaths(remap: (path: CmsBlockPath) => CmsBlockPath | null) {
+   if (selected.value) selected.value = remap(selected.value)
+   canvasHover.value = null
+   const target = picker.value
+   if (target.list.length > 1) {
+      const owner = remap(target.list.slice(0, -1))
+      if (!owner) {
+         paletteOpen.value = false
+         picker.value = { list: [props.fieldKey], index: 0 }
+      } else picker.value = { list: [...owner, target.list.at(-1)!], index: target.index }
+   }
 }
 
 function slugSource(field: FieldConfig) {
@@ -677,8 +776,8 @@ function slugSource(field: FieldConfig) {
    return slugSourceValue(props.fields[field.from], state.value[field.from], i18n.defaultLocale)
 }
 
-function select(index: number | null) {
-   selected.value = index
+function select(path: CmsBlockPath | null) {
+   selected.value = inField(path) ? path : null
 }
 
 function showPanel(name: 'tree' | 'inspector') {
@@ -686,59 +785,61 @@ function showPanel(name: 'tree' | 'inspector') {
    else layout.value[name].collapsed = false
 }
 
-function selectFromTree(index: number) {
-   select(index)
-   post({ type: 'reveal', index })
+function selectFromTree(path: CmsBlockPath) {
+   select(locate(path) ? path : null)
+   if (selected.value) post({ type: 'reveal', path: selected.value })
    if (compact.value) pane.value = 'fields'
 }
 
-function highlight(index: number | null) {
-   post({ type: 'highlight', index })
+function highlight(path: CmsBlockPath | null) {
+   post({ type: 'highlight', path })
 }
 
-function blockConfigAt(index: number) {
-   return blocksField.value.blocks?.[String(blocks.value[index]?.type)]
-}
-
-function insert(index: number, type: string) {
-   const block = blocksField.value.blocks?.[type]
-   if (!block || !canAdd.value) return
-   const at = Math.min(Math.max(index, 0), blocks.value.length)
-   setBlocks(insertBlock(blocks.value, at, emptyBlock(type, block)))
-   select(at)
+function insert(list: CmsBlockPath, index: number, type: string) {
+   const field = listField(list)
+   const block = field?.blocks?.[type]
+   if (!block || !canAddTo(list)) return
+   const at = Math.min(Math.max(index, 0), listLength(list))
+   if (!commitValues(insertBlocks(state.value, list, at, [emptyBlock(type, block)]))) return
+   remapPaths((path) => pathAfterInsert(path, list, at))
+   select([...list, at])
 }
 
 function insertFromPalette(type: string) {
    paletteOpen.value = false
-   insert(paletteIndex.value, type)
+   insert(picker.value.list, picker.value.index, type)
 }
 
 function pasteFromPalette() {
    paletteOpen.value = false
-   void paste(paletteIndex.value, null)
+   void paste(picker.value.list, picker.value.index, null)
 }
 
-function openPalette(index: number, anchor: OverlayAnchorTarget | null = null) {
-   if (props.readonly || !canAdd.value) return
-   paletteIndex.value = index
-   paletteAnchor.value = anchor ?? canvasAnchor(index) ?? focusedElement() ?? frame.value
+function openPalette(list: CmsBlockPath, index: number, anchor: OverlayAnchorTarget | null = null) {
+   if (props.readonly || !canAddTo(list)) return
+   picker.value = { list, index }
+   presetList.value = list
+   paletteAnchor.value = anchor ?? canvasAnchor([...list, index]) ?? focusedElement() ?? frame.value
    paletteOpen.value = true
 }
 
-function insertButton(index: number) {
+const pickerField = computed(() => listField(picker.value.list))
+
+function insertButton(path: CmsBlockPath) {
    let element: HTMLElement | null = null
    try {
       element =
-         frame.value?.contentDocument?.querySelector<HTMLElement>(`[data-cms-insert="${index}"]`) ??
-         null
+         frame.value?.contentDocument?.querySelector<HTMLElement>(
+            `[data-cms-insert="${formatBlockPath(path)}"]`
+         ) ?? null
    } catch {
       return null
    }
    return element?.getClientRects().length ? element : null
 }
 
-function canvasAnchor(index: number): OverlayVirtualAnchor | null {
-   const element = insertButton(index)
+function canvasAnchor(path: CmsBlockPath): OverlayVirtualAnchor | null {
+   const element = insertButton(path)
    const host = frame.value
    if (!element || !host) return null
    let last = new DOMRect()
@@ -763,72 +864,104 @@ function focusedElement() {
    return element instanceof HTMLElement && element !== document.body ? element : null
 }
 
-function move(from: number, to: number) {
-   if (to < 0 || to >= blocks.value.length || from === to) return
-   setBlocks(moveBlock(blocks.value, from, to))
-   selected.value = selectionAfterMove(selected.value, from, to)
+function move(from: CmsBlockPath, toList: CmsBlockPath, toIndex: number) {
+   if (!inField(from) || !inField(toList) || !isBlockListPath(toList)) return false
+   if (!canMoveBlock(props.fields, state.value, from, toList)) return false
+   if (!commitValues(moveBlock(state.value, from, toList, toIndex))) return false
+   remapPaths((path) => pathAfterMove(path, from, toList, toIndex))
+   return true
 }
 
-function moveSelected(delta: number) {
-   if (selected.value === null) return
-   move(selected.value, selected.value + delta)
+function moveBy(path: CmsBlockPath, delta: number) {
+   const index = blockPathIndex(path)
+   const target = index + delta
+   if (target < 0 || target >= listLength(blockListPath(path))) return
+   move(path, blockListPath(path), delta > 0 ? target + 1 : target)
 }
 
-function duplicate(index: number) {
-   if (!canAdd.value) return
-   setBlocks(duplicateBlock(blocks.value, index))
-   select(index + 1)
+function duplicate(path: CmsBlockPath) {
+   const list = blockListPath(path)
+   if (!canAddTo(list) || !commitValues(duplicateBlockAt(state.value, path))) return
+   const at = blockPathIndex(path) + 1
+   remapPaths((current) => pathAfterInsert(current, list, at))
+   select([...list, at])
 }
 
-function toggleHidden(index: number) {
-   setBlocks(toggleBlockHidden(blocks.value, index, blockConfigAt(index)))
+function toggleHidden(path: CmsBlockPath) {
+   commitValues(toggleBlockHiddenAt(state.value, path, locate(path)?.block))
 }
 
-function remove(index: number) {
-   if (!blocks.value[index]) return
-   setBlocks(removeBlock(blocks.value, index))
-   selected.value = selectionAfterRemove(selected.value, index)
+function remove(path: CmsBlockPath) {
+   if (!locate(path) || !commitValues(removeBlock(state.value, path))) return
+   remapPaths((current) => pathAfterRemove(current, path))
+}
+
+function selectChild(key: string, index: number) {
+   if (selected.value) selectFromTree([...selected.value, key, index])
+}
+
+function insertChild(key: string, anchor: HTMLElement) {
+   if (!selected.value) return
+   const list = [...selected.value, key]
+   openPalette(list, listLength(list), anchor)
+}
+
+function childInvalid(key: string, index: number) {
+   return blockErrors.value.has(`${selectedName.value}.${key}.${index}`)
 }
 
 const clipboard = useCmsClipboard()
 
-const pasteCount = computed(() => pasteableCount(clipboard.items.value, blocksField.value))
+const pasteCount = computed(() =>
+   pickerField.value ? pasteableCount(clipboard.items.value, pickerField.value) : 0
+)
 
-function copy(index: number, event?: ClipboardEvent) {
-   const item = blocks.value[index]
+function copy(path: CmsBlockPath, event?: ClipboardEvent) {
+   const item = locate(path)?.item
    if (!item) return
    clipboard.copy([item], event)
    clipboard.notify(copyNotice(1))
 }
 
-function cut(index: number, event?: ClipboardEvent) {
-   const item = blocks.value[index]
+function cut(path: CmsBlockPath, event?: ClipboardEvent) {
+   const item = locate(path)?.item
    if (!item || props.readonly) return
    clipboard.copy([item], event)
-   remove(index)
+   remove(path)
    clipboard.notify(copyNotice(1, true))
 }
 
-function insertItems(index: number, items: readonly CmsBlockValue[]) {
-   const result = pasteBlocks(blocks.value, index, items, blocksField.value, i18n)
-   if (result.pasted) {
-      setBlocks(result.list)
-      select(result.at)
-      post({ type: 'reveal', index: result.at })
+function insertItems(list: CmsBlockPath, index: number, items: readonly CmsBlockValue[]) {
+   const field = listField(list)
+   if (!field) return null
+   const current = (blockListAt(state.value, list) ?? []) as CmsBlockValue[]
+   const result = pasteBlocks(current, index, items, field, i18n)
+   if (result.pasted && commitValues(updateBlockList(state.value, list, () => result.list))) {
+      remapPaths((path) => pathAfterInsert(path, list, result.at, result.pasted))
+      select([...list, result.at])
+      if (selected.value) post({ type: 'reveal', path: selected.value })
    }
    return result
 }
 
-async function paste(index: number, text?: string | null) {
-   if (props.readonly) return
+async function paste(list: CmsBlockPath, index: number, text?: string | null) {
+   const field = listField(list)
+   if (props.readonly || !field) return
    const items = await clipboard.read(text)
-   const result = items ? insertItems(index, items) : null
-   clipboard.notify(pasteNotice(result, blocksField.value))
+   const result = items ? insertItems(list, index, items) : null
+   clipboard.notify(pasteNotice(result, field))
 }
 
 const { can } = useCmsPermissions()
 
 const presetsAllowed = computed(() => !props.readonly && can(`${props.entryName}.update`))
+
+const presetList = shallowRef<CmsBlockPath>([props.fieldKey])
+
+const presetFieldKey = computed(() => {
+   const list = presetList.value
+   return inField(list) ? blockSchemaPath(props.fields, state.value, list)?.join('.') : undefined
+})
 
 const {
    presets,
@@ -836,25 +969,28 @@ const {
    create: createPreset,
 } = useCmsPresets(
    () => (presetsAllowed.value ? props.entryName : undefined),
-   () => props.fieldKey
+   () => presetFieldKey.value
 )
 
 const presetOpen = ref(false)
 const presetItems = ref<CmsBlockValue[]>([])
+const presetField = shallowRef<FieldConfig | null>(null)
 
 const presetHint = computed(() => {
    const types = presetItems.value.map(
-      (item) => blocksField.value.blocks?.[String(item.type)]?.label ?? String(item.type)
+      (item) => presetField.value?.blocks?.[String(item.type)]?.label ?? String(item.type)
    )
    return `A copy of ${types.join(
       ', '
    )}. Insert it from the block picker of any field with the same blocks.`
 })
 
-function openPresetSave(index: number) {
-   const item = blocks.value[index]
-   if (!item) return
-   presetItems.value = [JSON.parse(JSON.stringify(item)) as CmsBlockValue]
+function openPresetSave(path: CmsBlockPath) {
+   const location = locate(path)
+   if (!location) return
+   presetList.value = blockListPath(path)
+   presetField.value = location.field
+   presetItems.value = [JSON.parse(JSON.stringify(location.item)) as CmsBlockValue]
    presetOpen.value = true
 }
 
@@ -866,49 +1002,71 @@ async function savePreset(details: CmsPresetDetails) {
 function insertPresetFromPalette(id: string) {
    paletteOpen.value = false
    const preset = presets.value.find((candidate) => candidate.id === id)
-   if (!preset || !canAdd.value) return
-   const result = insertItems(paletteIndex.value, preset.items)
-   clipboard.notify(presetInsertNotice(result, blocksField.value, preset))
+   const { list, index } = picker.value
+   const field = listField(list)
+   if (!preset || !field || !canAddTo(list)) return
+   const result = insertItems(list, index, preset.items)
+   if (result) clipboard.notify(presetInsertNotice(result, field, preset))
 }
 
 watch(paletteOpen, (open) => {
    if (open) void loadPresets()
 })
 
+function selectedPath() {
+   return selected.value && locate(selected.value) ? selected.value : null
+}
+
+function after(path: CmsBlockPath | null): [CmsBlockPath, number] {
+   return path
+      ? [blockListPath(path), blockPathIndex(path) + 1]
+      : [[props.fieldKey], blocks.value.length]
+}
+
 function onClipboard(event: ClipboardEvent) {
    if (event.defaultPrevented || paletteOpen.value) return
    if (isInForeignOverlay(event.target, root.value)) return
    const action = event.type as CmsClipboardAction
    if (props.readonly && action !== 'copy') return
-   const index = selected.value
-   if (!clipboardActionApplies(action, clipboardTarget(event, index !== null))) return
+   const path = selectedPath()
+   if (!clipboardActionApplies(action, clipboardTarget(event, path !== null))) return
    if (action === 'paste') {
       event.preventDefault()
-      void paste(
-         index === null ? blocks.value.length : index + 1,
-         event.clipboardData?.getData('text/plain') ?? null
-      )
-   } else if (index !== null) {
-      if (action === 'copy') copy(index, event)
-      else cut(index, event)
+      void paste(...after(path), event.clipboardData?.getData('text/plain') ?? null)
+   } else if (path) {
+      if (action === 'copy') copy(path, event)
+      else cut(path, event)
    }
 }
 
-function copyMenuItem(index: number) {
+function copyMenuItem(path: CmsBlockPath) {
    return {
       label: 'Copy',
       icon: cmsIcon('clipboard-document'),
       shortcut: 'mod+c',
-      onSelect: () => copy(index),
+      onSelect: () => copy(path),
    }
 }
 
-function blockMenu(index: number): MenuItems {
-   const item = blocks.value[index]
-   if (!item) return []
-   if (props.readonly) return [[copyMenuItem(index)]]
-   const full = canAdd.value ? undefined : maxReached.value
-   const hidden = isHiddenBlock(item)
+function nestedLists(path: CmsBlockPath) {
+   const location = locate(path)
+   const fields = location?.block?.fields ?? {}
+   return Object.entries(fields)
+      .filter(
+         ([, field]) => field.type === 'blocks' && isFieldVisible(field, location!.item, fields)
+      )
+      .map(([key, field]) => ({ key, label: field.label, list: [...path, key] }))
+}
+
+function blockMenu(path: CmsBlockPath): MenuItems {
+   const location = locate(path)
+   if (!location) return []
+   if (props.readonly) return [[copyMenuItem(path)]]
+   const list = blockListPath(path)
+   const index = blockPathIndex(path)
+   const full = canAddTo(list) ? undefined : maxReachedIn(list)
+   const hidden = isHiddenBlock(location.item)
+   const length = listLength(list)
    return [
       [
          {
@@ -916,53 +1074,63 @@ function blockMenu(index: number): MenuItems {
             icon: cmsIcon('bars-arrow-up'),
             disabled: !!full,
             disabledReason: full,
-            onSelect: () => openPalette(index),
+            onSelect: () => openPalette(list, index),
          },
          {
             label: 'Add a block after',
             icon: cmsIcon('bars-arrow-down'),
             disabled: !!full,
             disabledReason: full,
-            onSelect: () => openPalette(index + 1),
+            onSelect: () => openPalette(list, index + 1),
          },
+         ...nestedLists(path).map((nested) => {
+            const reason = canAddTo(nested.list) ? undefined : maxReachedIn(nested.list)
+            return {
+               label: `Add to ${nested.label}`,
+               icon: cmsIcon('plus'),
+               disabled: !!reason,
+               disabledReason: reason,
+               onSelect: () => openPalette(nested.list, listLength(nested.list)),
+            }
+         }),
       ],
       [
          {
             label: 'Move up',
             icon: cmsIcon('arrow-up'),
             disabled: index === 0,
-            onSelect: () => move(index, index - 1),
+            onSelect: () => moveBy(path, -1),
          },
          {
             label: 'Move down',
             icon: cmsIcon('arrow-down'),
-            disabled: index === blocks.value.length - 1,
-            onSelect: () => move(index, index + 1),
+            disabled: index === length - 1,
+            onSelect: () => moveBy(path, 1),
          },
          {
             label: 'Duplicate',
             icon: cmsIcon('document-duplicate'),
             disabled: !!full,
             disabledReason: full,
-            onSelect: () => duplicate(index),
+            onSelect: () => duplicate(path),
          },
-         ...(canHideBlock(blockConfigAt(index))
+         ...(canHideBlock(location.block)
             ? [
                  {
                     label: hidden ? 'Show' : 'Hide',
                     icon: cmsIcon(hidden ? 'eye' : 'eye-slash'),
-                    onSelect: () => toggleHidden(index),
+                    onSelect: () => toggleHidden(path),
                  },
               ]
             : []),
       ],
       [
-         copyMenuItem(index),
+         copyMenuItem(path),
          {
             label: 'Cut',
             icon: cmsIcon('scissors'),
             shortcut: 'mod+x',
-            onSelect: () => cut(index),
+            onSelect: () => cut(path),
          },
          {
             label: 'Paste after',
@@ -970,14 +1138,14 @@ function blockMenu(index: number): MenuItems {
             shortcut: 'mod+v',
             disabled: !!full,
             disabledReason: full,
-            onSelect: () => void paste(index + 1),
+            onSelect: () => void paste(list, index + 1),
          },
          ...(presetsAllowed.value
             ? [
                  {
                     label: 'Save as preset',
                     icon: cmsIcon(CMS_PRESET_ICON),
-                    onSelect: () => openPresetSave(index),
+                    onSelect: () => openPresetSave(path),
                  },
               ]
             : []),
@@ -987,26 +1155,27 @@ function blockMenu(index: number): MenuItems {
             label: 'Delete',
             icon: cmsIcon('trash'),
             tone: 'danger' as const,
-            onSelect: () => remove(index),
+            onSelect: () => remove(path),
          },
       ],
    ]
 }
 
 function updateBlockField(key: string, value: unknown) {
-   const index = selected.value
-   const current = index === null ? undefined : blocks.value[index]
-   if (index === null || !current) return
-   const list = blocks.value.map((item, i) => (i === index ? { ...current, [key]: value } : item))
-   setValue(props.fieldKey, list.length ? list : null, `${props.fieldKey}.${index}.${key}`)
+   const path = selectedPath()
+   if (!path) return
+   commitValues(
+      updateBlockAt(state.value, path, (item) => ({ ...item, [key]: value })),
+      `${formatBlockPath(path)}.${key}`
+   )
 }
 
-const { canUndo, canRedo, change, release, undo, redo } = useCmsHistory({
+const { canUndo, canRedo, change, release, undo, redo } = useCmsHistory<CmsBlockPath | null>({
    state: () => state.value,
    selected: () => selected.value,
-   restore: (values, index) => {
+   restore: (values, path) => {
       state.value = values
-      if (index !== selected.value) select(index)
+      select(path)
    },
    omit: props.content ? ['status'] : [],
 })
@@ -1015,36 +1184,38 @@ function runShortcut(event: KeyboardEvent) {
    if (event.defaultPrevented || event.isComposing || paletteOpen.value) return
    if (isInForeignOverlay(event.target, root.value)) return
    const action = editorShortcut(event, onApplePlatform())
-   const index = selected.value
-   if (!action || !shortcutApplies(action, shortcutTarget(event, index !== null))) return
+   const path = selectedPath()
+   if (!action || !shortcutApplies(action, shortcutTarget(event, path !== null))) return
    if (props.readonly && action !== 'deselect') return
    event.preventDefault()
    if (action === 'undo') undo()
    else if (action === 'redo') redo()
    else if (action === 'save') emit('save')
-   else if (index !== null) runBlockShortcut(action, index)
+   else if (path) runBlockShortcut(action, path)
 }
 
-function runBlockShortcut(action: CmsEditorShortcut, index: number) {
+function runBlockShortcut(action: CmsEditorShortcut, path: CmsBlockPath) {
+   const list = blockListPath(path)
+   const index = blockPathIndex(path)
    switch (action) {
       case 'remove':
-         remove(index)
+         remove(path)
          break
       case 'duplicate':
-         duplicate(index)
+         duplicate(path)
          break
       case 'move-up':
       case 'move-down':
-         moveSelected(action === 'move-up' ? -1 : 1)
+         moveBy(path, action === 'move-up' ? -1 : 1)
          break
       case 'insert-after':
-         openPalette(index + 1)
+         openPalette(list, index + 1)
          break
       case 'insert-before':
-         openPalette(index)
+         openPalette(list, index)
          break
       case 'deselect':
-         select(null)
+         select(parentBlockPath(path))
          break
    }
 }
@@ -1058,6 +1229,8 @@ const media = computed(() =>
    )
 )
 
+const blocksFields = computed(() => ({ [props.fieldKey]: blocksField.value }))
+
 const previewState = computed<CmsPreviewState>(() => ({
    entry: props.entryName,
    field: props.fieldKey,
@@ -1070,8 +1243,8 @@ const previewState = computed<CmsPreviewState>(() => ({
    lockedFields: lockedInlineFields({
       fields: props.content ? props.fields : null,
       values: state.value,
-      blocksField: blocksField.value,
-      blocks: blocks.value,
+      blocksFields: blocksFields.value,
+      blocksValues: state.value,
       locked: props.locked,
    }),
 }))
@@ -1081,12 +1254,12 @@ const READONLY_FRAME_MESSAGES = new Set(['ready', 'select', 'hover', 'copy', 'fo
 function post(message: CmsPreviewHostMessage) {
    const target = frame.value?.contentWindow
    if (!target) return
-   target.postMessage(previewEnvelope(message), window.location.origin)
+   const plain = JSON.parse(JSON.stringify(message)) as CmsPreviewHostMessage
+   target.postMessage(previewEnvelope(plain), window.location.origin)
 }
 
 function sendState() {
-   const snapshot = JSON.parse(JSON.stringify(previewState.value)) as CmsPreviewState
-   post({ type: 'render', state: snapshot })
+   post({ type: 'render', state: previewState.value })
 }
 
 watch(previewState, sendState, { deep: true })
@@ -1104,38 +1277,51 @@ function onFrameMessage(message: CmsPreviewFrameMessage) {
          break
       case 'select':
          paletteOpen.value = false
-         select(message.index)
+         select(locate(message.path) ? message.path : null)
          break
       case 'hover':
-         canvasHover.value = message.index
+         canvasHover.value = inField(message.path) ? message.path : null
          break
       case 'insert':
-         openPalette(message.index, insertButton(message.index))
+         if (inField(message.path))
+            openPalette(
+               blockListPath(message.path),
+               blockPathIndex(message.path),
+               insertButton(message.path)
+            )
          break
-      case 'move':
-         move(message.from, message.to)
-         select(message.to)
+      case 'move': {
+         const list = blockListPath(message.to)
+         const index = blockPathIndex(message.to)
+         const target = movedBlockPath(message.from, list, index)
+         if (move(message.from, list, index) && target) select(target)
          break
+      }
       case 'duplicate':
-         duplicate(message.index)
+         if (inField(message.path)) duplicate(message.path)
          break
       case 'toggle-hidden':
-         toggleHidden(message.index)
+         if (inField(message.path)) toggleHidden(message.path)
          break
       case 'remove':
-         remove(message.index)
+         if (inField(message.path)) remove(message.path)
          break
       case 'copy':
-         copy(message.index)
+         if (inField(message.path)) copy(message.path)
          break
       case 'cut':
-         cut(message.index)
+         if (inField(message.path)) cut(message.path)
          break
       case 'paste':
-         void paste(message.index, message.text ?? null)
+         if (inField(message.path))
+            void paste(
+               blockListPath(message.path),
+               blockPathIndex(message.path),
+               message.text ?? null
+            )
          break
       case 'focus-field':
-         focusField(message.index, message.key)
+         focusField(message.path, message.key)
          break
       case 'field-input':
          inlineInput(message)
@@ -1169,14 +1355,14 @@ async function loadLibrary() {
 
 const { highlighted, reveal } = useCmsFieldFocus()
 
-function revealBlock(index: number | null) {
-   select(index)
-   if (index === null) {
+function revealBlock(path: CmsBlockPath | null) {
+   select(path)
+   if (!selected.value) {
       showPanel('tree')
       return
    }
    showPanel('inspector')
-   post({ type: 'reveal', index })
+   post({ type: 'reveal', path: selected.value })
 }
 
 function revealField(key: string) {
@@ -1185,31 +1371,33 @@ function revealField(key: string) {
    showPanel('inspector')
 }
 
-function fieldAt(index: number | null, key: string) {
+function fieldAt(path: CmsBlockPath | null, key: string) {
+   if (path && !inField(path)) return undefined
    return previewFieldConfig(
-      { index, key, blockType: index === null ? null : String(blocks.value[index]?.type) },
-      blocksField.value,
+      { path, key },
+      blocksFields.value,
+      state.value,
       props.content ? props.fields : null,
       props.fieldKey
    )
 }
 
-function focusField(index: number | null, key: string) {
-   if (index !== null && index >= blocks.value.length) return
-   if (!fieldAt(index, key)) return
-   select(index)
-   if (index === null) activeTab.value = tabOfKey(key) === 'seo' ? 'seo' : 'content'
+function focusField(path: CmsBlockPath | null, key: string) {
+   if (!fieldAt(path, key)) return
+   select(path)
+   if (!path) activeTab.value = tabOfKey(key) === 'seo' ? 'seo' : 'content'
    if (!compact.value) layout.value.inspector.collapsed = false
    revealInPanel(key)
 }
 
 function inlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-input' }>) {
-   const { index, key, locale: code } = message
-   const field = fieldAt(index, key)
+   const { path, key, locale: code } = message
+   const field = fieldAt(path, key)
    if (props.readonly || !isInlineTextField(field)) return
-   if (previewState.value.lockedFields.includes(inlineFieldPath(index, key))) return
+   if (previewState.value.lockedFields.includes(inlineFieldPath(path, key))) return
    if (isTranslatableField(field) && !i18n.locales.includes(code)) return
-   const item = index === null ? undefined : blocks.value[index]
+   const item = path ? blockAt(state.value, path) : null
+   if (path && !item) return
    const text = clampInlineText(
       normalizeInlineText(message.value, !!field.textarea),
       inlineTextLimit(field)
@@ -1221,12 +1409,11 @@ function inlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-inp
       i18n.defaultLocale,
       text
    )
-   const coalesce = `inline:${index ?? ''}.${key}`
-   if (!item) setValue(key, value, coalesce, true)
+   const coalesce = `inline:${path ? formatBlockPath(path) : ''}.${key}`
+   if (!path) setValue(key, value, coalesce, true)
    else
-      setValue(
-         props.fieldKey,
-         blocks.value.map((current, i) => (i === index ? { ...item, [key]: value } : current)),
+      commitValues(
+         updateBlockAt(state.value, path, (current) => ({ ...current, [key]: value })),
          coalesce,
          true
       )
@@ -1238,8 +1425,8 @@ function applyFocus(focus: CmsSearchFocus) {
    const key = focus.field
    if (!key || !Object.hasOwn(props.fields, key)) return
    if (key === props.fieldKey) {
-      const index = focus.block != null && focus.block < blocks.value.length ? focus.block : null
-      revealBlock(index)
+      const path = focus.blockPath ?? (focus.block != null ? [key, focus.block] : null)
+      revealBlock(locate(path) ? path : null)
       return
    }
    revealField(key)
@@ -1296,15 +1483,7 @@ const schema = computed(() =>
 )
 
 function issueKey(path: FormIssuePath): string[] {
-   const [key, index, blockKey] = path
-   const keys = [String(key)]
-   if (String(key) === props.fieldKey && typeof index === 'number')
-      keys.push(
-         blockKey === undefined
-            ? `${String(key)}.${index}`
-            : `${String(key)}.${index}.${String(blockKey)}`
-      )
-   return keys
+   return editorIssueKeys(props.fields, state.value, path, props.fieldKey)
 }
 
 const form = useForm({
@@ -1315,7 +1494,11 @@ const form = useForm({
    issueKey,
 })
 
-const blockErrors = computed(() => blockErrorIndexes(form.errors, props.fieldKey))
+const blockErrors = computed(() => blockErrorPaths(form.errors, props.fieldKey))
+
+const topLevelErrorCount = computed(
+   () => [...blockErrors.value].filter((path) => path.split('.').length === 2).length
+)
 
 const blocksFieldError = computed(() =>
    blockErrors.value.size ? undefined : form.errors[props.fieldKey]
@@ -1336,33 +1519,20 @@ function tabErrorCount(tab: string) {
    return keys.size
 }
 
-function firstError() {
+function revealFirstError() {
    const keys = Object.keys(form.errors).filter((key) => form.errors[key])
    const name = Object.keys(props.fields).find((field) =>
       keys.some((key) => key === field || key.startsWith(`${field}.`))
    )
-   if (!name) return undefined
-   const indexes = keys
-      .filter((key) => key.startsWith(`${name}.`))
-      .map((key) => Number(key.split('.')[1]))
-      .filter(Number.isInteger)
-   const index = indexes.length ? Math.min(...indexes) : null
-   const blockKey = keys
-      .find((key) => index !== null && key.startsWith(`${name}.${index}.`))
-      ?.split('.')[2]
-   return { name, index, blockKey }
-}
-
-function revealFirstError() {
-   const first = firstError()
-   if (!first) return
-   const field = props.fields[first.name]
-   if (first.name === props.fieldKey) {
-      revealBlock(first.index)
-      if (first.blockKey) expandSection(first.blockKey)
+   if (!name) return
+   const field = props.fields[name]
+   if (name === props.fieldKey) {
+      const first = firstBlockError(form.errors, props.fieldKey)
+      revealBlock(first?.path ?? null)
+      if (first?.key) revealInPanel(first.key)
    } else if (field) {
-      revealField(first.name)
-      expandSection(first.name)
+      revealField(name)
+      expandSection(name)
       if (isTranslatableField(field)) locale.value = i18n.defaultLocale
    }
 }
@@ -1381,12 +1551,9 @@ function setIssues(issues: CmsResponseIssue[]) {
    revealFirstError()
 }
 
-watch(
-   () => blocks.value.length,
-   (length) => {
-      if (selected.value !== null && selected.value >= length) selected.value = null
-   }
-)
+watch(state, (values) => {
+   if (selected.value && !blockAt(values, selected.value)) selected.value = null
+})
 
 function applyChange(values: Record<string, unknown>) {
    if (props.readonly) return

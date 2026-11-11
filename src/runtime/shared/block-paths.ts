@@ -260,6 +260,62 @@ export function removeBlock(values: Values, itemPath: CmsBlockPath): Values {
    )
 }
 
+export function pathAfterRemove(path: CmsBlockPath, removed: CmsBlockPath): CmsBlockPath | null {
+   const list = blockListPath(removed)
+   const index = blockPathIndex(removed)
+   if (path.length <= list.length || !blockPathStartsWith(path, list)) return path
+   const position = path[list.length] as number
+   if (position === index) return null
+   if (position < index) return path
+   const next = [...path]
+   next[list.length] = position - 1
+   return next
+}
+
+export function pathAfterInsert(
+   path: CmsBlockPath,
+   listPath: CmsBlockPath,
+   index: number,
+   count = 1
+): CmsBlockPath {
+   if (path.length <= listPath.length || !blockPathStartsWith(path, listPath)) return path
+   const position = path[listPath.length] as number
+   if (position < index) return path
+   const next = [...path]
+   next[listPath.length] = position + count
+   return next
+}
+
+export function movedBlockPath(
+   from: CmsBlockPath,
+   toList: CmsBlockPath,
+   toIndex: number
+): CmsBlockPath | null {
+   if (!isBlockItemPath(from) || !isBlockListPath(toList)) return null
+   if (blockPathStartsWith(toList, from)) return null
+   const fromList = blockListPath(from)
+   const fromIndex = blockPathIndex(from)
+   const target = pathAfterRemove(toList, from)
+   if (!target) return null
+   const sameList = sameBlockPath(fromList, toList)
+   const index = Math.max(sameList && toIndex > fromIndex ? toIndex - 1 : toIndex, 0)
+   if (sameList && index === fromIndex) return null
+   return [...target, index]
+}
+
+export function pathAfterMove(
+   path: CmsBlockPath,
+   from: CmsBlockPath,
+   toList: CmsBlockPath,
+   toIndex: number
+): CmsBlockPath {
+   const moved = movedBlockPath(from, toList, toIndex)
+   if (!moved) return path
+   if (blockPathStartsWith(path, from)) return [...moved, ...path.slice(from.length)]
+   const removed = pathAfterRemove(path, from) ?? path
+   return pathAfterInsert(removed, blockListPath(moved), blockPathIndex(moved))
+}
+
 export function moveBlock(
    values: Values,
    from: CmsBlockPath,
@@ -267,20 +323,12 @@ export function moveBlock(
    toIndex: number
 ): Values {
    const item = blockAt(values, from)
-   if (!item || !isBlockListPath(toList) || blockPathStartsWith(toList, from)) return values
-   const fromList = blockListPath(from)
-   const fromIndex = blockPathIndex(from)
-   const target = [...toList]
-   const shared = fromList.length < target.length && blockPathStartsWith(target, fromList)
-   if (shared && (target[fromList.length] as number) > fromIndex) {
-      target[fromList.length] = (target[fromList.length] as number) - 1
-   }
-   const sameList = sameBlockPath(fromList, toList)
-   const index = sameList && toIndex > fromIndex ? toIndex - 1 : toIndex
-   if (sameList && index === fromIndex) return values
+   const moved = item ? movedBlockPath(from, toList, toIndex) : null
+   if (!item || !moved) return values
+   const target = blockListPath(moved)
    const removed = removeBlock(values, from)
    if (target.length > 1 && !blockAt(removed, target.slice(0, -1))) return values
-   return insertBlocks(removed, target, index, [item])
+   return insertBlocks(removed, target, blockPathIndex(moved), [item])
 }
 
 export interface CmsBlockVisit {

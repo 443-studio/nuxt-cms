@@ -37,6 +37,30 @@ describe('editor history', () => {
       vi.useRealTimers()
    })
 
+   it('restores a nested block path as the selection', () => {
+      const state = { value: { body: [{ type: 'columns', items: [] }] } as Record<string, unknown> }
+      const selected = { value: null as readonly (string | number)[] | null }
+      const history = createCmsHistory<readonly (string | number)[] | null>({
+         state: () => state.value,
+         selected: () => selected.value,
+         restore: (values, path) => {
+            state.value = values
+            selected.value = path
+         },
+      })
+      selected.value = ['body', 0]
+      history.change()
+      state.value = { body: [{ type: 'columns', items: [{ type: 'text' }] }] }
+      selected.value = ['body', 0, 'items', 0]
+      history.observe()
+      selected.value = null
+      expect(history.undo()).toBe(true)
+      expect(selected.value).toEqual(['body', 0])
+      expect(history.redo()).toBe(true)
+      expect(selected.value).toEqual(['body', 0, 'items', 0])
+      expect(state.value).toEqual({ body: [{ type: 'columns', items: [{ type: 'text' }] }] })
+   })
+
    it('starts clean', () => {
       const { history } = setup({ title: 'a' })
       expect(history.canUndo()).toBe(false)
