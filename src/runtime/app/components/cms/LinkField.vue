@@ -28,10 +28,7 @@
             :placeholder="field.placeholder ?? 'https://, /path, mailto:, tel: or #anchor'"
          />
       </div>
-      <p v-if="warning" class="cms-link-warning">
-         <KIcon :name="cmsIcon('exclamation-triangle')" />
-         <span>{{ warning }}</span>
-      </p>
+      <KFieldMessage v-if="warning" tone="warning" :message="warning" />
       <KFieldBoundary auxiliary>
          <div class="cms-link-extra">
             <KInput
@@ -65,7 +62,7 @@ import type { ComboboxOption, SegmentedOption } from '@xleddyl/443-components-vu
 import {
    Combobox as KCombobox,
    FieldBoundary as KFieldBoundary,
-   Icon as KIcon,
+   FieldMessage as KFieldMessage,
    Input as KInput,
    SegmentedControl as KSegmentedControl,
    Switch as KSwitch,
@@ -76,7 +73,7 @@ import cmsConfig from '#cms-config'
 import { useCmsLinkTargets } from '../../composables/cms-link-targets'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { cmsIcon, errorMessage } from '../../utils/ui'
+import { errorMessage } from '../../utils/ui'
 
 type Mode = 'internal' | 'external'
 type Row = Record<string, unknown>

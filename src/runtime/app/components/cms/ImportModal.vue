@@ -1,32 +1,18 @@
 <template>
-   <KModal v-model:open="open" :title="`Import ${config.label}`" size="lg">
+   <KModal v-model:open="open" :title="`Import ${config.label}`" :description="intro" size="lg">
       <KStack gap="md">
-         <p class="cms-settings-hint">
-            {{ csv ? 'A JSON or CSV file' : 'A JSON file' }} in the format of the export, up to
-            {{ maxSize }} and {{ IMPORT_MAX_ROWS }} rows. Media fields take keys of files that are
-            already in the media library. Nothing is written until you confirm.
-         </p>
-
-         <KStack direction="row" gap="sm" wrap>
-            <input
-               ref="input"
-               type="file"
-               hidden
-               :accept="csv ? '.json,.csv,application/json,text/csv' : '.json,application/json'"
-               @change="onFile"
-            />
-            <KButton
-               :label="file ? 'Choose another file' : 'Choose file'"
-               :icon="cmsIcon('document-arrow-up')"
-               variant="soft"
-               tone="neutral"
-               :disabled="busy"
-               @click="input?.click()"
-            />
-            <span v-if="file" class="cms-import-file-name">
-               {{ file.name }} · {{ formatFileSize(file.size) }}
-            </span>
-         </KStack>
+         <KFileInput
+            :model-value="file"
+            :accept="csv ? '.json,.csv,application/json,text/csv' : '.json,application/json'"
+            :icon="cmsIcon('document-arrow-up')"
+            :title="file ? 'Choose another file' : 'Choose a file'"
+            :disabled="busy"
+            :previews="false"
+            size="sm"
+            list
+            aria-label="Import file"
+            @update:model-value="onFile"
+         />
 
          <KFormField
             v-if="canUpsert"
@@ -82,10 +68,7 @@
                         {{ issue.path ? `${issue.path}: ` : '' }}{{ issue.message }}
                      </li>
                   </ul>
-                  <span v-else class="cms-import-ok">
-                     <KIcon name="check" />
-                     Ready
-                  </span>
+                  <KBadge v-else label="Ready" tone="success" icon="check" size="sm" />
                </template>
             </KTable>
          </template>
@@ -113,8 +96,8 @@ import {
    Alert as KAlert,
    Badge as KBadge,
    Button as KButton,
+   FileInput as KFileInput,
    FormField as KFormField,
-   Icon as KIcon,
    Modal as KModal,
    SegmentedControl as KSegmentedControl,
    SkeletonList as KSkeletonList,
@@ -158,8 +141,10 @@ const canUpsert = computed(() => can(`${props.collection}.update`))
 
 const csv = canTransferCsv(props.config)
 const maxSize = formatFileSize(IMPORT_MAX_BYTES)
+const intro = `${
+   csv ? 'A JSON or CSV file' : 'A JSON file'
+} in the format of the export, up to ${maxSize} and ${IMPORT_MAX_ROWS} rows. Media fields take keys of files that are already in the media library. Nothing is written until you confirm.`
 
-const input = ref<HTMLInputElement | null>(null)
 const file = ref<File | null>(null)
 const text = ref('')
 const mode = ref<CmsImportMode>('create')
@@ -215,7 +200,6 @@ function reset() {
    preview.value = null
    fileErrors.value = []
    mode.value = 'create'
-   if (input.value) input.value.value = ''
 }
 
 watch(open, (value) => {
@@ -254,11 +238,15 @@ async function check() {
    }
 }
 
-async function onFile(event: Event) {
-   const picked = (event.target as HTMLInputElement).files?.[0]
-   if (!picked) return
+async function onFile(value: File | File[] | null | undefined) {
+   const picked = Array.isArray(value) ? value[0] : value
+   if (!picked) {
+      reset()
+      return
+   }
    file.value = picked
    preview.value = null
+   fileErrors.value = []
    if (picked.size > IMPORT_MAX_BYTES) {
       fileErrors.value = [`The file is larger than ${maxSize}`]
       return

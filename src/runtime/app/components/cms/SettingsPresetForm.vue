@@ -16,12 +16,13 @@
             placeholder="Optional"
          />
       </KFormField>
-      <p class="cms-hint">{{ presetMeta(preset) }}</p>
+      <KFieldMessage tone="neutral" :icon="false" :message="presetMeta(preset)" />
    </KForm>
 </template>
 
 <script setup lang="ts">
 import {
+   FieldMessage as KFieldMessage,
    Form as KForm,
    FormField as KFormField,
    Input as KInput,

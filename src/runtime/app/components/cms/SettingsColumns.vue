@@ -1,8 +1,10 @@
 <template>
    <div class="cms-settings-columns">
-      <p class="cms-settings-hint">
-         Choose the columns of the table. Drag the visible columns to change their order.
-      </p>
+      <KFieldMessage
+         tone="neutral"
+         :icon="false"
+         message="Choose the columns of the table. Drag the visible columns to change their order."
+      />
       <ul class="cms-settings-list">
          <li
             v-for="(key, index) in model"
@@ -57,6 +59,7 @@
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
 import {
+   FieldMessage as KFieldMessage,
    Icon as KIcon,
    Separator as KSeparator,
    Switch as KSwitch,

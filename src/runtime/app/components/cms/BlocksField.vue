@@ -150,7 +150,7 @@
          </button>
       </div>
 
-      <p v-if="countHint" class="cms-field-hint">{{ countHint }}</p>
+      <KFieldMessage v-if="countHint" tone="neutral" :icon="false" :message="countHint" />
 
       <div v-if="visual">
          <KButton
@@ -348,6 +348,7 @@ import type { MenuItems } from '@xleddyl/443-components-vue'
 import {
    Button as KButton,
    DropdownMenu as KDropdownMenu,
+   FieldMessage as KFieldMessage,
    FormField as KFormField,
    Icon as KIcon,
    Modal as KModal,

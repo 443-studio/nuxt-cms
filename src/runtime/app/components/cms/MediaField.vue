@@ -57,10 +57,7 @@
       <span>Choose</span>
    </button>
 
-   <p v-if="missing" class="cms-media-missing">
-      <KIcon :name="cmsIcon('exclamation-triangle')" />
-      <span>Not found in the media library</span>
-   </p>
+   <KFieldMessage v-if="missing" tone="warning" message="Not found in the media library" />
 
    <KModal v-model:open="galleryOpen" title="Media" size="lg">
       <CmsMediaGallery
@@ -79,6 +76,7 @@ import { computed, ref, useState } from '#imports'
 import {
    Button as KButton,
    Card as KCard,
+   FieldMessage as KFieldMessage,
    Icon as KIcon,
    Modal as KModal,
    Stack as KStack,

@@ -1,9 +1,10 @@
 <template>
    <div class="cms-layout-editor" :class="{ 'is-dragging': dragging }">
-      <p class="cms-settings-hint">
-         Drag a field up or down to move it. Drop it on the side of another field to put them in the
-         same row (up to {{ MAX_LAYOUT_ROW_FIELDS }}).
-      </p>
+      <KFieldMessage
+         tone="neutral"
+         :icon="false"
+         :message="`Drag a field up or down to move it. Drop it on the side of another field to put them in the same row (up to ${MAX_LAYOUT_ROW_FIELDS}).`"
+      />
       <div class="cms-layout-areas">
          <div v-for="area in AREAS" :key="area.id" class="cms-layout-area" :class="`is-${area.id}`">
             <div
@@ -83,7 +84,11 @@
 <script setup lang="ts">
 import type { CmsFormLayout, CmsLayoutSection, CmsTab, FieldConfig } from '#nuxt-cms'
 import { MAX_LAYOUT_ROW_FIELDS, fieldTab } from '#nuxt-cms'
-import { Badge as KBadge, Icon as KIcon } from '@xleddyl/443-components-vue'
+import {
+   Badge as KBadge,
+   FieldMessage as KFieldMessage,
+   Icon as KIcon,
+} from '@xleddyl/443-components-vue'
 import { ref } from '#imports'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 

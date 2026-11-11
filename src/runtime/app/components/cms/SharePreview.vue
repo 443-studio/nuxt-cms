@@ -1,12 +1,11 @@
 <template>
-   <KModal v-model:open="open" title="Share preview" size="md">
+   <KModal
+      v-model:open="open"
+      title="Share preview"
+      description="Anyone with the link can see the saved version of this item on the site, even while it is a draft or scheduled. No account needed. Changes you save later show up in the link too; unsaved changes never do."
+      size="md"
+   >
       <KStack gap="lg">
-         <p class="cms-share-intro">
-            Anyone with the link can see the saved version of this item on the site, even while it
-            is a draft or scheduled. No account needed. Changes you save later show up in the link
-            too; unsaved changes never do.
-         </p>
-
          <KAlert
             v-if="dirty"
             tone="warning"
@@ -78,32 +77,24 @@
 
          <KStack gap="sm">
             <span class="k-label">Active links</span>
-            <KSkeletonList v-if="loading" :rows="2" />
-            <ul v-else-if="links.length" class="cms-share-list">
-               <li v-for="link in links" :key="link.id" class="cms-share-row">
-                  <div class="cms-share-text">
-                     <span class="cms-share-path k-mono">{{ link.path }}</span>
-                     <span class="cms-share-meta">
-                        Expires {{ formatDate(link.expiresAt) }}
-                        <template v-if="link.createdBy">· by {{ link.createdBy }}</template>
-                     </span>
-                  </div>
-                  <KBadge
-                     v-if="i18n.locales.length > 1 && link.locale"
-                     :label="link.locale"
-                     size="sm"
-                     variant="outline"
-                  />
+            <KRecordList
+               :items="linkItems"
+               :loading="loading"
+               :skeleton-rows="2"
+               label="Active links"
+               empty-text="No active links for this item."
+               empty-variant="plain"
+            >
+               <template #action="{ item }">
                   <KButton
                      label="Revoke"
                      variant="ghost"
                      tone="danger"
                      size="sm"
-                     @click="revoke(link)"
+                     @click="revokeById(item.id)"
                   />
-               </li>
-            </ul>
-            <p v-else class="cms-share-hint">No active links for this item.</p>
+               </template>
+            </KRecordList>
          </KStack>
       </KStack>
    </KModal>
@@ -112,22 +103,22 @@
 <script setup lang="ts">
 import type { CmsCreatedPreviewLink, CmsPreviewLink, CmsPreviewLinkDuration } from '#nuxt-cms'
 import { DEFAULT_PREVIEW_LINK_DURATION, PREVIEW_LINK_DURATIONS } from '#nuxt-cms'
+import type { RecordListItem } from '@xleddyl/443-components-vue'
 import {
    Alert as KAlert,
-   Badge as KBadge,
    Button as KButton,
    CopyButton as KCopyButton,
    FormField as KFormField,
    Grid as KGrid,
    Input as KInput,
    Modal as KModal,
+   RecordList as KRecordList,
    SegmentedControl as KSegmentedControl,
    Select as KSelect,
-   SkeletonList as KSkeletonList,
    Stack as KStack,
    toast,
 } from '@xleddyl/443-components-vue'
-import { ref, watch } from '#imports'
+import { computed, ref, watch } from '#imports'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { cmsApi } from '../../utils/api'
@@ -216,6 +207,22 @@ async function create() {
 
 async function saveAndCreate() {
    if (await props.save()) await create()
+}
+
+const linkItems = computed<RecordListItem[]>(() =>
+   links.value.map((link) => ({
+      id: link.id,
+      title: link.path,
+      description: `Expires ${formatDate(link.expiresAt)}${
+         link.createdBy ? ` · by ${link.createdBy}` : ''
+      }`,
+      badge: i18n.locales.length > 1 && link.locale ? { label: link.locale } : undefined,
+   }))
+)
+
+function revokeById(id: RecordListItem['id']) {
+   const link = links.value.find((item) => item.id === id)
+   if (link) void revoke(link)
 }
 
 async function revoke(link: CmsPreviewLink) {

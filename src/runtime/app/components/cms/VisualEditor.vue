@@ -102,7 +102,7 @@
                         openPalette([fieldKey], blocks.length, event.currentTarget as HTMLElement)
                   "
                />
-               <p v-else class="cms-field-hint">{{ maxReached }}</p>
+               <KFieldMessage v-else tone="neutral" :icon="false" :message="maxReached" />
             </div>
          </aside>
 

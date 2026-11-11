@@ -26,7 +26,7 @@
 
       <template #status>
          <CmsStatusBadge :published="published" :scheduled="scheduled" :at="scheduledAt" />
-         <span v-if="dirty" class="cms-editor-dirty">Unsaved changes</span>
+         <KBadge v-if="dirty" label="Unsaved changes" tone="warning" dot />
          <KBadge v-if="lock" size="sm" variant="outline" label="Read only" :title="lock" />
       </template>
 
@@ -51,9 +51,12 @@
                   tone="neutral"
                />
             </div>
-            <span v-if="addressHint(locale)" class="cms-field-hint">
-               {{ addressHint(locale) }}
-            </span>
+            <KFieldMessage
+               v-if="addressHint(locale)"
+               tone="neutral"
+               :icon="false"
+               :message="addressHint(locale)"
+            />
          </div>
       </template>
 
@@ -166,6 +169,7 @@ import {
    Badge as KBadge,
    Button as KButton,
    DropdownMenu as KDropdownMenu,
+   FieldMessage as KFieldMessage,
    FormField as KFormField,
    Popover as KPopover,
    Stack as KStack,
