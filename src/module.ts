@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -218,6 +218,10 @@ function resolveDatabaseOptions(
    }
    return { ...shared, driver: 'sqlite', path: database?.path ?? 'data/cms.db' }
 }
+
+const MODULE_VERSION: string = JSON.parse(
+   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+).version
 
 const DEFAULT_FILESYSTEM_MEDIA_DIR = 'data/media'
 const DEFAULT_FILESYSTEM_MEDIA_BASE_URL = '/media'
@@ -710,6 +714,7 @@ export default defineNuxtModule<ModuleOptions>({
             mediaMaxFileSize: resolved.media.maxFileSize,
             i18n: resolved.i18n,
             previewPath: resolved.preview.path,
+            version: MODULE_VERSION,
          }
          logger.info(
             '[nuxt-cms] disabled: registering no-op query composables and generated types, skipping admin, server and database setup'
@@ -1110,6 +1115,7 @@ export default defineNuxtModule<ModuleOptions>({
          mediaMaxFileSize: resolved.media.maxFileSize,
          i18n: resolved.i18n,
          previewPath,
+         version: MODULE_VERSION,
       }
 
       addTypeTemplate(

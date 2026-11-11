@@ -6,7 +6,13 @@
          href="https://github.com/443-studio/nuxt-cms"
          target="_blank"
          rel="noopener"
-         >@443-studio/nuxt-cms</a
+         >nuxt-cms{{ version ? ` v${version}` : '' }}</a
       >
    </span>
 </template>
+
+<script setup lang="ts">
+import { useCmsRuntime } from '../../composables/cms-runtime'
+
+const version = useCmsRuntime().version
+</script>
