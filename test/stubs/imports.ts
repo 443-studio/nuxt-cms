@@ -2,6 +2,14 @@ export function useRuntimeConfig(): never {
    throw new Error('useRuntimeConfig is not available in unit tests')
 }
 
+export const nuxtAppStub: { current: { _route: { query: Record<string, unknown> } } | null } = {
+   current: null,
+}
+
+export function tryUseNuxtApp() {
+   return nuxtAppStub.current
+}
+
 function ref<T>(value: T) {
    return { value }
 }

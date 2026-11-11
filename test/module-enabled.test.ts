@@ -5,6 +5,7 @@ const kit = vi.hoisted(() => ({
    addComponent: vi.fn(),
    addComponentsDir: vi.fn(),
    addImports: vi.fn(),
+   addPlugin: vi.fn(),
    addRouteMiddleware: vi.fn(),
    addServerHandler: vi.fn(),
    addServerPlugin: vi.fn(),
@@ -88,12 +89,14 @@ describe('module setup when disabled', () => {
          'useCmsContent',
          'useCmsContents',
          'useCmsPage',
+         'useCmsPreviewMode',
          'useCmsRoute',
          'useCmsSeo',
          'useCmsSingle',
          'useCmsSite',
       ])
-      for (const entry of imports.filter((item) => item.name !== 'useCmsSeo')) {
+      const shared = ['useCmsSeo', 'useCmsPreviewMode']
+      for (const entry of imports.filter((item) => !shared.includes(item.name))) {
          expect(entry.from).toContain('-disabled')
       }
    })
@@ -211,6 +214,7 @@ describe('module setup when enabled', () => {
          'useCmsContent',
          'useCmsContents',
          'useCmsPage',
+         'useCmsPreviewMode',
          'useCmsRoute',
          'useCmsSeo',
          'useCmsSingle',
@@ -528,6 +532,40 @@ describe('module setup of the seo routes', () => {
             'put /api/cms/redirects/:id',
             'delete /api/cms/redirects/:id',
          ])
+      )
+   })
+
+   it('registers the preview link api, middleware and plugins', async () => {
+      await setupAndFinish()
+      const routes = kit.addServerHandler.mock.calls.map((call) => {
+         const handler = call[0] as AnyRecord
+         return `${handler.method ?? 'all'} ${handler.route ?? handler.handler}`
+      })
+      expect(routes).toEqual(
+         expect.arrayContaining([
+            'get /api/cms/preview',
+            'get /api/cms/preview-links/:collection/:id',
+            'post /api/cms/preview-links/:collection/:id',
+            'delete /api/cms/preview-links/:collection/:id/:linkId',
+            'all ./runtime/server/middleware/preview-links',
+         ])
+      )
+      expect(kit.addPlugin.mock.calls.map((call) => call[0])).toEqual([
+         './runtime/app/plugins/cms-preview',
+         './runtime/app/plugins/cms-preview-banner.client',
+      ])
+   })
+
+   it('skips the automatic preview banner with preview.banner false', async () => {
+      await setupAndFinish({ preview: { banner: false } })
+      expect(kit.addPlugin.mock.calls.map((call) => call[0])).toEqual([
+         './runtime/app/plugins/cms-preview',
+      ])
+   })
+
+   it('rejects a preview.banner that is not a boolean', async () => {
+      await expect(setupAndFinish({ preview: { banner: 'yes' } })).rejects.toThrow(
+         'preview.banner must be a boolean, got "yes"'
       )
    })
 

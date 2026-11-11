@@ -33,6 +33,7 @@ cms: {
    preview: {
       path: '/cms/preview',         // the site page shown inside the visual editor
       component: '',                // default wrapper component for content previews
+      banner: true,                 // "Preview" banner on pages opened with a preview link
    },
    webhooks: [],                    // [{ name, url?, secret?, events?, timeout? }], see Hooks & webhooks
    roles: {},                       // { editor: { label?, description?, can: [...] } }, see Roles
@@ -215,6 +216,9 @@ The [visual editor](admin.md#visual-editor) shows a page of the site in an ifram
   item in the preview, for example the header of your article page. A content entry can override it
   with its own [`preview.component`](schema.md#preview-component). The build fails when the
   component is not registered.
+- `banner` (default `true`) shows a small "Preview" banner, with the expiry, on site pages opened
+  with a [preview link](querying.md#preview-links). Set it to `false` to draw your own with
+  `useCmsPreviewMode()`. Anything but a boolean fails the build.
 
 ### `webhooks`
 

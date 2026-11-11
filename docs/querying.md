@@ -129,6 +129,29 @@ or `null` when no published item has that path. The path is matched against the 
 hash and trailing slash are ignored. When two patterns could match the same path, the one with
 more fixed segments wins. It sends one request (`<entry>ByPath` per routed entry).
 
+### Preview links
+
+An editor can share a draft or scheduled item with a [preview link](admin.md#share-preview):
+the item address plus `?cms-preview=<token>`. Nothing changes in the page code: `useCmsRoute`,
+`useCmsContent`, `useCms` and the other helpers read the token from the current route and send it
+as the `x-cms-preview` header, on the server render and in the browser. The server checks the
+hash, the expiry and the revocation, then lets `<entry>ByPath`, `<entry>BySlug` and `<entry>ById`
+return that one item even if it is a draft or scheduled. Every other item, lists, counts and
+relations stay published only. A wrong, expired or revoked token falls back to the public behavior,
+so the catch-all page answers 404 for a draft. `$cmsQuery` reads the token when called with the
+Nuxt app available (setup, plugins, middleware); elsewhere send the header yourself.
+
+Requests with the token (the page, by the `cms-preview` query, and GraphQL, by the header) answer
+with `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow` and
+`Referrer-Policy: same-origin`. Preview queries skip the in-flight dedupe and go out in their own
+batch, and their `useAsyncData` keys end with `:cms-preview`. If a CDN or route rule (`swr`,
+`isr`, `cache`) caches your pages, bypass it for requests with `cms-preview` in the query.
+
+On such a page the module shows a small "Preview" banner with the expiry (turn it off with
+[`preview.banner: false`](configuration.md#preview)). `useCmsPreviewMode()` returns a computed
+`{ entry, id, expiresAt }` while a valid link is open, else `null`, for your own banner or to skip
+analytics. It is filled by `GET /api/cms/preview` with the header.
+
 ### SEO tags
 
 `useCmsSeo(item, { locale })` writes the title, description, canonical, Open Graph, Twitter,
@@ -351,7 +374,8 @@ const { data } = useCms(`query ($cat: String!) {
 
 ## Behavior notes
 
-- Entries with `drafts: true` return **published rows only**; drafts are invisible to the API.
+- Entries with `drafts: true` return **published rows only**; drafts are invisible to the API
+  (except the one item of a valid [preview link](#preview-links)).
 - Content entries also hide **scheduled** items: a published item whose `publishedAt` is still in
   the future stays out of every query, relations included, until that moment.
 - Fields declared with [`private: true`](schema.md#private-fields) are absent from the schema

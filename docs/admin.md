@@ -230,8 +230,8 @@ The visual editor edits a body of blocks on top of the real site. It fills the w
 - **Top bar**: back, the title, the status badge (Draft, Published or Scheduled) and an "Unsaved
   changes" note, the language switch, the preview width (desktop or mobile, 390 px), and the
   actions: **Schedule**, **Save**, **Publish** or **Unpublish**, and the `...` menu with the
-  [translation actions](#translations), **Duplicate** and **Delete**. The language switch marks how
-  much of the item each language has.
+  [translation actions](#translations), **Share preview**, **Duplicate** and **Delete**. The
+  language switch marks how much of the item each language has.
   **Schedule** picks a publish date and publishes the item: with a future date it stays hidden from
   the site until then. Save stays in the editor; the first save of a new item moves to its URL.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
@@ -259,6 +259,27 @@ error opens its tab, selects the block that holds it and switches to the default
 field is translatable; a dot marks every tab with an error. An error or a warning that names no
 field shows at the top of the inspector, and one that names a block shows above the fields of that
 block. Leaving with unsaved changes asks for a confirmation.
+
+### Share preview
+
+**Share preview** in the `...` menu (saved items of a content entry with a
+[`route`](schema.md#routes)) makes a link that shows the item on the real site to anyone, without
+an account, even while it is a draft or scheduled. The link is the item address in the chosen
+language plus `?cms-preview=<token>`; a never published item uses the address of its current slug.
+It shows the **saved** version at the time it is opened, so later saves show up in it and unsaved
+changes never do: with unsaved changes the dialog says so and offers **Save and create link**.
+
+Pick how long the link lives: 1 hour, 1 day (default), 7 days or 30 days. The new link is copied
+to the clipboard and shown once: only a SHA-256 hash of the token is stored, so it cannot be shown
+again. The dialog lists the active links of the item (address, language, expiry, author) with
+**Revoke**, which stops a link at once. Deleting the item deletes its links. Links live in the
+built-in `cms_preview_links` table (`id`, `token_hash`, `entry`, `item_id`, `locale`,
+`created_by`, `created_at`, `expires_at`, `revoked_at`), created by the generated migrations;
+expired rows are removed when a new link is made. The admin API is
+`GET`/`POST /api/cms/preview-links/<entry>/<id>` (`{ duration: '1h' | '1d' | '7d' | '30d', locale? }`)
+and `DELETE /api/cms/preview-links/<entry>/<id>/<linkId>`, with an admin session and the same-origin
+rule (any admin today, checked by `requirePreviewLinkAccess(event, entry)`). How the site reads the
+link is in [Querying](querying.md#preview-links).
 
 ### Preview page
 
@@ -388,5 +409,8 @@ is internal to the panel: your frontend reads content through the public
 - Encrypted session cookies; production requires `NUXT_SESSION_PASSWORD` (≥ 32 chars).
 - Login rate limiting: per IP and per email, 5 failures lock the login for 5 minutes.
 - Admin mutations require a same-origin request.
-- The public GraphQL API is read-only and never exposes draft entries. Introspection works only
-  in development.
+- The public GraphQL API is read-only and never exposes draft entries, except the one item of a
+  valid [preview link](querying.md#preview-links). Introspection works only in development.
+- Preview link tokens are 32 random bytes (base64url), stored only as a SHA-256 hash, looked up by
+  that hash, scoped to one item and limited to 30 days. There is no rate limit on wrong tokens:
+  guessing 256 bits is not practical. The module never logs them.

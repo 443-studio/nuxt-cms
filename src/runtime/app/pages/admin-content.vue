@@ -125,6 +125,15 @@
                title="More actions"
             />
          </KDropdownMenu>
+         <CmsSharePreview
+            v-if="canShare"
+            v-model:open="shareOpen"
+            :entry-name="name"
+            :item-id="id!"
+            :dirty="dirty"
+            :locale="editor?.locale"
+            :save="() => save()"
+         />
       </template>
    </CmsVisualEditor>
 </template>
@@ -253,10 +262,15 @@ const { items: translationItems } = useCmsTranslationActions({
    locale: () => editor.value?.locale,
    disabled: () => !!lock.value,
 })
+const canShare = !isNew && !!config.route
+const shareOpen = ref(false)
 const entryItems = computed<MenuEntry[]>(() =>
    isNew
       ? []
       : [
+           ...(canShare
+              ? [{ label: 'Share preview', onSelect: () => (shareOpen.value = true) }]
+              : []),
            ...(can(`${name}.create`) ? [{ label: 'Duplicate', onSelect: duplicate }] : []),
            ...(can(`${name}.delete`) ? [{ label: 'Delete', onSelect: remove }] : []),
         ]

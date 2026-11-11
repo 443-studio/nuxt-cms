@@ -22,7 +22,13 @@ import cmsConfig from '#cms-config'
 import { cmsDialect, useDb } from '#cms-db'
 import * as cmsTables from '#cms-tables'
 import { useRuntimeConfig } from '#imports'
-import type { CmsConfig, CmsEntry, FieldConfig, MediaStorageMode } from '../../shared/index'
+import type {
+   CmsConfig,
+   CmsEntry,
+   CmsPreviewGrant,
+   FieldConfig,
+   MediaStorageMode,
+} from '../../shared/index'
 import {
    CONTENT_SLUG_FIELD,
    CONTENT_PUBLISHED_AT_FIELD,
@@ -41,6 +47,7 @@ import {
    mediaPublicUrl,
    mediaTypeFor,
    pickTranslatedMedia,
+   previewGrantAllows,
    publicBlocks,
    translatableFieldKeys,
 } from '../../shared/index'
@@ -64,7 +71,7 @@ import {
    listFilterValues,
 } from './list-filter'
 import { getContentI18n, resolveTable, tableColumns } from './registry'
-import { visibilityConditions } from './visibility'
+import { visibilityConditions, visibleOrPreviewConditions } from './visibility'
 
 const MAX_LIMIT = 100
 const DEFAULT_LIMIT = 50
@@ -81,6 +88,7 @@ interface SortInput {
 
 interface Ctx {
    loaders: Map<string, BatchLoader<unknown, unknown>>
+   preview: CmsPreviewGrant | null
 }
 
 class BatchLoader<K, V> {
@@ -134,6 +142,14 @@ function tableFor(name: string): SQLiteTable {
 
 function publishedFilter(entry: CmsEntry, table: SQLiteTable): SQL[] {
    return visibilityConditions(entry, tableColumns(table))
+}
+
+function previewItemId(ctx: Ctx, name: string): string | undefined {
+   return previewGrantAllows(ctx.preview, name) ? ctx.preview!.itemId : undefined
+}
+
+function singleItemFilter(entry: CmsEntry, table: SQLiteTable, ctx: Ctx, name: string): SQL[] {
+   return visibleOrPreviewConditions(entry, tableColumns(table), previewItemId(ctx, name))
 }
 
 function localeOf(parent: Row): string {
@@ -568,13 +584,22 @@ export function buildCmsSchema() {
          return (rows as Record<string, unknown>[]).map((row) => localizeRow(entry, row, locale))
       }
 
-      queryResolvers[`${name}ById`] = async (_: unknown, args: { id: string; locale?: string }) => {
+      queryResolvers[`${name}ById`] = async (
+         _: unknown,
+         args: { id: string; locale?: string },
+         ctx: Ctx
+      ) => {
          const locale = resolveLocaleArg(args.locale)
          const table = tableFor(name)
          const [row] = await useDb()
             .select()
             .from(table)
-            .where(and(eq(tableColumns(table).id!, args.id), ...publishedFilter(entry, table)))
+            .where(
+               and(
+                  eq(tableColumns(table).id!, args.id),
+                  ...singleItemFilter(entry, table, ctx, name)
+               )
+            )
             .limit(1)
          return row ? localizeRow(entry, row as Record<string, unknown>, locale) : null
       }
@@ -582,7 +607,8 @@ export function buildCmsSchema() {
       if (entry.kind === 'content') {
          queryResolvers[`${name}BySlug`] = async (
             _: unknown,
-            args: { slug: string; locale?: string }
+            args: { slug: string; locale?: string },
+            ctx: Ctx
          ) => {
             const locale = resolveLocaleArg(args.locale)
             const table = tableFor(name)
@@ -590,7 +616,7 @@ export function buildCmsSchema() {
             const [row] = await useDb()
                .select()
                .from(table)
-               .where(and(eq(slug, args.slug), ...publishedFilter(entry, table)))
+               .where(and(eq(slug, args.slug), ...singleItemFilter(entry, table, ctx, name)))
                .limit(1)
             return row ? localizeRow(entry, row as Record<string, unknown>, locale) : null
          }
@@ -599,10 +625,13 @@ export function buildCmsSchema() {
       if (isRoutedContent(entry)) {
          queryResolvers[`${name}ByPath`] = async (
             _: unknown,
-            args: { path: string; locale?: string }
+            args: { path: string; locale?: string },
+            ctx: Ctx
          ) => {
             const locale = resolveLocaleArg(args.locale)
-            const row = await findContentByPath(name, args.path, locale)
+            const row = await findContentByPath(name, args.path, locale, {
+               previewId: previewItemId(ctx, name),
+            })
             return row ? localizeRow(entry, row, locale) : null
          }
       }
@@ -638,6 +667,6 @@ export function buildCmsSchema() {
    })
 }
 
-export function createGraphqlContext(): Ctx {
-   return { loaders: new Map() }
+export function createGraphqlContext(preview: CmsPreviewGrant | null = null): Ctx {
+   return { loaders: new Map(), preview }
 }

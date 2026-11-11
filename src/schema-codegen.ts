@@ -48,6 +48,7 @@ const RESERVED_ENTRY_KEYS = [
    'graphql',
    'settings',
    'cms_media',
+   'cms_preview_links',
    'cms_redirects',
    'cms_settings',
    'cms_users',
@@ -373,6 +374,7 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
 
    const sqlTableNames = new Map<string, string>([
       ['cms_media', 'the built-in media table'],
+      ['cms_preview_links', 'the built-in preview links table'],
       ['cms_redirects', 'the built-in redirects table'],
       ['cms_settings', 'the built-in settings table'],
       ['cms_users', 'the built-in users table'],
@@ -1082,6 +1084,24 @@ function redirectsTableExpr(dialect: Dialect): string {
    )
 }
 
+function previewLinksTableExpr(dialect: Dialect): string {
+   const pg = dialect === 'postgres'
+   const tableFn = pg ? 'pgTable' : 'sqliteTable'
+   return (
+      `export const cms_preview_links = ${tableFn}('cms_preview_links', {\n` +
+      `  id: text('id').primaryKey(),\n` +
+      `  tokenHash: text('token_hash').notNull().unique(),\n` +
+      `  entry: text('entry').notNull(),\n` +
+      `  itemId: text('item_id').notNull(),\n` +
+      `  locale: text('locale'),\n` +
+      `  createdBy: text('created_by'),\n` +
+      `  createdAt: ${nowExpr(pg, 'created_at')},\n` +
+      `  expiresAt: text('expires_at').notNull(),\n` +
+      `  revokedAt: text('revoked_at'),\n` +
+      `})`
+   )
+}
+
 function mediaTableExpr(dialect: Dialect): string {
    const pg = dialect === 'postgres'
    const tableFn = pg ? 'pgTable' : 'sqliteTable'
@@ -1162,6 +1182,7 @@ export function renderSchemaFile(
       settingsTableExpr(dialect),
       usersTableExpr(dialect),
       redirectsTableExpr(dialect),
+      previewLinksTableExpr(dialect),
       ...tables,
       ...joins,
       ...rows,

@@ -3,6 +3,8 @@ import { defineEventHandler } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { buildCmsSchema, createGraphqlContext } from '../utils/graphql'
 import { createBreadthRule, createDepthRule, createIntrospectionRule } from '../utils/graphql-depth'
+import { readPreviewGrant } from '../utils/preview-links'
+import type { CmsPreviewGrant } from '../../shared/index'
 import { CMS_GRAPHQL_BATCH_LIMIT } from '../../shared/index'
 
 function buildYoga(options: { graphiql: boolean; maxDepth: number }) {
@@ -13,7 +15,8 @@ function buildYoga(options: { graphiql: boolean; maxDepth: number }) {
       graphiql: options.graphiql,
       cors: false,
       batching: { limit: CMS_GRAPHQL_BATCH_LIMIT },
-      context: () => createGraphqlContext(),
+      context: ({ cmsPreview }: { cmsPreview?: CmsPreviewGrant | null }) =>
+         createGraphqlContext(cmsPreview ?? null),
       plugins: [
          {
             onValidate({
@@ -32,12 +35,13 @@ function buildYoga(options: { graphiql: boolean; maxDepth: number }) {
 
 let yoga: ReturnType<typeof buildYoga> | null = null
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
    if (!yoga) {
       const { graphql } = useRuntimeConfig(event).cms as {
          graphql: { graphiql: boolean; maxDepth: number }
       }
       yoga = buildYoga(graphql)
    }
-   return yoga(event.node.req, event.node.res)
+   const cmsPreview = await readPreviewGrant(event)
+   return yoga(event.node.req, event.node.res, { cmsPreview })
 })

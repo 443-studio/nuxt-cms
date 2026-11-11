@@ -1,5 +1,5 @@
 import type { SQL } from 'drizzle-orm'
-import { eq, isNotNull, lte } from 'drizzle-orm'
+import { and, eq, isNotNull, lte, or } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { CmsEntry } from '../../shared/index'
 import { CONTENT_PUBLISHED_AT_FIELD } from '../../shared/index'
@@ -17,4 +17,15 @@ export function visibilityConditions(
    if (entry.kind === 'content' && publishedAt)
       conditions.push(isNotNull(publishedAt), lte(publishedAt, now))
    return conditions
+}
+
+export function visibleOrPreviewConditions(
+   entry: Pick<CmsEntry, 'kind' | 'drafts'>,
+   columns: Record<string, AnySQLiteColumn>,
+   previewId?: string,
+   now: string = nowTimestamp()
+): SQL[] {
+   const visible = visibilityConditions(entry, columns, now)
+   if (!visible.length || previewId === undefined || !columns.id) return visible
+   return [or(and(...visible), eq(columns.id, previewId))!]
 }

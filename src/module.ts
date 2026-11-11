@@ -7,6 +7,7 @@ import {
    addComponent,
    addComponentsDir,
    addImports,
+   addPlugin,
    addRouteMiddleware,
    addServerHandler,
    addServerPlugin,
@@ -38,6 +39,7 @@ import {
    renderBlocksFile,
 } from './blocks-codegen'
 import { DEFAULT_CMS_PREVIEW_PATH, previewPathErrors } from './runtime/shared/preview'
+import { previewBannerErrors } from './runtime/shared/preview-links'
 import type { CmsSeoModuleOptions, CmsSiteModuleOptions } from './runtime/shared/seo'
 import {
    ROBOTS_CONFLICT_MODULES,
@@ -125,6 +127,7 @@ export interface ModuleOptions {
    preview?: {
       path?: string
       component?: string
+      banner?: boolean
    }
    webhooks?: ModuleOptionsWebhook[]
    roles?: CmsRolesInput
@@ -172,6 +175,7 @@ interface ResolvedModuleOptions {
    preview: {
       path: string
       component: string
+      banner: boolean
    }
 }
 
@@ -276,6 +280,7 @@ function resolveModuleOptions(options: ModuleOptions): ResolvedModuleOptions {
       preview: {
          path: options.preview?.path ?? DEFAULT_CMS_PREVIEW_PATH,
          component: options.preview?.component?.trim() ?? '',
+         banner: options.preview?.banner ?? true,
       },
    }
 }
@@ -646,6 +651,10 @@ export default defineNuxtModule<ModuleOptions>({
                from: resolver.resolve('./runtime/app/composables/cms-site-disabled'),
             },
             { name: 'useCmsSeo', from: resolver.resolve('./runtime/app/composables/cms-seo') },
+            {
+               name: 'useCmsPreviewMode',
+               from: resolver.resolve('./runtime/app/composables/cms-preview-mode'),
+            },
          ])
          const disabledConfig = await loadCmsConfig(
             nuxt,
@@ -764,11 +773,21 @@ export default defineNuxtModule<ModuleOptions>({
          { name: 'useCmsContents', from: entryComposables },
          { name: 'useCmsContent', from: entryComposables },
          { name: 'useCmsRoute', from: entryComposables },
+         {
+            name: 'useCmsPreviewMode',
+            from: resolver.resolve('./runtime/app/composables/cms-preview-mode'),
+         },
       ])
       addCmsBlocks(nuxt, resolver, cmsConfig, resolved.preview.component)
       addCmsImage(nuxt, resolver)
+      addPlugin(resolver.resolve('./runtime/app/plugins/cms-preview'))
+      if (resolved.preview.banner)
+         addPlugin(resolver.resolve('./runtime/app/plugins/cms-preview-banner.client'))
 
-      const previewErrors = previewPathErrors(resolved.preview.path, Object.keys(cmsConfig))
+      const previewErrors = [
+         ...previewPathErrors(resolved.preview.path, Object.keys(cmsConfig)),
+         ...previewBannerErrors(options.preview?.banner),
+      ]
       if (previewErrors.length) throw new Error(`[nuxt-cms] ${previewErrors.join('\n')}`)
       const previewPath = resolved.preview.path
       const previewRule = nuxt.options.routeRules?.[previewPath] ?? {}
@@ -1337,6 +1356,30 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({
          middleware: true,
          handler: resolver.resolve('./runtime/server/middleware/redirects'),
+      })
+      addServerHandler({
+         middleware: true,
+         handler: resolver.resolve('./runtime/server/middleware/preview-links'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/preview.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview-links/:collection/:id',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/preview-links.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview-links/:collection/:id',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/preview-links.post'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview-links/:collection/:id/:linkId',
+         method: 'delete',
+         handler: resolver.resolve('./runtime/server/api/preview-link.delete'),
       })
       addServerHandler({
          route: '/api/cms/redirects',

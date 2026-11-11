@@ -27,6 +27,14 @@ describe('validateConfig', () => {
       )
    })
 
+   it('reserves the name of the preview links table', () => {
+      const config = sampleConfig()
+      config.cms_preview_links = config.categories!
+      expect(validateConfig(config, I18N)).toContain(
+         "cms.config entry 'cms_preview_links': 'cms_preview_links' is a reserved name"
+      )
+   })
+
    it('rejects duplicate entry ids', () => {
       const config = sampleConfig()
       config.other = { ...config.categories!, fields: { ...config.categories!.fields } }

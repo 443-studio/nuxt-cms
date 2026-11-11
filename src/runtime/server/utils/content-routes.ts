@@ -11,10 +11,11 @@ import {
    matchContentPattern,
 } from '../../shared/index'
 import { resolveTable, tableColumns } from './registry'
-import { visibilityConditions } from './visibility'
+import { visibleOrPreviewConditions } from './visibility'
 
 export interface FindContentByPathOptions {
    includeDrafts?: boolean
+   previewId?: string
 }
 
 export async function findContentByPath(
@@ -33,7 +34,8 @@ export async function findContentByPath(
    const conditions: SQL[] = []
    if (params.slug) conditions.push(eq(columns[CONTENT_SLUG_FIELD]!, params.slug))
    if (params.id) conditions.push(eq(columns.id!, params.id))
-   if (!options.includeDrafts) conditions.push(...visibilityConditions(entry, columns))
+   if (!options.includeDrafts)
+      conditions.push(...visibleOrPreviewConditions(entry, columns, options.previewId))
    const [row] = await useDb()
       .select()
       .from(table)
