@@ -9,7 +9,7 @@
       @update:open="(value: boolean) => !value && emit('close')"
       @delete="item && emit('delete', item)"
    >
-      <div v-if="shown" class="cms-media-detail">
+      <KStack v-if="shown" gap="lg">
          <div class="cms-media-detail-preview">
             <div
                v-if="shown.type === 'image' && shown.url"
@@ -78,18 +78,13 @@
             />
          </KStack>
 
-         <div class="cms-media-detail-facts">
-            <KDescriptionList :items="facts">
-               <template #value="{ item: fact }">
-                  <span
-                     class="cms-media-detail-fact"
-                     :class="{ 'k-mono': fact.key === 'key' }"
-                     :title="fact.value == null ? undefined : String(fact.value)"
-                     >{{ fact.value }}</span
-                  >
+         <KCard variant="subtle" padding="sm">
+            <KDescriptionList :items="facts" layout="inline">
+               <template #value-key="{ item: fact }">
+                  <span class="k-mono">{{ fact.value }}</span>
                </template>
             </KDescriptionList>
-         </div>
+         </KCard>
 
          <KStack gap="md">
             <KFormField
@@ -126,15 +121,21 @@
             </KFormField>
          </KStack>
 
-         <section class="cms-media-detail-usage">
+         <KStack as="section" gap="sm">
             <KSeparator variant="heading" label="Used in" :level="3" />
             <KSkeletonList v-if="usageLoading" :rows="2" />
-            <p v-else-if="usageList === null" class="cms-media-hint">
-               Could not check where this file is used.
-            </p>
-            <p v-else-if="!usageList.length && !hiddenUsage" class="cms-media-hint">
-               Not used in any entry.
-            </p>
+            <KFieldMessage
+               v-else-if="usageList === null"
+               tone="neutral"
+               :icon="false"
+               message="Could not check where this file is used."
+            />
+            <KFieldMessage
+               v-else-if="!usageList.length && !hiddenUsage"
+               tone="neutral"
+               :icon="false"
+               message="Not used in any entry."
+            />
             <ul v-else class="cms-media-usage-list">
                <li v-for="(entry, index) in usageList" :key="index">
                   <NuxtLink :to="usageLink(entry)" class="cms-media-usage-link">
@@ -146,8 +147,8 @@
                   {{ otherEntriesLabel(hiddenUsage) }}
                </li>
             </ul>
-         </section>
-      </div>
+         </KStack>
+      </KStack>
    </KFormDrawer>
 </template>
 
@@ -156,8 +157,10 @@ import type { MediaItem, MediaUsage } from '#nuxt-cms'
 import { computed, ref, useRequestURL, watch } from '#imports'
 import {
    Button as KButton,
+   Card as KCard,
    CopyButton as KCopyButton,
    DescriptionList as KDescriptionList,
+   FieldMessage as KFieldMessage,
    FormDrawer as KFormDrawer,
    FormField as KFormField,
    Icon as KIcon,
