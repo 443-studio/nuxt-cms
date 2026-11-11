@@ -1,8 +1,14 @@
 import { inArray } from 'drizzle-orm'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
-import type { CmsEntry, FieldConfig, MediaUsage } from '../../shared/index'
-import { PAGE_PATH_FIELD, pageFields, pageRouteOf, selectOptionLabel } from '../../shared/index'
+import type { CmsEntry, CmsSiteSettings, FieldConfig, MediaUsage } from '../../shared/index'
+import {
+   CMS_SITE_SETTINGS_KEY,
+   PAGE_PATH_FIELD,
+   pageFields,
+   pageRouteOf,
+   selectOptionLabel,
+} from '../../shared/index'
 
 export interface MediaReference {
    field: string
@@ -97,6 +103,23 @@ export function collectMediaUsage(
          }
       }
    }
+   return usage
+}
+
+export const SITE_MEDIA_USAGE: Omit<MediaUsage, 'field'> = {
+   collection: CMS_SITE_SETTINGS_KEY,
+   label: 'Settings',
+   kind: 'site',
+   id: null,
+   title: 'Site settings',
+}
+
+export function addSiteMediaUsage(
+   usage: Record<string, MediaUsage[]>,
+   settings: Pick<CmsSiteSettings, 'image'>
+): Record<string, MediaUsage[]> {
+   const list = settings.image ? usage[settings.image] : undefined
+   if (list) list.push({ ...SITE_MEDIA_USAGE, field: 'Share image' })
    return usage
 }
 

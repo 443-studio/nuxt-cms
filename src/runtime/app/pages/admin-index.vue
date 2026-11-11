@@ -15,14 +15,15 @@
 
 <script setup lang="ts">
 import { EmptyState as KEmptyState } from '@xleddyl/443-components-vue'
-import { definePageMeta, navigateTo } from '#imports'
+import { definePageMeta, navigateTo, useRoute } from '#imports'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { cmsIcon } from '../utils/ui'
 
 definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth' })
 
+const route = useRoute()
 const { access, firstPath } = useCmsPermissions()
 
 const first = firstPath()
-if (first) await navigateTo(first, { replace: true })
+if (first) await navigateTo({ path: first, query: route.query }, { replace: true })
 </script>

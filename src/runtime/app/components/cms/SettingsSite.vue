@@ -43,7 +43,7 @@
       <KSettingsGroup
          row
          label="Hide the site from search engines"
-         description="Every page gets noindex, robots.txt disallows everything and the sitemap is empty. For a staging site or one not launched yet."
+         description="Every page is sent with noindex and the sitemap is empty. For a staging site or one not launched yet."
       >
          <template #actions>
             <KSwitch v-model="state.hidden" aria-label="Hide the site from search engines" />

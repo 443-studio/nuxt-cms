@@ -208,8 +208,11 @@ levels. In `'s3'` and `'filesystem'` mode you manage the folders from the panel:
   selection bar moves or deletes all the selected files.
 - Click a file to open its detail panel: preview, focal point, facts, alt text, folder, a **Copy URL** button,
   a **Download** button and the list of entries that use the file, with links to them.
-- Each tile and each list row shows how many entries use the file, or an "unused" mark.
+- Each tile and each list row shows how many entries use the file, or an "unused" mark. The share
+  image of the [site settings](seo.md#site-settings) counts too, listed as **Site settings**.
 - Before you delete a file that entries use, the confirmation lists those entries with links.
+- Moving a file to another folder, or renaming a folder, keeps its key, so the entries and the
+  site settings that use it keep working.
 - The search looks in the open folder and its subfolders. **Search all folders** extends it to the
   full library. The search matches the file name, the alt text and the folder.
 - Sort by date, name or size, and switch between the grid and the list view. The panel remembers

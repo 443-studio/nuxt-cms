@@ -205,10 +205,12 @@ export interface MediaSourceInfo {
    builtAt: string | null
 }
 
+export type MediaUsageKind = CmsEntryKind | 'site'
+
 export interface MediaUsage {
    collection: string
    label: string
-   kind: CmsEntryKind
+   kind: MediaUsageKind
    id: string | null
    title: string | null
    field: string
@@ -217,7 +219,7 @@ export interface MediaUsage {
 export interface MediaUsageEntry {
    collection: string
    label: string
-   kind: CmsEntryKind
+   kind: MediaUsageKind
    id: string | null
    title: string | null
    fields: string[]

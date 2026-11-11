@@ -504,6 +504,15 @@ describe('module setup of the seo routes', () => {
       })
    })
 
+   it('sends the hidden site header from a server middleware', async () => {
+      await setupAndFinish({ seo: { robots: false, sitemap: false } })
+      const middleware = kit.addServerHandler.mock.calls
+         .map((call) => call[0] as AnyRecord)
+         .filter((handler) => handler.middleware)
+         .map((handler) => handler.handler)
+      expect(middleware).toContain('./runtime/server/middleware/hidden-site')
+   })
+
    it('steps aside for @nuxtjs/sitemap and honors explicit switches', async () => {
       kit.hasNuxtModule.mockImplementation((name: string) => name === '@nuxtjs/sitemap')
       const nuxt = await setupAndFinish({ seo: { robots: false } })

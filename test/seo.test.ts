@@ -6,6 +6,7 @@ import {
    absoluteUrl,
    applyTitleTemplate,
    coerceSiteSettings,
+   hiddenSiteHeaderApplies,
    normalizeSiteUrl,
    pageSitemapUrls,
    planSitemapChunks,
@@ -359,10 +360,22 @@ describe('robots.txt', () => {
       )
    })
 
-   it('disallows everything when the site is hidden', () => {
+   it('stays open when the site is hidden, so crawlers can read the noindex header', () => {
       expect(renderRobotsTxt({ hidden: true, sitemapUrl: 'https://example.com/sitemap.xml' })).toBe(
-         'User-agent: *\nDisallow: /\n'
+         'User-agent: *\nDisallow: /cms/\n'
       )
+   })
+})
+
+describe('hidden site header', () => {
+   it('applies to site responses and skips the admin and the build assets', () => {
+      expect(hiddenSiteHeaderApplies('/')).toBe(true)
+      expect(hiddenSiteHeaderApplies('/blog/post?x=1')).toBe(true)
+      expect(hiddenSiteHeaderApplies('/cmsx')).toBe(true)
+      expect(hiddenSiteHeaderApplies('/cms')).toBe(false)
+      expect(hiddenSiteHeaderApplies('/cms/news?x=1')).toBe(false)
+      expect(hiddenSiteHeaderApplies('/_nuxt/entry.js')).toBe(false)
+      expect(hiddenSiteHeaderApplies('/__nuxt_error')).toBe(false)
    })
 })
 

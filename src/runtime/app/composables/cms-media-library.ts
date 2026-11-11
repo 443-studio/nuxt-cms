@@ -6,7 +6,7 @@ import {
    mediaFolderParent,
 } from '../../shared/index'
 import { computed, ref } from '#imports'
-import { errorMessage } from '../utils/ui'
+import { cmsSettingsLink, errorMessage } from '../utils/ui'
 import { invalidateCmsMediaKeys } from './cms-media-keys'
 import { useCmsToast } from './cms-toast'
 
@@ -180,6 +180,7 @@ export function useCmsMediaLibrary() {
 
 export type CmsMediaLibrary = ReturnType<typeof useCmsMediaLibrary>
 
-export function usageLink(usage: Pick<MediaUsage, 'collection' | 'id'>) {
+export function usageLink(usage: Pick<MediaUsage, 'collection' | 'id' | 'kind'>) {
+   if (usage.kind === 'site') return cmsSettingsLink('site', '/cms/media')
    return usage.id === null ? `/cms/${usage.collection}` : `/cms/${usage.collection}/${usage.id}`
 }

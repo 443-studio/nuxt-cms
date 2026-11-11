@@ -5,6 +5,7 @@
       :sections="sections"
       :account="account"
       :presets="false"
+      :route="CMS_SETTINGS_QUERY"
       hide-session
       close-label="Close settings"
       :on-sign-out="signOut"
@@ -61,7 +62,7 @@ import { computed, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { useCmsAccount } from '../../composables/cms-account'
 import { useCmsPermissions } from '../../composables/cms-permissions'
-import { cmsIcon } from '../../utils/ui'
+import { CMS_SETTINGS_QUERY, cmsIcon } from '../../utils/ui'
 
 type EntryStatus = 'idle' | 'saving' | 'saved' | 'error'
 

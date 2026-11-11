@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { useDb } from '#cms-db'
 import { cms_settings } from '#cms-tables'
 import { useRuntimeConfig } from '#imports'
+import { cachedValue } from './cached-value'
 import type { CmsI18n, CmsSiteSettings } from '../../shared/index'
 import {
    CMS_SITE_SETTINGS_KEY,
@@ -72,6 +73,14 @@ export async function readSiteSettings(): Promise<CmsSiteSettings> {
    return parseSiteSettings(row?.value)
 }
 
+export const SITE_SETTINGS_CACHE_TTL_MS = 30_000
+
+const siteSettingsCache = cachedValue(readSiteSettings, SITE_SETTINGS_CACHE_TTL_MS)
+
+export function readCachedSiteSettings(): Promise<CmsSiteSettings> {
+   return siteSettingsCache.get()
+}
+
 export async function writeSiteSettings(settings: CmsSiteSettings): Promise<void> {
    const value = JSON.stringify(settings)
    const updatedAt = new Date().toISOString()
@@ -79,6 +88,7 @@ export async function writeSiteSettings(settings: CmsSiteSettings): Promise<void
       .insert(cms_settings)
       .values({ key: CMS_SITE_SETTINGS_KEY, value, updatedAt })
       .onConflictDoUpdate({ target: cms_settings.key, set: { value, updatedAt } })
+   siteSettingsCache.invalidate()
 }
 
 export function resolveSiteUrl(event: H3Event): string {

@@ -13,9 +13,13 @@ your app call one composable.
 - **Title template**: how each title reads. `%s` is the page title, `%siteName` the site name:
   `%s | %siteName` (the default) turns `About` into `About | Acme`. It must contain `%s`.
 - **Default description**: for a page without its own. Translatable.
-- **Share image**: an image of the media library, for a page shared without its own image.
-- **Hide the site from search engines**: every page gets `noindex, nofollow`, `robots.txt`
-  disallows everything and the sitemap is empty. For a staging site, or one not launched yet.
+- **Share image**: an image of the media library, for a page shared without its own image. The
+  media library counts it as a use (**Site settings**), so deleting it asks first.
+- **Hide the site from search engines**: every response of the site gets the header
+  `X-Robots-Tag: noindex, nofollow` (and `useCmsSeo` the matching meta tag), and the sitemap is
+  empty. `robots.txt` stays open on purpose: a crawler that may not fetch a page never sees its
+  `noindex`, so a blocked page can still show up in results. For a staging site, or one not
+  launched yet.
 
 They are stored as one row of the built-in `cms_settings` table (key `cms:site`), so they need no
 migration and no entry in `cms.config.ts`. Saving checks the share image against the media library.
@@ -145,8 +149,11 @@ Disallow: /cms/
 Sitemap: https://example.com/sitemap.xml
 ```
 
-The `Sitemap` line is there when a sitemap is served (ours or a sitemap module). A hidden site
-gets `Disallow: /` only.
+The `Sitemap` line is there when a sitemap is served (ours or a sitemap module) and the site is not
+hidden. A hidden site keeps the same rules: it is kept out of search results by the
+`X-Robots-Tag` header, which a server middleware adds to every response except `/cms/**` and the
+build assets under `/_nuxt/`. The middleware reads the site settings from a short in-memory cache
+(30 seconds, cleared when they are saved on the same server).
 
 ## Turning them off
 

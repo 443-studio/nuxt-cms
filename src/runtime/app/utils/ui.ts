@@ -1,6 +1,12 @@
 import type { FieldConfig, FieldType } from '#nuxt-cms'
 import { isBuiltinIcon } from '@xleddyl/443-components-vue'
 
+export const CMS_SETTINGS_QUERY = 'settings'
+
+export function cmsSettingsLink(section: string, path = '/cms') {
+   return `${path}?${CMS_SETTINGS_QUERY}=${encodeURIComponent(section)}`
+}
+
 export function errorMessage(error: unknown): string | undefined {
    const err = error as { data?: { message?: string }; message?: string }
    return err.data?.message ?? err.message

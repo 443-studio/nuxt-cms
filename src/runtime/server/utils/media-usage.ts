@@ -2,9 +2,10 @@ import cmsConfig from '#cms-config'
 import { useDb } from '#cms-db'
 import type { CmsEntry, MediaUsage } from '../../shared/index'
 import type { MediaUsageSource } from './media-references'
-import { collectMediaUsage } from './media-references'
+import { addSiteMediaUsage, collectMediaUsage } from './media-references'
 import { readPages } from './page-storage'
 import { decodeRows, resolveTable } from './registry'
+import { readSiteSettings } from './site'
 
 async function usageSources(): Promise<MediaUsageSource[]> {
    const sources: MediaUsageSource[] = []
@@ -21,5 +22,5 @@ async function usageSources(): Promise<MediaUsageSource[]> {
 }
 
 export async function loadMediaUsage(keys: string[]): Promise<Record<string, MediaUsage[]>> {
-   return collectMediaUsage(await usageSources(), keys)
+   return addSiteMediaUsage(collectMediaUsage(await usageSources(), keys), await readSiteSettings())
 }

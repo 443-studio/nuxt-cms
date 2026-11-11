@@ -1330,6 +1330,10 @@ export default defineNuxtModule<ModuleOptions>({
          method: 'put',
          handler: resolver.resolve('./runtime/server/api/site.put'),
       })
+      addServerHandler({
+         middleware: true,
+         handler: resolver.resolve('./runtime/server/middleware/hidden-site'),
+      })
       setupSeoRoutes(nuxt, resolver, options.seo, publicDir, logger)
       addServerHandler({
          route: '/api/cms/admin/settings',

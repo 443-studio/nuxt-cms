@@ -17,6 +17,8 @@ export const SITEMAP_MAX_URLS = 50000
 
 export const SEO_ADMIN_PREFIX = '/cms'
 
+export const HIDDEN_SITE_ROBOTS = 'noindex, nofollow'
+
 export const SITE_TEXT_LIMITS = { name: 200, titleTemplate: 200, description: 1000 } as const
 
 export const SITEMAP_CONFLICT_MODULES = ['@nuxtjs/sitemap', 'nuxt-simple-sitemap']
@@ -305,7 +307,7 @@ export function resolveSeoMeta(
             : [item.seoImage, item.cover, site?.image],
          context.siteUrl
       ),
-      robots: hidden ? 'noindex, nofollow' : noindex ? 'noindex' : null,
+      robots: hidden ? HIDDEN_SITE_ROBOTS : noindex ? 'noindex' : null,
       alternates: seoAlternates(
          overrides.alternates ?? item.paths,
          context.siteUrl,
@@ -388,6 +390,16 @@ export function isAdminPath(path: string): boolean {
    return path === SEO_ADMIN_PREFIX || path.startsWith(`${SEO_ADMIN_PREFIX}/`)
 }
 
+const ROBOTS_HEADER_SKIPPED_PREFIXES = ['/_nuxt/', '/__nuxt']
+
+export function hiddenSiteHeaderApplies(path: string): boolean {
+   const bare = path.replace(/[?#].*$/, '')
+   return (
+      !isAdminPath(bare) &&
+      !ROBOTS_HEADER_SKIPPED_PREFIXES.some((prefix) => bare.startsWith(prefix))
+   )
+}
+
 export function sitemapLastmod(value: unknown): string | null {
    const normalized = normalizeTimestamp(value)
    return typeof normalized === 'string' && normalized ? normalized : null
@@ -449,10 +461,7 @@ export interface RobotsOptions {
 }
 
 export function renderRobotsTxt(options: RobotsOptions): string {
-   const lines = [
-      'User-agent: *',
-      options.hidden ? 'Disallow: /' : `Disallow: ${SEO_ADMIN_PREFIX}/`,
-   ]
+   const lines = ['User-agent: *', `Disallow: ${SEO_ADMIN_PREFIX}/`]
    if (!options.hidden && options.sitemapUrl) lines.push('', `Sitemap: ${options.sitemapUrl}`)
    return `${lines.join('\n')}\n`
 }
