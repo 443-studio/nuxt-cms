@@ -112,15 +112,17 @@ import { cmsIcon } from '../utils/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '#imports'
 import type { FieldConfig } from '../../shared/index'
 import { canAddBlock } from '../../shared/index'
-import type { CmsPreviewFrameMessage } from '../../shared/preview'
+import type { CmsClipboardAction, CmsPreviewFrameMessage } from '../../shared/preview'
 import {
+   CMS_CLIPBOARD_MAX_LENGTH,
    canHideBlock,
+   clipboardActionApplies,
    editorShortcut,
    insertionIndex,
    moveTargetForInsertion,
    shortcutApplies,
 } from '../../shared/preview'
-import { onApplePlatform, shortcutTarget } from '../utils/keyboard'
+import { clipboardTarget, onApplePlatform, shortcutTarget } from '../utils/keyboard'
 
 interface Box {
    index: number
@@ -391,6 +393,26 @@ function onKeydown(event: KeyboardEvent) {
    }
 }
 
+function onClipboard(event: ClipboardEvent) {
+   if (event.defaultPrevented) return
+   const action = event.type as CmsClipboardAction
+   const index = props.selected
+   if (!clipboardActionApplies(action, clipboardTarget(event, index !== null))) return
+   if (action !== 'paste') {
+      if (index !== null) emit('message', { type: action, index })
+      return
+   }
+   event.preventDefault()
+   const at = index === null ? props.total : index + 1
+   const text = event.clipboardData?.getData('text/plain') ?? ''
+   emit(
+      'message',
+      text && text.length <= CMS_CLIPBOARD_MAX_LENGTH
+         ? { type: 'paste', index: at, text }
+         : { type: 'paste', index: at }
+   )
+}
+
 function blockElement(index: number) {
    return document.querySelector<HTMLElement>(`[data-cms-block="${index}"]`)
 }
@@ -451,6 +473,9 @@ onMounted(() => {
    document.addEventListener('click', onClick, true)
    document.addEventListener('submit', onSubmit, true)
    document.addEventListener('keydown', onKeydown)
+   document.addEventListener('copy', onClipboard)
+   document.addEventListener('cut', onClipboard)
+   document.addEventListener('paste', onClipboard)
    document.addEventListener('load', scheduleMeasure, true)
    window.addEventListener('scroll', scheduleMeasure, { passive: true, capture: true })
    window.addEventListener('resize', scheduleMeasure)
@@ -470,6 +495,9 @@ onBeforeUnmount(() => {
    document.removeEventListener('click', onClick, true)
    document.removeEventListener('submit', onSubmit, true)
    document.removeEventListener('keydown', onKeydown)
+   document.removeEventListener('copy', onClipboard)
+   document.removeEventListener('cut', onClipboard)
+   document.removeEventListener('paste', onClipboard)
    document.removeEventListener('load', scheduleMeasure, true)
    window.removeEventListener('scroll', scheduleMeasure, { capture: true })
    window.removeEventListener('resize', scheduleMeasure)

@@ -280,6 +280,22 @@ function blockVariantSchema(
    })
 }
 
+export function blockFieldValue(
+   blockField: FieldConfig,
+   value: unknown,
+   i18n: CmsI18n,
+   config?: CmsConfig
+): unknown {
+   const schema = blockFieldSchema(
+      { ...blockField, required: false },
+      i18n,
+      DEFAULT_MESSAGES,
+      config
+   )
+   const parsed = schema.safeParse(value)
+   return parsed.success ? parsed.data ?? null : null
+}
+
 function blocksSchema(
    field: FieldConfig,
    i18n: CmsI18n,

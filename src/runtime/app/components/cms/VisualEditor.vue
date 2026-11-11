@@ -368,8 +368,10 @@ import type { CmsPreviewDevice } from '../../../shared/editor-layout'
 import { CMS_EDITOR_PANEL_LIMITS, CMS_PREVIEW_DEVICE_WIDTHS } from '../../../shared/editor-layout'
 import type { CmsSearchFocus } from '../../../shared/search'
 import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
+import { copyNotice, pasteBlocks, pasteNotice } from '../../../shared/clipboard'
 import type {
    CmsBlockValue,
+   CmsClipboardAction,
    CmsEditorShortcut,
    CmsPreviewFrameMessage,
    CmsPreviewHostMessage,
@@ -380,6 +382,7 @@ import {
    blockErrorIndexes,
    blockSummary,
    canHideBlock,
+   clipboardActionApplies,
    collectMediaKeys,
    duplicateBlock,
    editorShortcut,
@@ -397,12 +400,18 @@ import {
    toggleBlockHidden,
 } from '../../../shared/preview'
 import { translationProgress } from '../../../shared/translations'
+import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsEditorLayout } from '../../composables/cms-editor-layout'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsHistory } from '../../composables/cms-history'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
-import { isInForeignOverlay, onApplePlatform, shortcutTarget } from '../../utils/keyboard'
+import {
+   clipboardTarget,
+   isInForeignOverlay,
+   onApplePlatform,
+   shortcutTarget,
+} from '../../utils/keyboard'
 import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
@@ -662,6 +671,52 @@ function remove(index: number) {
    selected.value = selectionAfterRemove(selected.value, index)
 }
 
+const clipboard = useCmsClipboard()
+
+function copy(index: number, event?: ClipboardEvent) {
+   const item = blocks.value[index]
+   if (!item) return
+   clipboard.copy([item], event)
+   clipboard.notify(copyNotice(1))
+}
+
+function cut(index: number, event?: ClipboardEvent) {
+   const item = blocks.value[index]
+   if (!item) return
+   clipboard.copy([item], event)
+   remove(index)
+   clipboard.notify(copyNotice(1, true))
+}
+
+async function paste(index: number, text?: string | null) {
+   const items = await clipboard.read(text)
+   const result = items ? pasteBlocks(blocks.value, index, items, blocksField.value, i18n) : null
+   if (result?.pasted) {
+      setBlocks(result.list)
+      select(result.at)
+      post({ type: 'reveal', index: result.at })
+   }
+   clipboard.notify(pasteNotice(result, blocksField.value))
+}
+
+function onClipboard(event: ClipboardEvent) {
+   if (event.defaultPrevented || paletteOpen.value) return
+   if (isInForeignOverlay(event.target, root.value)) return
+   const action = event.type as CmsClipboardAction
+   const index = selected.value
+   if (!clipboardActionApplies(action, clipboardTarget(event, index !== null))) return
+   if (action === 'paste') {
+      event.preventDefault()
+      void paste(
+         index === null ? blocks.value.length : index + 1,
+         event.clipboardData?.getData('text/plain') ?? null
+      )
+   } else if (index !== null) {
+      if (action === 'copy') copy(index, event)
+      else cut(index, event)
+   }
+}
+
 function blockMenu(index: number): MenuItems {
    const item = blocks.value[index]
    if (!item) return []
@@ -713,6 +768,28 @@ function blockMenu(index: number): MenuItems {
                  },
               ]
             : []),
+      ],
+      [
+         {
+            label: 'Copy',
+            icon: cmsIcon('clipboard-document'),
+            shortcut: 'mod+c',
+            onSelect: () => copy(index),
+         },
+         {
+            label: 'Cut',
+            icon: cmsIcon('scissors'),
+            shortcut: 'mod+x',
+            onSelect: () => cut(index),
+         },
+         {
+            label: 'Paste after',
+            icon: cmsIcon('clipboard'),
+            shortcut: 'mod+v',
+            disabled: !!full,
+            disabledReason: full,
+            onSelect: () => void paste(index + 1),
+         },
       ],
       [
          {
@@ -844,6 +921,15 @@ function onFrameMessage(message: CmsPreviewFrameMessage) {
       case 'remove':
          remove(message.index)
          break
+      case 'copy':
+         copy(message.index)
+         break
+      case 'cut':
+         cut(message.index)
+         break
+      case 'paste':
+         void paste(message.index, message.text ?? null)
+         break
       case 'undo':
          undo()
          break
@@ -907,6 +993,9 @@ let frameObserver: ResizeObserver | null = null
 onMounted(() => {
    window.addEventListener('message', onMessage)
    document.addEventListener('keydown', runShortcut)
+   document.addEventListener('copy', onClipboard)
+   document.addEventListener('cut', onClipboard)
+   document.addEventListener('paste', onClipboard)
    frameObserver = new ResizeObserver(([entry]) => {
       canvasWidth.value = entry ? Math.round(entry.contentRect.width) : null
    })
@@ -925,6 +1014,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
    window.removeEventListener('message', onMessage)
    document.removeEventListener('keydown', runShortcut)
+   document.removeEventListener('copy', onClipboard)
+   document.removeEventListener('cut', onClipboard)
+   document.removeEventListener('paste', onClipboard)
    frameObserver?.disconnect()
 })
 

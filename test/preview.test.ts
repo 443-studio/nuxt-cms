@@ -9,10 +9,12 @@ import type { CmsConfig } from '../src/runtime/shared/index'
 import { normalizeCmsConfig } from '../src/runtime/shared/index'
 import type { CmsBlockValue, CmsPreviewMedia } from '../src/runtime/shared/preview'
 import {
+   CMS_CLIPBOARD_MAX_LENGTH,
    CMS_PREVIEW_CHANNEL,
    blockErrorIndexes,
    blockSummary,
    canHideBlock,
+   clipboardActionApplies,
    collectMediaKeys,
    duplicateBlock,
    editorShortcut,
@@ -65,7 +67,15 @@ describe('preview message protocol', () => {
       expect(
          parseFrameMessage(previewEnvelope({ type: 'move', from: 2, to: 0, focus: true }))
       ).toEqual({ type: 'move', from: 2, to: 0, focus: true })
-      for (const type of ['insert', 'duplicate', 'toggle-hidden', 'remove'] as const) {
+      for (const type of [
+         'insert',
+         'duplicate',
+         'toggle-hidden',
+         'remove',
+         'copy',
+         'cut',
+         'paste',
+      ] as const) {
          expect(parseFrameMessage(previewEnvelope({ type, index: 1 }))).toEqual({ type, index: 1 })
       }
       for (const type of ['undo', 'redo', 'save'] as const) {
@@ -73,6 +83,21 @@ describe('preview message protocol', () => {
             type,
          })
       }
+   })
+
+   it('carries the clipboard text of a paste from the frame', () => {
+      expect(
+         parseFrameMessage(previewEnvelope({ type: 'paste', index: 2, text: '{"a":1}' }))
+      ).toEqual({ type: 'paste', index: 2, text: '{"a":1}' })
+      expect(parseFrameMessage(previewEnvelope({ type: 'copy', index: 0, text: 'x' }))).toEqual({
+         type: 'copy',
+         index: 0,
+      })
+      expect(parseFrameMessage(previewEnvelope({ type: 'paste', index: 1, text: 3 }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'paste', text: 'x' }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'cut', index: -1 }))).toBeNull()
+      const long = 'x'.repeat(CMS_CLIPBOARD_MAX_LENGTH + 1)
+      expect(parseFrameMessage(previewEnvelope({ type: 'paste', index: 0, text: long }))).toBeNull()
    })
 
    it('rejects foreign, unknown and malformed frame messages', () => {
@@ -556,5 +581,31 @@ describe('editor shortcuts', () => {
       expect(shortcutApplies('insert-after', button)).toBe(false)
       expect(shortcutApplies('insert-before', button)).toBe(false)
       expect(shortcutApplies('remove', button)).toBe(true)
+   })
+})
+
+describe('clipboard keys', () => {
+   const idle = { editable: false, textSelected: false, selected: false }
+
+   it('leaves fields and selected text to the browser', () => {
+      for (const action of ['copy', 'cut', 'paste'] as const)
+         expect(clipboardActionApplies(action, { ...idle, editable: true, selected: true })).toBe(
+            false
+         )
+      expect(clipboardActionApplies('copy', { ...idle, selected: true, textSelected: true })).toBe(
+         false
+      )
+      expect(clipboardActionApplies('cut', { ...idle, selected: true, textSelected: true })).toBe(
+         false
+      )
+   })
+
+   it('copies and cuts the selected block and pastes without one', () => {
+      expect(clipboardActionApplies('copy', idle)).toBe(false)
+      expect(clipboardActionApplies('cut', idle)).toBe(false)
+      expect(clipboardActionApplies('paste', idle)).toBe(true)
+      expect(clipboardActionApplies('copy', { ...idle, selected: true })).toBe(true)
+      expect(clipboardActionApplies('cut', { ...idle, selected: true })).toBe(true)
+      expect(clipboardActionApplies('paste', { ...idle, textSelected: true })).toBe(true)
    })
 })

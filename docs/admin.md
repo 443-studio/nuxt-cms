@@ -54,6 +54,11 @@ disabled, and so are the palette, the `+` buttons and **Duplicate** of the visua
 drag. For a keyboard, focus the grip at the bottom left of a tile and press the left or right arrow
 key; the block editor also carries two move buttons, which is the way on a touch screen.
 
+**Copy and paste.** The `...` menu of a tile has **Copy**, **Cut**, **Paste after** and
+**Duplicate**. With a tile focused, ⌘ C, ⌘ X and ⌘ V (Ctrl outside macOS) do the same; ⌘ V on the
+add tile appends. Copied blocks paste into any `blocks` field that has their type, here or in the
+[visual editor](#copy-and-paste), even in another entry.
+
 **Media lists.** A `blocks` field with one block type that has one `media` field (for example a
 photo gallery) is edited as a media list. **+** opens the media library and adds the file you pick.
 The X on a tile removes it, and a drag changes the order. No editor opens.
@@ -293,6 +298,8 @@ field (where the browser keeps its own undo) or in a dialog. ⌘ is Ctrl outside
 | ⌘ ↑, ⌘ ↓ | move the selected block up or down |
 | Enter, ⇧ Enter | open the palette to add a block after or before the selected one |
 | Escape | clear the selection |
+| ⌘ C, ⌘ X | copy or cut the selected block |
+| ⌘ V | paste after the selected block, or at the end |
 
 Duplicate and add do nothing once the field holds `max` blocks. In the canvas you can also focus the
 drag handle of a block and press the up or down arrow to move it. In the block tree, Alt with the
@@ -306,6 +313,16 @@ red dot every block with one in the tree. An error or a warning that names no fi
 top of the inspector, an error of the body itself (for example too few blocks)
 shows at the top of the block tree, and one that names a block shows above the fields of that
 block. Leaving with unsaved changes asks for a confirmation.
+
+### Copy and paste
+
+Copy, Cut and Paste after are also in the `...` menu of a block, in the tree and in the inspector.
+Blocks go to the system clipboard as JSON text and to a copy kept by the admin, which is used when
+the browser denies the clipboard or it holds something else. You can paste into another item, into
+another content type that uses the same blocks, or into the tiles of a `blocks` field. Only the
+block types of the target field are pasted: unknown fields are dropped, values are checked like the
+form, and a full field takes as many as fit. A toast says what was pasted and what was skipped. In a
+text field, or with text selected, the keys copy and paste text as usual.
 
 ### Share preview
 

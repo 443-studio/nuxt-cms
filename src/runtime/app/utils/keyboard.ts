@@ -1,4 +1,4 @@
-import type { CmsShortcutTarget } from '../../shared/preview'
+import type { CmsClipboardTarget, CmsShortcutTarget } from '../../shared/preview'
 import { isApplePlatform } from '../../shared/preview'
 
 const NON_TEXT_INPUTS = new Set([
@@ -39,6 +39,15 @@ export function shortcutTarget(event: KeyboardEvent, selected: boolean): CmsShor
    return {
       editable: isEditableTarget(event.target),
       interactive: !!element?.closest(INTERACTIVE_SELECTOR),
+      selected,
+   }
+}
+
+export function clipboardTarget(event: Event, selected: boolean): CmsClipboardTarget {
+   const selection = typeof window === 'undefined' ? null : window.getSelection()
+   return {
+      editable: isEditableTarget(event.target),
+      textSelected: !!selection && !selection.isCollapsed && selection.toString().trim() !== '',
       selected,
    }
 }

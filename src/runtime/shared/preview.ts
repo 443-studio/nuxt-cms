@@ -98,9 +98,14 @@ export type CmsPreviewFrameMessage =
    | { type: 'duplicate'; index: number }
    | { type: 'toggle-hidden'; index: number }
    | { type: 'remove'; index: number }
+   | { type: 'copy'; index: number }
+   | { type: 'cut'; index: number }
+   | { type: 'paste'; index: number; text?: string }
    | { type: 'undo' }
    | { type: 'redo' }
    | { type: 'save' }
+
+export const CMS_CLIPBOARD_MAX_LENGTH = 2_000_000
 
 export type CmsPreviewEnvelope<T> = T & { channel: typeof CMS_PREVIEW_CHANNEL }
 
@@ -147,7 +152,15 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
       case 'duplicate':
       case 'toggle-hidden':
       case 'remove':
+      case 'copy':
+      case 'cut':
          return isIndex(message.index) ? { type: message.type, index: message.index } : null
+      case 'paste':
+         if (!isIndex(message.index)) return null
+         if (message.text === undefined) return { type: 'paste', index: message.index }
+         return typeof message.text === 'string' && message.text.length <= CMS_CLIPBOARD_MAX_LENGTH
+            ? { type: 'paste', index: message.index, text: message.text }
+            : null
       default:
          return null
    }
@@ -242,6 +255,23 @@ export function shortcutApplies(action: CmsEditorShortcut, target: CmsShortcutTa
    if (!target.selected) return false
    if (action === 'insert-after' || action === 'insert-before') return !target.interactive
    return true
+}
+
+export type CmsClipboardAction = 'copy' | 'cut' | 'paste'
+
+export interface CmsClipboardTarget {
+   editable: boolean
+   textSelected: boolean
+   selected: boolean
+}
+
+export function clipboardActionApplies(
+   action: CmsClipboardAction,
+   target: CmsClipboardTarget
+): boolean {
+   if (target.editable) return false
+   if (action === 'paste') return true
+   return target.selected && !target.textSelected
 }
 
 export function isTrustedPreviewEvent(

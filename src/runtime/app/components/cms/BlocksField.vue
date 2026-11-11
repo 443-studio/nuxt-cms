@@ -1,6 +1,6 @@
 <template>
    <KStack gap="sm" class="cms-blocks-field">
-      <div class="cms-blocks-grid">
+      <div class="cms-blocks-grid" @copy="onClipboard" @cut="onClipboard" @paste="onClipboard">
          <div
             v-for="(item, index) in items"
             :key="uidFor(item)"
@@ -14,6 +14,7 @@
                'is-disabled': disabled,
             }"
             :draggable="disabled ? undefined : 'true'"
+            :data-cms-tile="index"
             :tabindex="mediaOnly && !disabled ? 0 : undefined"
             :aria-label="
                mediaOnly && !disabled
@@ -94,6 +95,15 @@
                >
                   <KIcon name="exclamation-triangle" />
                </span>
+               <KDropdownMenu :items="tileMenu(index)" placement="bottom-end">
+                  <KButton
+                     :icon="cmsIcon('ellipsis-horizontal')"
+                     size="xs"
+                     variant="ghost"
+                     tone="neutral"
+                     :aria-label="`${labelOf(item)} actions`"
+                  />
+               </KDropdownMenu>
                <KButton
                   v-if="!disabled"
                   icon="trash"
@@ -277,6 +287,7 @@ import {
    mediaTypeForKey,
    pickTranslatedMedia,
 } from '#nuxt-cms'
+import type { MenuItems } from '@xleddyl/443-components-vue'
 import {
    Button as KButton,
    DropdownMenu as KDropdownMenu,
@@ -287,8 +298,13 @@ import {
    useFieldControl,
 } from '@xleddyl/443-components-vue'
 import { computed, ref, useState } from '#imports'
+import { copyNotice, pasteBlocks, pasteNotice } from '../../../shared/clipboard'
+import type { CmsBlockValue, CmsClipboardAction } from '../../../shared/preview'
+import { clipboardActionApplies } from '../../../shared/preview'
+import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
 import { useCmsRuntime } from '../../composables/cms-runtime'
+import { clipboardTarget } from '../../utils/keyboard'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const props = defineProps<{
@@ -624,5 +640,95 @@ function duplicateCurrent() {
    if (editorIndex.value === null) return
    duplicate(editorIndex.value)
    editorIndex.value = null
+}
+
+const clipboard = useCmsClipboard()
+
+function copy(index: number, event?: ClipboardEvent) {
+   const item = items.value[index]
+   if (!item) return
+   clipboard.copy([item as CmsBlockValue], event)
+   clipboard.notify(copyNotice(1))
+}
+
+function cut(index: number, event?: ClipboardEvent) {
+   const item = items.value[index]
+   if (!item || disabled.value) return
+   clipboard.copy([item as CmsBlockValue], event)
+   remove(index)
+   clipboard.notify(copyNotice(1, true))
+}
+
+async function paste(index: number, text?: string | null) {
+   if (disabled.value) return
+   const pasted = await clipboard.read(text)
+   const result = pasted
+      ? pasteBlocks(items.value as CmsBlockValue[], index, pasted, props.field, i18n)
+      : null
+   if (result?.pasted) model.value = result.list
+   clipboard.notify(pasteNotice(result, props.field))
+}
+
+function tileIndexOf(target: EventTarget | null) {
+   const tile = target instanceof Element ? target.closest<HTMLElement>('[data-cms-tile]') : null
+   const index = tile ? Number(tile.dataset.cmsTile) : NaN
+   return Number.isInteger(index) ? index : null
+}
+
+function onClipboard(event: ClipboardEvent) {
+   if (event.defaultPrevented) return
+   const action = event.type as CmsClipboardAction
+   if (disabled.value && action !== 'copy') return
+   const index = tileIndexOf(event.target)
+   if (!clipboardActionApplies(action, clipboardTarget(event, index !== null))) return
+   if (action === 'paste') {
+      event.preventDefault()
+      void paste(
+         index === null ? items.value.length : index + 1,
+         event.clipboardData?.getData('text/plain') ?? null
+      )
+   } else if (index !== null) {
+      if (action === 'copy') copy(index, event)
+      else cut(index, event)
+   }
+}
+
+function tileMenu(index: number): MenuItems {
+   const copyItem = {
+      label: 'Copy',
+      icon: cmsIcon('clipboard-document'),
+      shortcut: 'mod+c',
+      onSelect: () => copy(index),
+   }
+   if (disabled.value) return [[copyItem]]
+   const full = canAdd.value ? undefined : countHint.value
+   return [
+      [
+         copyItem,
+         {
+            label: 'Cut',
+            icon: cmsIcon('scissors'),
+            shortcut: 'mod+x',
+            onSelect: () => cut(index),
+         },
+         {
+            label: 'Paste after',
+            icon: cmsIcon('clipboard'),
+            shortcut: 'mod+v',
+            disabled: !!full,
+            disabledReason: full,
+            onSelect: () => void paste(index + 1),
+         },
+      ],
+      [
+         {
+            label: 'Duplicate',
+            icon: cmsIcon('document-duplicate'),
+            disabled: !!full,
+            disabledReason: full,
+            onSelect: () => duplicate(index),
+         },
+      ],
+   ]
 }
 </script>
