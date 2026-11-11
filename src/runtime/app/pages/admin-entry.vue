@@ -80,6 +80,7 @@ const FORM_ID = 'cms-entry-form'
 definePageMeta({
    layout: 'cms-admin',
    middleware: 'cms-auth',
+   content: 'page',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
    key: (route) => route.fullPath,
 })

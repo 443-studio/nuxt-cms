@@ -201,7 +201,7 @@ matter. Each language is **complete** (every value), **partial** (some) or **mis
   switch of the visual editor counts the whole item.
 - **Lists**: the table of a collection or content entry with translatable fields has a
   **Translations** column, with one badge per language other than the default. It is shown by
-  default and can be hidden in **Settings > Content > Table columns**. The page tree shows the same
+  default and can be hidden in **Settings > Layout > Table columns**. The page tree shows the same
   badges. They are computed in the browser from the rows the list already loads.
 - **Actions**: the `...` menu of the form header (entry page, entry drawer, single, page) and of the
   visual editor has a **Translations** group. **Copy EN into IT** has two choices: **Fill empty
@@ -485,26 +485,33 @@ only.
 
 ## Settings
 
-The account button at the bottom of the sidebar opens **Settings**:
+The account button at the bottom of the sidebar opens **Settings**. Every section and subpage is in
+the URL hash (`#settings/<section>`, `#settings/<section>/<id>`), so the browser back button, a
+reload and a shared link open the same place. Add and edit open a subpage of the section
+(`#settings/users/new`, `#settings/redirects/<id>`); its header holds **Delete** and **Save** (or
+**Create**).
 
 - **Account**: your name and your password. The super admin account comes from the environment
   variables, so it has no form here.
 - **Appearance**: the theme (light, dark or system). The choice is kept in the `cms-theme` cookie
   of the browser.
-- **Users** (super admin and roles with `users.manage`): add accounts, pick their role, set a new
-  password, delete accounts.
+- **Users** (super admin and roles with `users.manage`): the accounts, with **Add user**. A user
+  opens on its own page: name, role, a new password (shown once, with a copy button) and
+  **Delete**. You cannot change your own role or delete your own account.
 - **Site** (roles with `settings.manage`): site name, title template, default description, share
   image and the switch that hides the whole site from search engines. See
   [SEO](seo.md#site-settings).
-- **Redirects** (roles with `redirects.manage`): the redirects of the site, with search, import and
-  export. Changing the slug of a published item adds one. See [SEO](seo.md#redirects).
-- **Block presets** (roles with `settings.manage`): rename and delete the
-  [block presets](#block-presets).
-- **Content** (roles with `settings.manage`): one item for each entry the role can read.
-  - **Table columns** (collections only): show, hide and drag the columns of the table, including
-    **Status** and **Translations**.
+- **Redirects** (roles with `redirects.manage`): the redirects of the site, with search, **Add
+  redirect**, and a menu to import and export them. Changing the slug of a published item adds one.
+  See [SEO](seo.md#redirects).
+- **Layout** (roles with `settings.manage`): one row for each entry the role can read
+  (`#settings/layout/<entry>`), with two tabs in the header:
+  - **Table columns** (collections and content only): show, hide and drag the columns of the table,
+    including **Status** and **Translations**.
   - **Form layout**: drag a field up or down, or next to another field to put them in the same row.
     Sections come from the config and fields cannot be added.
+- **Block presets** (roles with `settings.manage`): rename and delete the
+  [block presets](#block-presets).
 - **Sign out**.
 
 Column and layout changes save automatically in the `cms_settings` table and apply to every admin.

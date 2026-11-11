@@ -3,7 +3,18 @@
       <KDashboardLayout
          v-model:open="navOpen"
          class="cms-admin"
+         :content="content"
+         :loading="navigationPending"
          :navigation="navigation"
+         :account="account"
+         :settings-sections="settingsSections.navigation.value"
+         :settings-presets="false"
+         settings-title="Settings"
+         :settings-route="true"
+         settings-route-location="hash"
+         settings-account-section="account"
+         settings-hide-session
+         :settings-resolve-page="settingsSections.resolvePage"
          :theme-switch="false"
          :collapsible="false"
          :storage-key="false"
@@ -12,6 +23,7 @@
          :search-navigation="false"
          :search-props="searchProps"
          search-label="Search"
+         @sign-out="logout"
       >
          <template #brand>
             <CmsBrandMark :subtitle="cmsBrand.subtitle || undefined" />
@@ -55,21 +67,34 @@
             </template>
          </template>
 
-         <template #account>
-            <KAccountMenu
-               :name="displayName"
-               :email="email"
-               :active="settingsOpen"
-               aria-haspopup="dialog"
-               aria-label="Open settings"
-               @click="openSettings"
-            />
-         </template>
-
          <slot />
+
+         <template #settings-nav-footer>
+            <CmsPoweredBy />
+         </template>
+         <template #settings-account-fields>
+            <CmsSettingsAccount />
+         </template>
+         <template
+            v-for="section in settingsSections.views.value"
+            #[`settings-section-${section.id}`]="slot"
+         >
+            <component :is="section.component" v-bind="section.bind?.(slot)" />
+         </template>
+         <template
+            v-for="section in settingsSections.actionViews.value"
+            #[`settings-actions-${section.id}`]="slot"
+         >
+            <component :is="section.actions" v-bind="section.bindActions?.(slot)" />
+         </template>
+         <template
+            v-for="section in settingsSections.tabViews.value"
+            #[`settings-tabs-${section.id}`]="slot"
+         >
+            <component :is="section.tabs" :page="slot.page" />
+         </template>
       </KDashboardLayout>
 
-      <CmsSettingsModal v-model:open="settingsOpen" @logout="logout" />
       <CmsWelcomeModal />
       <KOverlayHost />
    </KRoot>
@@ -77,14 +102,19 @@
 
 <script setup lang="ts">
 import type { CmsConfig, CmsEntryKind } from '#nuxt-cms'
-import type { CommandGroup, DashboardSearchProps, NavSection } from '@xleddyl/443-components-vue'
+import type {
+   CommandGroup,
+   DashboardSearchProps,
+   NavSection,
+   ShellContent,
+} from '@xleddyl/443-components-vue'
 import {
-   AccountMenu as KAccountMenu,
    Badge as KBadge,
    DashboardLayout as KDashboardLayout,
    Icon as KIcon,
    OverlayHost as KOverlayHost,
    Root as KRoot,
+   provideFormConfig,
    provideTheme,
 } from '@xleddyl/443-components-vue'
 import { computed, navigateTo, ref, useRoute, watch } from '#imports'
@@ -95,16 +125,29 @@ import { CMS_SEARCH_MIN_LENGTH, normalizeSearchQuery } from '../../shared/search
 import { useCmsTheme } from '../composables/cms-theme'
 import { useCmsAccount } from '../composables/cms-account'
 import { useCmsPermissions } from '../composables/cms-permissions'
+import { provideCmsRouteLocation, useCmsNavigationPending } from '../composables/cms-route'
 import { loadCmsSettings } from '../composables/cms-settings'
-import { cmsIcon } from '../utils/ui'
+import { useCmsSettingsSections } from '../composables/cms-settings-sections'
+import { cmsIcon, cmsSubmitError } from '../utils/ui'
 
 const route = useRoute()
 const { email, displayName } = useCmsAccount()
-const { can } = useCmsPermissions()
+const { can, role, roleLabel } = useCmsPermissions()
 const theme = useCmsTheme()
 provideTheme(theme)
+provideCmsRouteLocation()
+provideFormConfig({ submitError: cmsSubmitError })
 const navOpen = ref(false)
-const settingsOpen = ref(false)
+const navigationPending = useCmsNavigationPending()
+const settingsSections = useCmsSettingsSections()
+
+const content = computed(() => (route.meta.content as ShellContent | undefined) ?? 'fill')
+
+const account = computed(() => ({
+   name: displayName.value,
+   email: email.value,
+   role: roleLabel(role.value),
+}))
 
 await loadCmsSettings()
 
@@ -242,13 +285,7 @@ watch(
    }
 )
 
-function openSettings() {
-   navOpen.value = false
-   settingsOpen.value = true
-}
-
 async function logout() {
-   settingsOpen.value = false
    await navigateTo('/cms/logout')
 }
 </script>

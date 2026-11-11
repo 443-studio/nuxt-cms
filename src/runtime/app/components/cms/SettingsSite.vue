@@ -1,7 +1,7 @@
 <template>
-   <KSpinner v-if="loading" />
+   <KSkeletonForm v-if="!loaded" :fields="4" :columns="2" />
 
-   <template v-else>
+   <KForm v-else :id="formId" :form="form" class="cms-stack is-loose">
       <KSettingsGroup
          label="Search results"
          description="How the pages of the site show up in search engines and browser tabs."
@@ -9,28 +9,31 @@
          <template v-if="multilingual" #actions>
             <CmsLocaleSwitch v-model="locale" :progress="progress" />
          </template>
-         <KGrid :columns="2">
-            <KFormField label="Site name">
-               <CmsTranslatableField v-model="state.name" :field="NAME_FIELD" :locale="locale" />
-            </KFormField>
+         <div class="cms-stack">
+            <div class="cms-form-grid">
+               <KFormField label="Site name" name="name">
+                  <CmsTranslatableField v-model="state.name" :field="NAME_FIELD" :locale="locale" />
+               </KFormField>
+               <KFormField
+                  label="Title template"
+                  name="titleTemplate"
+                  :description="`${TITLE_PLACEHOLDER} is the page title, ${SITE_NAME_PLACEHOLDER} the site name.`"
+               >
+                  <KInput v-model="titleTemplate" :placeholder="DEFAULT_TITLE_TEMPLATE" />
+               </KFormField>
+            </div>
             <KFormField
-               label="Title template"
-               :description="`${TITLE_PLACEHOLDER} is the page title, ${SITE_NAME_PLACEHOLDER} the site name.`"
-               :error="templateError"
+               label="Default description"
+               name="description"
+               description="Used by the pages that have no description of their own."
             >
-               <KInput v-model="titleTemplate" :placeholder="DEFAULT_TITLE_TEMPLATE" />
+               <CmsTranslatableField
+                  v-model="state.description"
+                  :field="DESCRIPTION_FIELD"
+                  :locale="locale"
+               />
             </KFormField>
-         </KGrid>
-         <KFormField
-            label="Default description"
-            description="Used by the pages that have no description of their own."
-         >
-            <CmsTranslatableField
-               v-model="state.description"
-               :field="DESCRIPTION_FIELD"
-               :locale="locale"
-            />
-         </KFormField>
+         </div>
       </KSettingsGroup>
 
       <KSettingsGroup
@@ -49,17 +52,7 @@
             <KSwitch v-model="state.hidden" aria-label="Hide the site from search engines" />
          </template>
       </KSettingsGroup>
-
-      <KStack direction="row" justify="end" gap="sm">
-         <KButton
-            label="Save"
-            size="sm"
-            :loading="saving"
-            :disabled="!dirty || !!templateError"
-            @click="save"
-         />
-      </KStack>
-   </template>
+   </KForm>
 </template>
 
 <script setup lang="ts">
@@ -72,19 +65,19 @@ import {
    titleTemplateErrors,
 } from '#nuxt-cms'
 import {
-   Button as KButton,
+   Form as KForm,
    FormField as KFormField,
-   Grid as KGrid,
    Input as KInput,
    SettingsGroup as KSettingsGroup,
-   Spinner as KSpinner,
-   Stack as KStack,
+   SkeletonForm as KSkeletonForm,
    Switch as KSwitch,
+   toast,
+   useForm,
 } from '@xleddyl/443-components-vue'
 import { computed, onMounted, ref } from '#imports'
 import { translationProgress } from '../../../shared/translations'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { useCmsToast } from '../../composables/cms-toast'
+import { useCmsSettingsForm } from '../../composables/cms-settings-form'
 import { cmsApi } from '../../utils/api'
 import { errorMessage } from '../../utils/ui'
 
@@ -101,14 +94,11 @@ const PROGRESS_FIELDS: Record<string, FieldConfig> = {
 const ENDPOINT = '/api/cms/site'
 
 const { i18n } = useCmsRuntime()
-const toast = useCmsToast()
 
 const multilingual = i18n.locales.length > 1
 const locale = ref(i18n.defaultLocale)
-const loading = ref(true)
-const saving = ref(false)
+const loaded = ref(false)
 const state = ref<CmsSiteSettings>({ ...EMPTY_SITE_SETTINGS })
-const saved = ref(JSON.stringify(state.value))
 
 const titleTemplate = computed<string | number | null | undefined>({
    get: () => state.value.titleTemplate ?? '',
@@ -117,51 +107,35 @@ const titleTemplate = computed<string | number | null | undefined>({
    },
 })
 
-const templateError = computed(() => {
-   const template = state.value.titleTemplate?.trim()
-   return template ? titleTemplateErrors(template)[0] ?? false : false
-})
-
-const dirty = computed(() => JSON.stringify(state.value) !== saved.value)
-
 const progress = computed(() =>
    translationProgress(PROGRESS_FIELDS, state.value as unknown as Record<string, unknown>, i18n)
 )
 
-function apply(settings: CmsSiteSettings) {
-   state.value = { ...EMPTY_SITE_SETTINGS, ...settings }
-   saved.value = JSON.stringify(state.value)
-}
+const form = useForm({
+   values: state,
+   schema: {
+      titleTemplate: {
+         validate: (value: string | null) => {
+            const template = value?.trim()
+            return template ? titleTemplateErrors(template)[0] : undefined
+         },
+      },
+   },
+   onSubmit: async (values) => {
+      const saved = await cmsApi<CmsSiteSettings>(ENDPOINT, { method: 'PUT', body: values })
+      form.reset({ ...EMPTY_SITE_SETTINGS, ...saved })
+      toast.success('Site settings saved')
+   },
+})
 
-async function load() {
+const formId = useCmsSettingsForm({ submitting: form.submitting, enabled: loaded })
+
+onMounted(async () => {
    try {
-      apply(await cmsApi<CmsSiteSettings>(ENDPOINT))
+      form.reset({ ...EMPTY_SITE_SETTINGS, ...(await cmsApi<CmsSiteSettings>(ENDPOINT)) })
+      loaded.value = true
    } catch (error) {
-      toast.add({
-         title: 'Site settings not loaded',
-         description: errorMessage(error),
-         color: 'error',
-      })
-   } finally {
-      loading.value = false
+      toast.error('Site settings not loaded', { description: errorMessage(error) })
    }
-}
-
-async function save() {
-   saving.value = true
-   try {
-      apply(await cmsApi<CmsSiteSettings>(ENDPOINT, { method: 'PUT', body: state.value }))
-      toast.add({ title: 'Site settings saved', color: 'success' })
-   } catch (error) {
-      toast.add({
-         title: 'Site settings not saved',
-         description: errorMessage(error),
-         color: 'error',
-      })
-   } finally {
-      saving.value = false
-   }
-}
-
-onMounted(load)
+})
 </script>

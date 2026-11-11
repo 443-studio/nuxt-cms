@@ -1,10 +1,9 @@
 import type { FieldConfig, FieldType } from '#nuxt-cms'
-import { isBuiltinIcon } from '@xleddyl/443-components-vue'
-
-export const CMS_SETTINGS_QUERY = 'settings'
+import type { FormSubmitError } from '@xleddyl/443-components-vue'
+import { isBuiltinIcon, routeHash } from '@xleddyl/443-components-vue'
 
 export function cmsSettingsLink(section: string, path = '/cms') {
-   return `${path}?${CMS_SETTINGS_QUERY}=${encodeURIComponent(section)}`
+   return `${path}${routeHash(undefined, { settings: section })}`
 }
 
 export function errorMessage(error: unknown): string | undefined {
@@ -27,6 +26,10 @@ export function errorIssues(error: unknown): CmsResponseIssue[] {
          Array.isArray((issue as CmsResponseIssue).path) &&
          typeof (issue as CmsResponseIssue).message === 'string'
    )
+}
+
+export function cmsSubmitError(error: unknown): FormSubmitError {
+   return { message: errorMessage(error) ?? 'Something went wrong.', issues: errorIssues(error) }
 }
 
 const FIELD_ICONS: Record<FieldType, string> = {

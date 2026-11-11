@@ -19,7 +19,7 @@ import { definePageMeta, navigateTo, useRoute } from '#imports'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { cmsIcon } from '../utils/ui'
 
-definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth' })
+definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth', content: 'centered' })
 
 const route = useRoute()
 const { access, firstPath } = useCmsPermissions()
