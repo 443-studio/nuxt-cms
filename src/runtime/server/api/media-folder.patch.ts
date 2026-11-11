@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { runBatch } from '#cms-db'
 import { cms_media } from '#cms-tables'
 import {
+   isMediaFolderMarker,
    isWithinMediaFolder,
    MEDIA_FOLDER_MAX_DEPTH,
    mediaFolderDepth,
@@ -13,6 +14,7 @@ import {
 } from '../../shared/index'
 import { useMediaStorage } from '../utils/media'
 import { mediaRowsInFolder } from '../utils/media-folders'
+import { emitMediaChange } from '../utils/hooks'
 import { requireAdmin } from '../utils/require-admin'
 import type { WriteDb } from '../utils/write-statements'
 import { mediaFolderRenameStatements, planMediaFolderRename } from '../utils/write-statements'
@@ -30,7 +32,7 @@ function tooDeep() {
 }
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    const { store } = useMediaStorage(event)
    const body = await readValidatedBody(event, bodySchema.parse)
 
@@ -67,5 +69,11 @@ export default defineEventHandler(async (event) => {
       await store.remove(key)
    }
 
+   emitMediaChange(event, user, {
+      action: 'folder-rename',
+      keys: rows.flatMap((row) => (isMediaFolderMarker(row.key) ? [] : [row.key])),
+      folder: to,
+      from,
+   })
    return { folder: to, moved: rows.length }
 })

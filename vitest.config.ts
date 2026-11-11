@@ -9,6 +9,9 @@ export default defineConfig({
          '#cms-config': fileURLToPath(new URL('./test/stubs/cms-config.ts', import.meta.url)),
          '#cms-db': fileURLToPath(new URL('./test/stubs/cms-db.ts', import.meta.url)),
          '#cms-tables': fileURLToPath(new URL('./test/stubs/cms-tables.ts', import.meta.url)),
+         'nitropack/runtime': fileURLToPath(
+            new URL('./test/stubs/nitro-runtime.ts', import.meta.url)
+         ),
       },
    },
    test: {

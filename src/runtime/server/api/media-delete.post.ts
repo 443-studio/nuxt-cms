@@ -7,12 +7,13 @@ import { isMediaFolderMarker } from '../../shared/index'
 import { objectKeySchema } from '../../shared/validation'
 import { useMediaStorage } from '../utils/media'
 import { deleteMediaRows, keyChunks } from '../utils/media-folders'
+import { emitMediaChange } from '../utils/hooks'
 import { requireAdmin } from '../utils/require-admin'
 
 const bodySchema = z.object({ keys: z.array(objectKeySchema).min(1).max(1000) })
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    const { store } = useMediaStorage(event)
    const { keys } = await readValidatedBody(event, bodySchema.parse)
 
@@ -27,5 +28,6 @@ export default defineEventHandler(async (event) => {
 
    await deleteMediaRows(store, found)
 
+   if (found.length) emitMediaChange(event, user, { action: 'delete', keys: found })
    return { deleted: found.length }
 })

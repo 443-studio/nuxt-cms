@@ -18,7 +18,9 @@ deploy.
    accounts, sessions.
 7. [Media](media.md): S3-compatible storage, filesystem storage or local mode, upload flow,
    allowed file types.
-8. [Deployment](deployment.md): host and driver matrix, migrations on serverless, horizontal
+8. [Hooks & webhooks](hooks.md): `cms:entry:change` / `cms:media:change` Nitro hooks, signed
+   webhooks, `verifyCmsWebhook`.
+9. [Deployment](deployment.md): host and driver matrix, migrations on serverless, horizontal
    scaling, Cloudflare Workers.
 
 ## How it works in one paragraph

@@ -2,13 +2,14 @@ import { eq } from 'drizzle-orm'
 import { createError, defineEventHandler } from 'h3'
 import { useDb } from '#cms-db'
 import { mapConstraintErrors } from '../utils/db-errors'
+import { emitEntryChange } from '../utils/hooks'
 import { getRegistryEntry, idColumn, parseId } from '../utils/registry'
 import { isCollectionKind } from '../../shared/index'
 import { requireAdmin } from '../utils/require-admin'
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
-   const { entry, table } = getRegistryEntry(event)
+   const user = await requireAdmin(event)
+   const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({
          statusCode: 405,
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
    }
 
    const id = parseId(event)
-   return mapConstraintErrors(async () => {
+   const result = await mapConstraintErrors(async () => {
       const [row] = await useDb()
          .delete(table)
          .where(eq(idColumn(table), id))
@@ -25,4 +26,6 @@ export default defineEventHandler(async (event) => {
       if (!row) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
       return { deleted: true }
    })
+   emitEntryChange(event, user, { entry: name, kind: entry.kind, action: 'delete', ids: [id] })
+   return result
 })

@@ -238,6 +238,10 @@ function deferredSelfRelations(entry: CmsEntry, name: string): string[] {
       .map(([key]) => key)
 }
 
+export function assignImportIds(entry: CmsEntry, rows: PreparedImportRow[]): PreparedImportRow[] {
+   return rows.map((row) => (row.values && !row.id ? { ...row, id: customId(entry.id) } : row))
+}
+
 export function importWriteStatements(
    db: CmsDb,
    name: string,

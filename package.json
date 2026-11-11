@@ -47,6 +47,10 @@
       "./generate": {
          "types": "./dist/runtime/generate.d.ts",
          "import": "./dist/runtime/generate.js"
+      },
+      "./webhooks": {
+         "types": "./dist/runtime/webhooks.d.ts",
+         "import": "./dist/runtime/webhooks.js"
       }
    },
    "main": "./dist/module.mjs",

@@ -34,6 +34,7 @@ cms: {
       path: '/cms/preview',         // the site page shown inside the visual editor
       component: '',                // default wrapper component for content previews
    },
+   webhooks: [],                    // [{ name, url?, secret?, events?, timeout? }], see Hooks & webhooks
 }
 ```
 
@@ -207,6 +208,14 @@ The [visual editor](admin.md#visual-editor) shows a page of the site in an ifram
   with its own [`preview.component`](schema.md#preview-component). The build fails when the
   component is not registered.
 
+### `webhooks`
+
+URLs called with a signed JSON `POST` after each admin write: `name` (camelCase, unique), `url`,
+`secret` (16+ characters), `events` (`'entry'`, `'media'` or exact events like `'entry:publish'`)
+and `timeout` (ms, default 5000). The URL and the secret can be set at runtime with
+`NUXT_CMS_WEBHOOKS_<NAME>_URL` / `NUXT_CMS_WEBHOOKS_<NAME>_SECRET`. The build validates every
+webhook. See [Hooks & webhooks](hooks.md).
+
 ## Environment variables
 
 Secrets should be provided as env vars rather than committed to `nuxt.config.ts`.
@@ -233,6 +242,8 @@ Secrets should be provided as env vars rather than committed to `nuxt.config.ts`
 | `NUXT_PUBLIC_CMS_MEDIA_MAX_FILE_SIZE` | no | same limit, checked by the admin client; set it to the same value as `NUXT_CMS_MEDIA_MAX_FILE_SIZE` |
 | `NUXT_CMS_MEDIA_DIR` | for filesystem media | directory for uploaded files (default `data/media`) |
 | `NUXT_PUBLIC_CMS_MEDIA_BASE_URL` | for media | public base URL for uploaded files |
+| `NUXT_CMS_WEBHOOKS_<NAME>_URL` | no | URL of the webhook named `<name>` (upper snake case) |
+| `NUXT_CMS_WEBHOOKS_<NAME>_SECRET` | no | signing secret of that webhook |
 
 Env vars follow Nuxt's runtime-config convention: `cms.admin.email` ← `NUXT_CMS_ADMIN_EMAIL`,
 `cms.database.url` ← `NUXT_CMS_DATABASE_URL`, and so on. Values set via env override the ones in

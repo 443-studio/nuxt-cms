@@ -16,7 +16,9 @@ import {
    TRANSFER_FORMATS,
 } from '../../shared/transfer'
 import { mapConstraintErrors } from '../utils/db-errors'
+import { emitEntryChange } from '../utils/hooks'
 import {
+   assignImportIds,
    checkImportRows,
    importPreview,
    importWriteStatements,
@@ -40,7 +42,7 @@ function tooLarge(): never {
 }
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({ statusCode: 405, statusMessage: 'Only collections can be imported' })
@@ -83,8 +85,15 @@ export default defineEventHandler(async (event) => {
       })
    }
 
+   const written = assignImportIds(entry, rows)
    await mapConstraintErrors(() =>
-      runBatch((tx) => importWriteStatements(tx, name, entry, table, rows))
+      runBatch((tx) => importWriteStatements(tx, name, entry, table, written))
    )
+   emitEntryChange(event, user, {
+      entry: name,
+      kind: entry.kind,
+      action: 'import',
+      ids: written.flatMap((row) => (row.values && row.id ? [row.id] : [])),
+   })
    return { ...preview, imported: true }
 })

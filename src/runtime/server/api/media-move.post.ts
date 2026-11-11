@@ -7,6 +7,7 @@ import { MEDIA_FOLDER_MARKER, normalizeMediaFolder } from '../../shared/index'
 import { objectKeySchema } from '../../shared/validation'
 import { useMediaStorage } from '../utils/media'
 import { keyChunks } from '../utils/media-folders'
+import { emitMediaChange } from '../utils/hooks'
 import { requireAdmin } from '../utils/require-admin'
 
 const bodySchema = z.object({
@@ -15,7 +16,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    useMediaStorage(event)
    const { keys, folder } = await readValidatedBody(event, bodySchema.parse)
    const target = normalizeMediaFolder(folder)
@@ -34,7 +35,9 @@ export default defineEventHandler(async (event) => {
             .returning({ key: cms_media.key })
       )
    )
-   const moved = (results as unknown[][]).reduce((total, rows) => total + rows.length, 0)
+   const keysMoved = (results as { key: string }[][]).flatMap((rows) => rows.map((row) => row.key))
 
-   return { folder: target, moved }
+   if (keysMoved.length)
+      emitMediaChange(event, user, { action: 'move', keys: keysMoved, folder: target })
+   return { folder: target, moved: keysMoved.length }
 })

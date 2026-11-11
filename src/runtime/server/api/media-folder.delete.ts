@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { isMediaFolderMarker, normalizeMediaFolder } from '../../shared/index'
 import { useMediaStorage } from '../utils/media'
 import { deleteMediaRows, mediaRowsInFolder } from '../utils/media-folders'
+import { emitMediaChange } from '../utils/hooks'
 import { requireAdmin } from '../utils/require-admin'
 
 const querySchema = z.object({
@@ -11,7 +12,7 @@ const querySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    const { store } = useMediaStorage(event)
    const { name, recursive } = await getValidatedQuery(event, querySchema.parse)
 
@@ -35,5 +36,10 @@ export default defineEventHandler(async (event) => {
       rows.map((row) => row.key)
    )
 
+   emitMediaChange(event, user, {
+      action: 'folder-delete',
+      keys: files.map((row) => row.key),
+      folder,
+   })
    return { deleted: rows.length }
 })

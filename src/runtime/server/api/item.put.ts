@@ -9,6 +9,7 @@ import {
    idColumn,
    parseId,
    requirePageRoute,
+   tableColumns,
    withContentDefaults,
    withUpdatedAt,
 } from '../utils/registry'
@@ -23,9 +24,11 @@ import {
 } from '../utils/relations'
 import { requireAdmin } from '../utils/require-admin'
 import { mapConstraintErrors } from '../utils/db-errors'
+import { emitEntryChange } from '../utils/hooks'
+import { entryStatus, entryWriteAction } from '../../shared/hooks'
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (entry.kind === 'single') {
       throw createError({
@@ -42,9 +45,18 @@ export default defineEventHandler(async (event) => {
       await assertMediaExists(pageFields(entry, route.path), body as Record<string, unknown>)
       const values = encodeColumnValues(entry, body as Record<string, unknown>)
       const set = withUpdatedAt(table, values)
-      return mapConstraintErrors(
+      const page = await mapConstraintErrors(
          async () => decodeRows(entry, [await writePage(name, entry, table, route, set)])[0]
       )
+      emitEntryChange(event, user, {
+         entry: name,
+         kind: entry.kind,
+         action: 'update',
+         ids: [id],
+         path: route.path,
+         item: page ?? null,
+      })
+      return page
    }
 
    const body = await readValidatedBody(event, buildValidator(entry).parse)
@@ -55,14 +67,15 @@ export default defineEventHandler(async (event) => {
    await assertRelationTargets(entry, lists)
    const set = withUpdatedAt(table, withContentDefaults(entry, values))
 
+   const statusColumn = entry.drafts ? tableColumns(table).status : undefined
    const [existing] = await useDb()
-      .select({ id: idColumn(table) })
+      .select({ id: idColumn(table), ...(statusColumn ? { status: statusColumn } : {}) })
       .from(table)
       .where(eq(idColumn(table), id))
       .limit(1)
    if (!existing) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
 
-   return mapConstraintErrors(async () => {
+   const item = await mapConstraintErrors(async () => {
       const [updated] = await runBatch((db) => [
          db
             .update(table)
@@ -76,4 +89,14 @@ export default defineEventHandler(async (event) => {
       const [attached] = await attachManyToMany(useDb(), name, entry, [row])
       return decodeRows(entry, [attached!])[0]
    })
+   const status = entry.drafts ? entryStatus(item?.status) : null
+   emitEntryChange(event, user, {
+      entry: name,
+      kind: entry.kind,
+      action: entryWriteAction(false, entryStatus(existing.status), status),
+      ids: [id],
+      status,
+      item: item ?? null,
+   })
+   return item
 })

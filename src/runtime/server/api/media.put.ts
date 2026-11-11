@@ -9,6 +9,7 @@ import { nowTimestamp } from '../../shared/timestamps'
 import { objectKeySchema } from '../../shared/validation'
 import { useMediaIndex } from '../utils/media-index'
 import { assertMediaWritable, toMediaItem, useMediaConfig } from '../utils/media'
+import { emitMediaChange } from '../utils/hooks'
 import { requireAdmin } from '../utils/require-admin'
 
 const bodySchema = z.object({
@@ -18,7 +19,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event): Promise<MediaItem> => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    const { media, publicUrl } = useMediaConfig(event)
    const body = await readValidatedBody(event, bodySchema.parse)
 
@@ -41,6 +42,7 @@ export default defineEventHandler(async (event): Promise<MediaItem> => {
          .values({ key: body.key, alt, createdAt: nowTimestamp() })
          .onConflictDoUpdate({ target: cms_media.key, set: { alt } })
 
+      emitMediaChange(event, user, { action: 'update', keys: [body.key], folder: file.folder })
       return toMediaItem({ ...file, alt, createdAt: null }, publicUrl)
    }
 
@@ -63,5 +65,6 @@ export default defineEventHandler(async (event): Promise<MediaItem> => {
       throw createError({ statusCode: 404, statusMessage: 'Media not found' })
    }
 
+   emitMediaChange(event, user, { action: 'update', keys: [body.key], folder: row.folder })
    return toMediaItem(row, publicUrl)
 })

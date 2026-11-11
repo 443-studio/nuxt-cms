@@ -2,6 +2,7 @@ import { createError, defineEventHandler, readValidatedBody } from 'h3'
 import { runBatch, useDb } from '#cms-db'
 import { customId } from '../utils/custom-id'
 import { mapConstraintErrors } from '../utils/db-errors'
+import { emitEntryChange } from '../utils/hooks'
 import {
    buildValidator,
    decodeRows,
@@ -10,6 +11,7 @@ import {
    withContentDefaults,
    withTimestamps,
 } from '../utils/registry'
+import { entryStatus } from '../../shared/hooks'
 import { isCollectionKind } from '../../shared/index'
 import {
    assertRelationTargets,
@@ -20,7 +22,7 @@ import {
 import { requireAdmin } from '../utils/require-admin'
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const user = await requireAdmin(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({ statusCode: 405, statusMessage: 'Single objects are updated with PUT' })
@@ -36,7 +38,7 @@ export default defineEventHandler(async (event) => {
    withContentDefaults(entry, values)
    const id = customId(entry.id)
    values.id = id
-   return mapConstraintErrors(async () => {
+   const item = await mapConstraintErrors(async () => {
       const [inserted] = await runBatch((db) => [
          db.insert(table).values(withTimestamps(table, values)).returning(),
          ...manyToManyStatements(db, name, id, lists),
@@ -45,4 +47,13 @@ export default defineEventHandler(async (event) => {
       const [attached] = await attachManyToMany(useDb(), name, entry, [row!])
       return decodeRows(entry, [attached!])[0]
    })
+   emitEntryChange(event, user, {
+      entry: name,
+      kind: entry.kind,
+      action: 'create',
+      ids: [id],
+      status: entry.drafts ? entryStatus(item?.status) : null,
+      item: item ?? null,
+   })
+   return item
 })

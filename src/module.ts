@@ -52,6 +52,19 @@ import { renderQueriesFile } from './queries-codegen'
 import { resolvePageRoutes, routePathsFromDir } from './runtime/shared/page-routes'
 import { renderTypesFile } from './types-codegen'
 import { CMS_ENABLED_ENV, resolveCmsEnabled } from './enabled'
+import type { ModuleOptionsWebhook } from './webhooks-config'
+import { resolveWebhooks } from './webhooks-config'
+
+export type { CmsWebhookEventFilter, ModuleOptionsWebhook } from './webhooks-config'
+export type {
+   CmsEntryAction,
+   CmsEntryChange,
+   CmsEntryStatus,
+   CmsHookContext,
+   CmsHookUser,
+   CmsMediaAction,
+   CmsMediaChange,
+} from './runtime/shared/hooks'
 
 export type ModuleOptionsDatabase = { migrateOnBoot?: boolean } & (
    | { driver?: 'sqlite'; path?: string }
@@ -98,6 +111,7 @@ export interface ModuleOptions {
       path?: string
       component?: string
    }
+   webhooks?: ModuleOptionsWebhook[]
 }
 
 interface ResolvedModuleOptions {
@@ -502,6 +516,11 @@ export default defineNuxtModule<ModuleOptions>({
       const resolver = createResolver(import.meta.url)
       const logger = useLogger('nuxt-cms')
       const resolved = resolveModuleOptions(options)
+      const webhooks = resolveWebhooks(options.webhooks, process.env)
+      if (webhooks.errors.length) {
+         throw new Error(`[nuxt-cms] Invalid webhooks:\n${webhooks.errors.join('\n')}`)
+      }
+      for (const warning of webhooks.warnings) logger.warn(`[nuxt-cms] ${warning}`)
 
       if (!resolveCmsEnabled(options.enabled, process.env[CMS_ENABLED_ENV])) {
          const queryStub = resolver.resolve('./runtime/app/composables/cms-query-disabled')
@@ -765,6 +784,10 @@ export default defineNuxtModule<ModuleOptions>({
 
       addServerPlugin(resolver.resolve('./runtime/server/plugins/session-validate'))
 
+      if (Object.keys(webhooks.webhooks).length) {
+         addServerPlugin(resolver.resolve('./runtime/server/plugins/webhooks'))
+      }
+
       if (!nuxt.options.dev) {
          addServerPlugin(resolver.resolve('./runtime/server/plugins/session-check'))
       }
@@ -848,6 +871,10 @@ export default defineNuxtModule<ModuleOptions>({
             dir: mediaDir,
             ...((existingConfig.media as Record<string, unknown>) ?? {}),
          },
+         webhooks: {
+            ...webhooks.webhooks,
+            ...((existingConfig.webhooks as Record<string, unknown>) ?? {}),
+         } as never,
       }
       nuxt.options.runtimeConfig.public.cms = {
          mediaBaseUrl: resolved.media.publicBaseUrl,
@@ -889,6 +916,27 @@ export default defineNuxtModule<ModuleOptions>({
                   '  }',
                   '}',
                   '',
+                  'export {}',
+                  '',
+               ].join('\n'),
+         },
+         { nuxt: true, nitro: true }
+      )
+
+      const hooksTypes = toPosix(resolver.resolve('./runtime/shared/hooks'))
+      addTypeTemplate(
+         {
+            filename: 'types/nuxt-cms-hooks.d.ts',
+            getContents: () =>
+               [
+                  `import type { CmsRuntimeHooks } from '${hooksTypes}'`,
+                  '',
+                  ...['nitropack', 'nitropack/types'].flatMap((name) => [
+                     `declare module '${name}' {`,
+                     '  interface NitroRuntimeHooks extends CmsRuntimeHooks {}',
+                     '}',
+                     '',
+                  ]),
                   'export {}',
                   '',
                ].join('\n'),
