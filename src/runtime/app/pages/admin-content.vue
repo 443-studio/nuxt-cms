@@ -27,7 +27,9 @@
       <template #status>
          <CmsStatusBadge :published="published" :scheduled="scheduled" :at="scheduledAt" />
          <KBadge v-if="dirty" label="Unsaved changes" tone="warning" dot />
-         <KBadge v-if="lock" size="sm" variant="outline" label="Read only" :title="lock" />
+         <KTooltip v-if="lock" :text="lock">
+            <KBadge size="sm" variant="outline" label="Read only" />
+         </KTooltip>
       </template>
 
       <template v-if="config.route" #content-start="{ locale }">
@@ -173,6 +175,7 @@ import {
    FormField as KFormField,
    Popover as KPopover,
    Stack as KStack,
+   Tooltip as KTooltip,
    toast,
    useLeaveGuard,
 } from '@xleddyl/443-components-vue'

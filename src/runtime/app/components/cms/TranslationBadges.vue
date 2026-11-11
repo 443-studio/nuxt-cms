@@ -1,22 +1,21 @@
 <template>
    <span v-if="badges.length" class="cms-translation-badges">
-      <KBadge
-         v-for="badge in badges"
-         :key="badge.locale"
-         :label="badge.locale"
-         :tone="badge.tone"
-         :variant="badge.variant"
-         size="sm"
-         dot
-         class="cms-code-badge"
-         :title="badge.title"
-         :aria-label="badge.title"
-      />
+      <KTooltip v-for="badge in badges" :key="badge.locale" :text="badge.title">
+         <KBadge
+            :label="badge.locale"
+            :tone="badge.tone"
+            :variant="badge.variant"
+            size="sm"
+            dot
+            class="cms-code-badge"
+            :aria-label="badge.title"
+         />
+      </KTooltip>
    </span>
 </template>
 
 <script setup lang="ts">
-import { Badge as KBadge } from '@xleddyl/443-components-vue'
+import { Badge as KBadge, Tooltip as KTooltip } from '@xleddyl/443-components-vue'
 import { computed } from '#imports'
 import type { TranslationProgress, TranslationState } from '../../../shared/translations'
 import { translationSummary } from '../../../shared/translations'

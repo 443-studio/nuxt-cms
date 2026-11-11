@@ -4,7 +4,9 @@
          <div class="cms-editor-bar-start">
             <slot name="start" />
             <div class="cms-editor-heading">
-               <span class="cms-editor-title" :title="title">{{ title }}</span>
+               <KTooltip :text="title">
+                  <span class="cms-editor-title">{{ title }}</span>
+               </KTooltip>
                <slot name="status" />
             </div>
          </div>

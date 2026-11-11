@@ -5,20 +5,14 @@
          :icon="false"
          message="Choose the columns of the table. Drag the visible columns to change their order."
       />
-      <ul class="cms-settings-list">
+      <ul ref="list" class="cms-settings-list">
          <li
             v-for="(key, index) in model"
             :key="key"
+            v-bind="sortable.itemProps(index)"
             class="cms-settings-item is-draggable"
-            :class="{
-               'is-dragging': dragging === key,
-               'is-drop-before': dropIndex === index && dragging !== key,
-            }"
-            draggable="true"
-            @dragstart="onDragStart($event, key)"
-            @dragover.prevent="dropIndex = index"
-            @drop.prevent="onDrop(index)"
-            @dragend="onDragEnd"
+            :class="{ 'is-dragging': sortable.dragging.value === index }"
+            tabindex="0"
          >
             <KIcon :name="cmsIcon('bars-2')" class="cms-settings-grip" />
             <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
@@ -30,14 +24,8 @@
                @update:model-value="hide(key)"
             />
          </li>
-         <li
-            v-if="dragging"
-            class="cms-settings-drop-end"
-            :class="{ 'is-over': dropIndex === model.length }"
-            @dragover.prevent="dropIndex = model.length"
-            @drop.prevent="onDrop(model.length)"
-         />
       </ul>
+      <span class="k-visually-hidden" aria-live="polite">{{ sortable.announcement.value }}</span>
 
       <template v-if="hidden.length">
          <KSeparator variant="heading" label="Hidden" :level="3" />
@@ -63,8 +51,9 @@ import {
    Icon as KIcon,
    Separator as KSeparator,
    Switch as KSwitch,
+   useSortable,
 } from '@xleddyl/443-components-vue'
-import { computed, ref } from '#imports'
+import { computed, useTemplateRef } from '#imports'
 import { TRANSLATIONS_COLUMN } from '../../../shared/translations'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
@@ -101,28 +90,13 @@ function show(key: string) {
    model.value = [...model.value, key]
 }
 
-const dragging = ref<string | null>(null)
-const dropIndex = ref<number | null>(null)
+const list = useTemplateRef<HTMLElement>('list')
 
-function onDragStart(event: DragEvent, key: string) {
-   dragging.value = key
-   event.dataTransfer?.setData('text/plain', key)
-   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
-}
-
-function onDrop(index: number) {
-   const key = dragging.value
-   if (key) {
-      const next = model.value.filter((k) => k !== key)
-      const from = model.value.indexOf(key)
-      next.splice(from < index ? index - 1 : index, 0, key)
+const sortable = useSortable(list, {
+   items: model,
+   label: labelOf,
+   onMove: (next) => {
       model.value = next
-   }
-   onDragEnd()
-}
-
-function onDragEnd() {
-   dragging.value = null
-   dropIndex.value = null
-}
+   },
+})
 </script>

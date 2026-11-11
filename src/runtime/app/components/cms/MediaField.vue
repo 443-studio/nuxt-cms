@@ -24,7 +24,9 @@
          <KIcon v-else :name="cmsIcon(icon)" />
       </button>
       <div class="cms-media-single-bar">
-         <span class="cms-media-single-name" :title="model">{{ mediaFilename(model) }}</span>
+         <KTooltip :text="model">
+            <span class="cms-media-single-name">{{ mediaFilename(model) }}</span>
+         </KTooltip>
          <KStack v-if="!disabled" direction="row" gap="none" align="center">
             <KButton
                :icon="cmsIcon('arrow-path')"
@@ -80,6 +82,7 @@ import {
    Icon as KIcon,
    Modal as KModal,
    Stack as KStack,
+   Tooltip as KTooltip,
    useFieldControl,
 } from '@xleddyl/443-components-vue'
 import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'

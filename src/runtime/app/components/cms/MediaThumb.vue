@@ -4,33 +4,32 @@
       <span class="k-visually-hidden">No media</span>
    </span>
 
-   <img
-      v-else-if="kind === 'image' && url"
-      :src="url"
-      :alt="filename"
-      :title="filename"
-      loading="lazy"
-      class="cms-media-thumb"
-   />
-
-   <video
-      v-else-if="kind === 'video' && url"
-      :src="url"
-      :title="filename"
-      muted
-      playsinline
-      preload="metadata"
-      class="cms-media-thumb"
-   />
-
-   <span v-else :title="filename" class="cms-media-thumb is-fallback">
-      <KIcon :name="cmsIcon(icon)" />
-   </span>
+   <KTooltip v-else :text="filename">
+      <img
+         v-if="kind === 'image' && url"
+         :src="url"
+         :alt="filename"
+         loading="lazy"
+         class="cms-media-thumb"
+      />
+      <video
+         v-else-if="kind === 'video' && url"
+         :src="url"
+         :aria-label="filename"
+         muted
+         playsinline
+         preload="metadata"
+         class="cms-media-thumb"
+      />
+      <span v-else class="cms-media-thumb is-fallback">
+         <KIcon :name="cmsIcon(icon)" :label="filename" />
+      </span>
+   </KTooltip>
 </template>
 
 <script setup lang="ts">
 import { computed } from '#imports'
-import { Icon as KIcon } from '@xleddyl/443-components-vue'
+import { Icon as KIcon, Tooltip as KTooltip } from '@xleddyl/443-components-vue'
 import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { cmsIcon } from '../../utils/ui'

@@ -1,32 +1,35 @@
 <template>
    <KStack gap="sm" class="cms-blocks-field">
-      <div class="cms-blocks-grid" @copy="onClipboard" @cut="onClipboard" @paste="onClipboard">
+      <KGrid
+         ref="grid"
+         :columns="4"
+         min-item-width="9rem"
+         gap="md"
+         @copy="onClipboard"
+         @cut="onClipboard"
+         @paste="onClipboard"
+      >
          <div
             v-for="(item, index) in items"
             :key="uidFor(item)"
+            v-bind="sortable.itemProps(index)"
             class="cms-block-tile"
             :class="{
                'is-muted': isHidden(item),
-               'is-dragging': dragIndex === index,
-               'is-drop-target': dropIndex === index && dragIndex !== index,
+               'is-dragging': sortable.dragging.value === index,
                'is-missing': hasMissingMedia(item),
                'is-media-only': mediaOnly,
                'is-disabled': disabled,
                'is-invalid': tileInvalid(index),
             }"
-            :draggable="disabled ? undefined : 'true'"
             :data-cms-tile="index"
+            :data-cms-grip="mediaOnly && !disabled ? '' : undefined"
             :tabindex="mediaOnly && !disabled ? 0 : undefined"
             :aria-label="
                mediaOnly && !disabled
                   ? `${barTitle(item)}, use the arrow keys to reorder`
                   : undefined
             "
-            @dragstart="onDragStart(index, $event)"
-            @dragover.prevent="dropIndex = index"
-            @dragleave="onDragLeave(index)"
-            @drop.prevent="onDrop(index)"
-            @dragend="onDragEnd"
             @keydown.self="onTileKey($event, index)"
          >
             <component
@@ -57,45 +60,45 @@
                <KIcon v-if="isHidden(item)" name="eye-slash" class="cms-block-hidden" />
 
                <template v-if="mediaOnly">
-                  <span
-                     v-if="hasMissingMedia(item)"
-                     class="cms-block-missing"
-                     title="Not found in the media library"
-                  >
-                     <KIcon name="exclamation-triangle" />
-                  </span>
-                  <button
-                     v-if="!disabled"
-                     type="button"
-                     class="cms-block-remove"
-                     :aria-label="`Remove ${barTitle(item)}`"
-                     title="Remove"
-                     @click.stop="remove(index)"
-                  >
-                     <KIcon name="x-mark" />
-                  </button>
+                  <KTooltip v-if="hasMissingMedia(item)" text="Not found in the media library">
+                     <span class="cms-block-missing">
+                        <KIcon name="exclamation-triangle" label="Not found in the media library" />
+                     </span>
+                  </KTooltip>
+                  <KTooltip v-if="!disabled" text="Remove">
+                     <button
+                        type="button"
+                        class="cms-block-remove"
+                        :aria-label="`Remove ${barTitle(item)}`"
+                        @click.stop="remove(index)"
+                     >
+                        <KIcon name="x-mark" />
+                     </button>
+                  </KTooltip>
                </template>
             </component>
 
             <div v-if="!mediaOnly" class="cms-block-bar">
-               <button
+               <KButton
                   v-if="!disabled"
-                  type="button"
-                  class="cms-block-grip"
+                  data-cms-grip
+                  :icon="cmsIcon('bars-2')"
+                  size="xs"
+                  variant="ghost"
+                  tone="neutral"
                   :aria-label="`Reorder ${labelOf(item)}, use the arrow keys`"
-                  @keydown.left.prevent="index > 0 && move(index, -1)"
-                  @keydown.right.prevent="index < items.length - 1 && move(index, 1)"
-               >
-                  <KIcon :name="cmsIcon('bars-2')" />
-               </button>
-               <span class="cms-block-bar-name" :title="barTitle(item)">{{ barLabel(item) }}</span>
-               <span
-                  v-if="hasMissingMedia(item)"
-                  class="cms-block-missing-icon"
-                  title="Not found in the media library"
-               >
-                  <KIcon name="exclamation-triangle" />
-               </span>
+                  tooltip="Drag to reorder"
+                  @keydown.left.prevent="keyMove(index, -1)"
+                  @keydown.right.prevent="keyMove(index, 1)"
+               />
+               <KTooltip :text="barTitle(item)">
+                  <span class="cms-block-bar-name">{{ barLabel(item) }}</span>
+               </KTooltip>
+               <KTooltip v-if="hasMissingMedia(item)" text="Not found in the media library">
+                  <span class="cms-block-missing-icon">
+                     <KIcon name="exclamation-triangle" label="Not found in the media library" />
+                  </span>
+               </KTooltip>
                <KDropdownMenu :items="tileMenu(index)" placement="bottom-end">
                   <KButton
                      :icon="cmsIcon('ellipsis-horizontal')"
@@ -132,23 +135,21 @@
             @paste="paste(items.length, null)"
             @preset="insertPreset"
          >
-            <button type="button" class="cms-block-add">
-               <KIcon name="plus" />
-               <span>Add</span>
-            </button>
+            <KButton label="Add" icon="plus" variant="soft" tone="neutral" block />
          </CmsBlockPickerPopover>
-         <button
+         <KButton
             v-else
-            type="button"
-            class="cms-block-add"
+            :label="mediaOnly ? addMediaLabel : 'Add'"
+            icon="plus"
+            variant="soft"
+            tone="neutral"
+            block
             :disabled="!canAdd || disabled"
-            :title="canAdd ? undefined : countHint"
+            :disabled-reason="canAdd ? undefined : countHint"
             @click="addFirst"
-         >
-            <KIcon name="plus" />
-            <span>{{ mediaOnly ? addMediaLabel : 'Add' }}</span>
-         </button>
-      </div>
+         />
+      </KGrid>
+      <span class="k-visually-hidden" aria-live="polite">{{ sortable.announcement.value }}</span>
 
       <KFieldMessage v-if="countHint" tone="neutral" :icon="false" :message="countHint" />
 
@@ -350,14 +351,26 @@ import {
    DropdownMenu as KDropdownMenu,
    FieldMessage as KFieldMessage,
    FormField as KFormField,
+   Grid as KGrid,
    Icon as KIcon,
    Modal as KModal,
    Stack as KStack,
+   Tooltip as KTooltip,
    useFieldControl,
    useFormContext,
    useRouteState,
+   useSortable,
 } from '@xleddyl/443-components-vue'
-import { computed, inject, nextTick, onMounted, ref, useState, watch } from '#imports'
+import {
+   computed,
+   inject,
+   nextTick,
+   onMounted,
+   ref,
+   useState,
+   useTemplateRef,
+   watch,
+} from '#imports'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
 import type { CmsPresetDetails } from '../../../shared/presets'
 import { CMS_PRESET_ICON, presetInsertNotice } from '../../../shared/presets'
@@ -578,13 +591,17 @@ function add(type: string) {
    openEditor(index)
 }
 
+function keyMove(index: number, delta: number) {
+   sortable.move(index, index + delta, { announce: true, source: 'keyboard' })
+}
+
 function onTileKey(event: KeyboardEvent, index: number) {
-   if (!mediaOnly.value || disabled.value) return
+   if (!mediaOnly.value || disabled.value || event.altKey) return
    const action =
       event.key === 'ArrowLeft'
-         ? () => move(index, -1)
+         ? () => keyMove(index, -1)
          : event.key === 'ArrowRight'
-           ? () => move(index, 1)
+           ? () => keyMove(index, 1)
            : event.key === 'Delete' || event.key === 'Backspace'
              ? () => remove(index)
              : null
@@ -622,46 +639,18 @@ function duplicate(index: number) {
    model.value = next
 }
 
-function move(index: number, delta: number) {
-   moveTo(index, index + delta)
-}
+const grid = useTemplateRef<{ $el: HTMLElement }>('grid')
 
-function moveTo(from: number, to: number) {
-   if (disabled.value || from === to || to < 0 || to >= items.value.length) return
-   const next = [...items.value]
-   const [item] = next.splice(from, 1)
-   next.splice(to, 0, item!)
-   model.value = next
-}
-
-const dragIndex = ref<number | null>(null)
-const dropIndex = ref<number | null>(null)
-
-function onDragStart(index: number, event: DragEvent) {
-   if (disabled.value) {
-      event.preventDefault()
-      return
-   }
-   dragIndex.value = index
-   if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('text/plain', String(index))
-   }
-}
-
-function onDragLeave(index: number) {
-   if (dropIndex.value === index) dropIndex.value = null
-}
-
-function onDrop(index: number) {
-   if (dragIndex.value !== null) moveTo(dragIndex.value, index)
-   onDragEnd()
-}
-
-function onDragEnd() {
-   dragIndex.value = null
-   dropIndex.value = null
-}
+const sortable = useSortable(() => grid.value?.$el, {
+   items,
+   orientation: 'horizontal',
+   handle: '[data-cms-grip]',
+   disabled: () => disabled.value,
+   label: (item) => barTitle(item),
+   onMove: (next) => {
+      model.value = next
+   },
+})
 
 const ROOT = '_'
 
