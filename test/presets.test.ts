@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FieldConfig } from '../src/runtime/shared/index'
+import { blockSignature } from '../src/runtime/shared/block-signature'
 import { pasteBlocks } from '../src/runtime/shared/clipboard'
 import type { CmsBlockPreset } from '../src/runtime/shared/presets'
 import {
@@ -118,6 +119,10 @@ describe('buildPreset', () => {
          name: 'Intro',
          source: 'news.body',
          types: ['quote', 'text'],
+         signatures: {
+            quote: blockSignature(field.blocks!.quote!),
+            text: blockSignature(field.blocks!.text!),
+         },
          items: [
             { type: 'text', heading: { en: 'Hello' }, body: { en: '<p>Hi</p>' } },
             { type: 'quote', text: null, author: 'Ann', hidden: true },
@@ -156,11 +161,60 @@ describe('buildPreset', () => {
 })
 
 describe('preset scope', () => {
-   it('fits every field that accepts all of its block types', () => {
-      expect(presetFits(preset(), field)).toBe(true)
-      expect(presetFits(preset({ types: ['quote'] }), field)).toBe(true)
-      expect(presetFits(preset({ types: ['quote', 'hero'] }), field)).toBe(false)
-      expect(presetFits(preset({ types: [] }), field)).toBe(false)
+   const signed = () =>
+      preset({
+         signatures: {
+            quote: blockSignature(field.blocks!.quote!),
+            text: blockSignature(field.blocks!.text!),
+         },
+      })
+
+   it('fits every field whose blocks of its types have the same schema', () => {
+      expect(presetFits(signed(), field, 'blog.body')).toBe(true)
+      const reordered: FieldConfig = {
+         label: 'Other',
+         type: 'blocks',
+         blocks: {
+            hero: { label: 'Hero', fields: { title: { label: 'Title', type: 'text' } } },
+            quote: {
+               label: 'Citation',
+               fields: {
+                  author: { label: 'Who', type: 'text', required: true },
+                  text: { label: 'Words', type: 'text', textarea: true },
+               },
+            },
+            text: field.blocks!.text!,
+         },
+      }
+      expect(presetFits(signed(), reordered, 'pages.sections')).toBe(true)
+      expect(presetFits({ ...signed(), types: ['quote'] }, field, 'blog.body')).toBe(true)
+      expect(presetFits({ ...signed(), types: ['quote', 'hero'] }, field, 'blog.body')).toBe(false)
+      expect(presetFits({ ...signed(), types: [] }, field, 'news.body')).toBe(false)
+   })
+
+   it('skips a field with a different block under the same name', () => {
+      const events: FieldConfig = {
+         label: 'Body',
+         type: 'blocks',
+         blocks: {
+            text: field.blocks!.text!,
+            quote: {
+               label: 'Quote',
+               fields: {
+                  text: { label: 'Text', type: 'richtext' },
+                  author: { label: 'Author', type: 'text' },
+               },
+            },
+         },
+      }
+      expect(presetFits(signed(), events, 'events.body')).toBe(false)
+      expect(presetFits({ ...signed(), types: ['text'] }, events, 'events.body')).toBe(true)
+   })
+
+   it('fits an old preset without signatures only in its source field', () => {
+      expect(presetFits(preset(), field, 'news.body')).toBe(true)
+      expect(presetFits(preset(), field, 'blog.body')).toBe(false)
+      expect(presetFits(preset({ types: ['hero'] }), field, 'news.body')).toBe(false)
    })
 
    it('lists the distinct types in order', () => {
@@ -197,6 +251,11 @@ describe('stored presets', () => {
    it('reads a stored row and ignores anything else', () => {
       const value = preset({ description: 'Top' })
       expect(parseStoredPreset(JSON.stringify(value))).toEqual(value)
+      const withSignatures = preset({ signatures: { quote: 'a', text: 'b' } })
+      expect(parseStoredPreset(JSON.stringify(withSignatures))).toEqual(withSignatures)
+      expect(
+         parseStoredPreset(JSON.stringify(preset({ signatures: { quote: 1 } as never })))
+      ).toBeNull()
       expect(parseStoredPreset(JSON.stringify({ columns: ['title'] }))).toBeNull()
       expect(parseStoredPreset('not json')).toBeNull()
    })

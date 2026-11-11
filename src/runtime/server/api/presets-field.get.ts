@@ -5,6 +5,6 @@ import { presetBlocksField, readPresets, requirePresetAccess } from '../utils/pr
 
 export default defineEventHandler(async (event): Promise<CmsBlockPreset[]> => {
    await requirePresetAccess(event, 'use')
-   const { field } = presetBlocksField(event)
-   return sortPresets((await readPresets()).filter((preset) => presetFits(preset, field)))
+   const { source, field } = presetBlocksField(event)
+   return sortPresets((await readPresets()).filter((preset) => presetFits(preset, field, source)))
 })

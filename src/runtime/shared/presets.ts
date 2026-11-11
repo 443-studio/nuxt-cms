@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { CmsI18n, FieldConfig } from './index'
 import type { CmsClipboardNotice, CmsPasteResult } from './clipboard'
 import { pasteBlocks, skippedText } from './clipboard'
+import { blockSignature, blockSignatures } from './block-signature'
 import type { CmsBlockValue } from './preview'
 
 export const CMS_PRESET_KEY_PREFIX = 'cms:presets:'
@@ -22,6 +23,7 @@ export interface CmsBlockPreset {
    description?: string
    source: string
    types: string[]
+   signatures?: Record<string, string>
    items: CmsBlockValue[]
    createdAt: string
    updatedAt: string
@@ -63,6 +65,7 @@ const storedSchema = z.object({
    description: z.string().optional(),
    source: z.string(),
    types: z.array(z.string()),
+   signatures: z.record(z.string(), z.string()).optional(),
    items: z.array(z.record(z.string(), z.unknown())),
    createdAt: z.string(),
    updatedAt: z.string(),
@@ -77,11 +80,19 @@ export function presetTypes(items: readonly CmsBlockValue[]): string[] {
 }
 
 export function presetFits(
-   preset: Pick<CmsBlockPreset, 'types'>,
-   field: Pick<FieldConfig, 'blocks'>
+   preset: Pick<CmsBlockPreset, 'types' | 'signatures' | 'source'>,
+   field: Pick<FieldConfig, 'blocks'>,
+   source: string
 ): boolean {
    const blocks = field.blocks ?? {}
-   return preset.types.length > 0 && preset.types.every((type) => Object.hasOwn(blocks, type))
+   if (!preset.types.length || !preset.types.every((type) => Object.hasOwn(blocks, type)))
+      return false
+   const signatures = preset.signatures
+   if (!signatures) return preset.source === source
+   return preset.types.every(
+      (type) =>
+         Object.hasOwn(signatures, type) && signatures[type] === blockSignature(blocks[type]!)
+   )
 }
 
 export function parseStoredPreset(raw: string): CmsBlockPreset | null {
@@ -116,12 +127,14 @@ export function buildPreset(
       return {
          error: `Not a block of this field: ${[...new Set(result.unknown)].join(', ')}`,
       }
+   const types = presetTypes(result.list)
    const preset: CmsBlockPreset = {
       id: meta.id,
       name: input.name,
       ...(input.description ? { description: input.description } : {}),
       source: meta.source,
-      types: presetTypes(result.list),
+      types,
+      signatures: blockSignatures(field.blocks, types),
       items: result.list,
       createdAt: meta.now,
       updatedAt: meta.now,

@@ -355,19 +355,30 @@ Blocks go to the system clipboard as JSON text and to a copy kept by the admin, 
 the browser denies the clipboard or it holds something else. You can paste into another item, into
 another content type that uses the same blocks, or into the tiles of a `blocks` field. Only the
 block types of the target field are pasted: unknown fields are dropped, values are checked like the
-form, and a full field takes as many as fit. A toast says what was pasted and what was skipped. In a
-text field, or with text selected, the keys copy and paste text as usual.
+form, and a full field takes as many as fit. A toast says what was pasted and what was skipped. Paste
+matches blocks by type name only, since you choose where to paste: a block pasted into a field whose
+block of that name has other fields keeps only the values that fit. In a text field, or with text
+selected, the keys copy and paste text as usual.
 
 ### Block presets
 
 **Save as preset** in the `...` menu of a block (block tree, inspector header, or a tile of a
 `blocks` field) keeps a copy of that block under a name and an optional description. The
-[block picker](#block-picker) of every field that has all the block types of a preset lists it
-under **Presets**, with its name and its number of blocks: picking it inserts a copy, the same way
-a paste does (one undo step, as many blocks as fit under `max`, unknown fields dropped, values
-checked). So a preset saved in a news item can be inserted into another news item, or into a blog
-item when both use the same blocks. A preset is a copy, not a link: changing or deleting it never
-changes the blocks that were inserted from it.
+[block picker](#block-picker) of every field that has all the block types of a preset, with the
+same schema, lists it under **Presets**, with its name and its number of blocks: picking it inserts
+a copy, the same way a paste does (one undo step, as many blocks as fit under `max`, unknown fields
+dropped, values checked). So a preset saved in a news item can be inserted into another news item,
+or into a blog item when both use the same blocks.
+
+The preset keeps a signature of each of its block types, computed from the field keys, the field
+types and the options that shape the value (`translatable`, `integer`, the `select` option values
+and `multiple`, the media `mediaType`). A field offers the preset only when every one of its block
+types exists there with the same signature, so a news `quote` preset is not offered in an events
+field whose own `quote` block has other fields. Labels, descriptions, validation rules, `layout`
+and `component` do not count. Changing the fields of a block in `cms.config.ts` hides the presets
+saved before the change. Presets saved before signatures existed are offered only in the field they
+were saved from. A preset is a copy, not a link: changing or deleting it never changes the blocks
+that were inserted from it.
 
 **Settings → Block presets** lists every preset with its size and where it was saved from, to
 rename or delete it. Presets live in the `cms_settings` table (one row per preset, keyed
