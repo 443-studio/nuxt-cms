@@ -84,6 +84,24 @@
          </div>
       </template>
 
+      <div
+         v-if="fieldBox && !drag"
+         class="cms-preview-field"
+         :style="{
+            top: `${fieldBox.top}px`,
+            left: `${fieldBox.left}px`,
+            width: `${fieldBox.width}px`,
+            height: `${fieldBox.height}px`,
+         }"
+      >
+         <span
+            class="cms-preview-field-label"
+            :class="{ 'is-above': fieldBox.top + fieldBox.height > viewportHeight - 32 }"
+         >
+            {{ fieldBox.label }}
+         </span>
+      </div>
+
       <button
          v-for="slot in insertSlots"
          :key="`insert-${slot.index}-${slot.edge}`"
@@ -112,7 +130,11 @@ import { cmsIcon } from '../utils/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '#imports'
 import type { FieldConfig } from '../../shared/index'
 import { canAddBlock } from '../../shared/index'
-import type { CmsClipboardAction, CmsPreviewFrameMessage } from '../../shared/preview'
+import type {
+   CmsClipboardAction,
+   CmsFieldTarget,
+   CmsPreviewFrameMessage,
+} from '../../shared/preview'
 import {
    CMS_CLIPBOARD_MAX_LENGTH,
    canHideBlock,
@@ -120,6 +142,7 @@ import {
    editorShortcut,
    insertionIndex,
    moveTargetForInsertion,
+   previewFieldConfig,
    shortcutApplies,
 } from '../../shared/preview'
 import { clipboardTarget, onApplePlatform, shortcutTarget } from '../utils/keyboard'
@@ -134,8 +157,23 @@ interface Box {
    bottom: number
 }
 
+interface FieldHit extends CmsFieldTarget {
+   element: HTMLElement
+   field: FieldConfig
+}
+
+interface FieldBox {
+   top: number
+   left: number
+   width: number
+   height: number
+   label: string
+}
+
 const props = defineProps<{
    field: FieldConfig
+   fieldKey: string
+   fields: Record<string, FieldConfig> | null
    total: number
    selected: number | null
    highlighted: number | null
@@ -147,6 +185,8 @@ const emit = defineEmits<{ message: [message: CmsPreviewFrameMessage] }>()
 const root = ref<HTMLElement | null>(null)
 const boxes = ref<Box[]>([])
 const hovered = ref<number | null>(null)
+const hoveredField = ref<FieldHit | null>(null)
+const fieldBox = ref<FieldBox | null>(null)
 const viewportWidth = ref(0)
 const viewportHeight = ref(0)
 
@@ -183,6 +223,40 @@ function measure() {
       })
    }
    boxes.value = found.sort((a, b) => a.top - b.top)
+   measureField()
+}
+
+function measureField() {
+   const hit = hoveredField.value
+   if (!hit || !hit.element.isConnected) {
+      fieldBox.value = null
+      return
+   }
+   const rect = hit.element.getBoundingClientRect()
+   fieldBox.value = {
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+      label: hit.field.label,
+   }
+}
+
+function fieldHitOf(target: EventTarget | null): FieldHit | null {
+   const element =
+      target instanceof Element ? target.closest<HTMLElement>('[data-cms-field]') : null
+   const key = element?.dataset.cmsField
+   if (!element || !key) return null
+   const block = element.closest<HTMLElement>('[data-cms-block]')
+   const index = block ? Number(block.dataset.cmsBlock) : null
+   if (index !== null && !Number.isInteger(index)) return null
+   const field = previewFieldConfig(
+      { index, key, blockType: block?.dataset.cmsBlockType },
+      props.field,
+      props.fields,
+      props.fieldKey
+   )
+   return field ? { element, index, key, field } : null
 }
 
 function scheduleMeasure() {
@@ -332,10 +406,18 @@ function insideOverlay(target: EventTarget | null) {
 function onPointerMove(event: PointerEvent) {
    if (drag.value || insideOverlay(event.target)) return
    hovered.value = blockIndexOf(event.target)
+   const hit = fieldHitOf(event.target)
+   if (hit?.element !== hoveredField.value?.element) {
+      hoveredField.value = hit
+      measureField()
+   }
 }
 
 function onPointerLeave() {
-   if (!drag.value) hovered.value = null
+   if (drag.value) return
+   hovered.value = null
+   hoveredField.value = null
+   fieldBox.value = null
 }
 
 function onClick(event: MouseEvent) {
@@ -350,7 +432,13 @@ function onClick(event: MouseEvent) {
    if (target?.closest('a, button, input, select, textarea, label, summary')) event.preventDefault()
    if (target?.closest('[data-cms-preview-keep]')) return
    event.stopPropagation()
-   emit('message', { type: 'select', index: blockIndexOf(event.target) })
+   const hit = fieldHitOf(event.target)
+   emit(
+      'message',
+      hit
+         ? { type: 'focus-field', index: hit.index, key: hit.key }
+         : { type: 'select', index: blockIndexOf(event.target) }
+   )
 }
 
 function onSubmit(event: Event) {

@@ -347,6 +347,8 @@ The component receives `item` (every public field of the item in the active lang
 `CmsMedia` objects, relations as ids, values not saved yet included, and `path` when the entry has
 a [route](#routes)) and `locale`. Use the same
 component on the site page, with `<CmsBlocks>` in the slot, and the preview matches the page.
+Mark the item fields it shows (`<CmsField name="title" as="h1">`, see
+[Marking fields](querying.md#marking-fields)) to open them from the canvas.
 `cms.preview.component` in `nuxt.config` sets a default for every content entry. A `preview` option
 on an entry that is not `kind: 'content'` is a config error.
 
@@ -650,8 +652,10 @@ blocks: {
   [visual editor](admin.md#visual-editor) as well; other `blocks` fields keep the tile grid.
 
 Render a blocks value with [`<CmsBlocks>`](querying.md#rendering-blocks). Each component receives
-the fields of its block as props. Type them with the generated interface
-`<Entry><Field><Block>Props` from `#cms-types`:
+the fields of its block as props; mark the element of each field with `<CmsField>` or
+`v-cms-field` ([Marking fields](querying.md#marking-fields)) so the visual editor can open it from
+the canvas. Type the props with the generated interface `<Entry><Field><Block>Props` from
+`#cms-types`:
 
 ```vue
 <script setup lang="ts">

@@ -535,6 +535,27 @@ function addCmsBlocks(
       name: 'CmsLink',
       filePath: resolver.resolve('./runtime/app/links/CmsLink.vue'),
    })
+   addComponent({
+      name: 'CmsField',
+      filePath: resolver.resolve('./runtime/app/blocks/CmsField'),
+   })
+   addPlugin(resolver.resolve('./runtime/app/plugins/cms-field'))
+   addTypeTemplate({
+      filename: 'types/nuxt-cms-field.d.ts',
+      getContents: () =>
+         [
+            "import type { Directive } from 'vue'",
+            '',
+            "declare module 'vue' {",
+            '  interface GlobalDirectives {',
+            '    vCmsField: Directive<HTMLElement, string>',
+            '  }',
+            '}',
+            '',
+            'export {}',
+            '',
+         ].join('\n'),
+   })
    if (!refs.length && !previews.length) return
    nuxt.hook('components:extend', (components) => {
       const names = components.map((component) => component.pascalName)

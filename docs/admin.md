@@ -277,6 +277,13 @@ delete. A **+** between two blocks, and before the first and after the last, ope
 drawn in the canvas: it stays in the block tree, where **Show** brings it back. Deleting a block
 asks for no confirmation: undo brings it back. Deleting the whole item still asks.
 
+**Fields in the canvas.** When a component [marks the element of a field](querying.md#marking-fields),
+hovering that element in the canvas outlines it with the field label, and a click selects its block
+and scrolls the inspector to the field, highlighted (the canvas always shows the language of the top
+bar, so a translatable field opens in that language). A marked element outside every block, such
+as the title in the [preview component](schema.md#preview-component), opens the field in the
+**Content** or **SEO** tab.
+
 **Undo and redo.** The editor keeps the last 100 changes of the open item, from the canvas and from
 the inspector forms alike. Typing in one field is one step once you pause. Undo restores the block
 selection of that moment too. The history starts when the item opens, and saving does not reset

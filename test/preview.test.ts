@@ -22,6 +22,7 @@ import {
    insertBlock,
    insertionIndex,
    isApplePlatform,
+   isFieldKey,
    isTrustedPreviewEvent,
    moveBlock,
    moveTargetForInsertion,
@@ -29,6 +30,7 @@ import {
    parseHostMessage,
    previewBlocks,
    previewEnvelope,
+   previewFieldConfig,
    previewItem,
    previewMedia,
    previewPathErrors,
@@ -187,6 +189,30 @@ describe('preview message protocol', () => {
       expect(parseFrameMessage(previewEnvelope({ type: 'hover' }))).toBeNull()
    })
 
+   it('parses focus-field frame messages for block and entry fields', () => {
+      expect(
+         parseFrameMessage(previewEnvelope({ type: 'focus-field', index: 2, key: 'heading' }))
+      ).toEqual({ type: 'focus-field', index: 2, key: 'heading' })
+      expect(
+         parseFrameMessage(
+            previewEnvelope({ type: 'focus-field', index: null, key: 'title', extra: 1 })
+         )
+      ).toEqual({ type: 'focus-field', index: null, key: 'title' })
+      for (const broken of [
+         { index: -1, key: 'heading' },
+         { index: '1', key: 'heading' },
+         { key: 'heading' },
+         { index: 0 },
+         { index: 0, key: '' },
+         { index: 0, key: 'body.0' },
+         { index: 0, key: '__proto__ x' },
+         { index: 0, key: 'x'.repeat(101) },
+         { index: 0, key: 3 },
+      ]) {
+         expect(parseFrameMessage(previewEnvelope({ type: 'focus-field', ...broken }))).toBeNull()
+      }
+   })
+
    it('trusts only the expected origin and source window', () => {
       const source = {}
       expect(
@@ -209,6 +235,77 @@ describe('preview message protocol', () => {
             null
          )
       ).toBe(false)
+   })
+})
+
+describe('field targets', () => {
+   it('accepts identifier field keys only', () => {
+      expect(isFieldKey('heading')).toBe(true)
+      expect(isFieldKey('_seo2')).toBe(true)
+      expect(isFieldKey('2nd')).toBe(false)
+      expect(isFieldKey('a-b')).toBe(false)
+      expect(isFieldKey(null)).toBe(false)
+   })
+
+   it('resolves a block field from the block type', () => {
+      expect(
+         previewFieldConfig(
+            { index: 0, key: 'heading', blockType: 'text' },
+            body,
+            news.fields,
+            'body'
+         )
+      ).toMatchObject({ label: 'Heading', type: 'text' })
+      expect(
+         previewFieldConfig(
+            { index: 0, key: 'caption', blockType: 'text' },
+            body,
+            news.fields,
+            'body'
+         )
+      ).toBeUndefined()
+      expect(
+         previewFieldConfig(
+            { index: 0, key: 'heading', blockType: 'nope' },
+            body,
+            news.fields,
+            'body'
+         )
+      ).toBeUndefined()
+      expect(
+         previewFieldConfig({ index: 0, key: 'heading' }, body, news.fields, 'body')
+      ).toBeUndefined()
+      expect(
+         previewFieldConfig(
+            { index: 0, key: 'constructor', blockType: 'text' },
+            body,
+            news.fields,
+            'body'
+         )
+      ).toBeUndefined()
+   })
+
+   it('resolves an entry field without a block, never the blocks field itself', () => {
+      expect(
+         previewFieldConfig({ index: null, key: 'title' }, body, news.fields, 'body')
+      ).toMatchObject({ type: 'text', translatable: true })
+      expect(
+         previewFieldConfig({ index: null, key: 'excerpt' }, body, news.fields, 'body')
+      ).toMatchObject({ label: 'Summary', textarea: true })
+      expect(
+         previewFieldConfig({ index: null, key: 'body' }, body, news.fields, 'body')
+      ).toBeUndefined()
+      expect(previewFieldConfig({ index: null, key: 'title' }, body, null, 'body')).toBeUndefined()
+      expect(
+         previewFieldConfig({ index: null, key: 'missing' }, body, news.fields, 'body')
+      ).toBeUndefined()
+      const secret = {
+         ...news.fields,
+         notes: { label: 'Notes', type: 'text' as const, private: true },
+      }
+      expect(
+         previewFieldConfig({ index: null, key: 'notes' }, body, secret, 'body')
+      ).toBeUndefined()
    })
 })
 

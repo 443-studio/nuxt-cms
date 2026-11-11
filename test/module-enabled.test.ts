@@ -111,7 +111,10 @@ describe('module setup when disabled', () => {
       expect(kit.addComponentsDir).not.toHaveBeenCalled()
       expect(nuxt.hook).not.toHaveBeenCalledWith('app:templates', expect.any(Function))
       expect(kit.addRouteMiddleware).not.toHaveBeenCalled()
-      expect(kit.addTypeTemplate).not.toHaveBeenCalled()
+      expect(kit.addTypeTemplate).toHaveBeenCalledTimes(1)
+      expect(kit.addTypeTemplate.mock.calls[0]![0]).toMatchObject({
+         filename: 'types/nuxt-cms-field.d.ts',
+      })
       expect(kit.addVitePlugin).not.toHaveBeenCalled()
    })
 
@@ -150,6 +153,12 @@ describe('module setup when disabled', () => {
          name: 'CmsBlocks',
          filePath: expect.stringContaining('blocks/CmsBlocks.vue'),
       })
+      expect(kit.addComponent).toHaveBeenCalledWith({
+         name: 'CmsField',
+         filePath: expect.stringContaining('blocks/CmsField'),
+      })
+      expect(kit.addPlugin).toHaveBeenCalledTimes(1)
+      expect(kit.addPlugin).toHaveBeenCalledWith(expect.stringContaining('plugins/cms-field'))
    })
 
    it('registers no database or schema aliases', async () => {
@@ -551,6 +560,7 @@ describe('module setup of the seo routes', () => {
          ])
       )
       expect(kit.addPlugin.mock.calls.map((call) => call[0])).toEqual([
+         './runtime/app/plugins/cms-field',
          './runtime/app/plugins/cms-preview',
          './runtime/app/plugins/cms-preview-banner.client',
       ])
@@ -559,6 +569,7 @@ describe('module setup of the seo routes', () => {
    it('skips the automatic preview banner with preview.banner false', async () => {
       await setupAndFinish({ preview: { banner: false } })
       expect(kit.addPlugin.mock.calls.map((call) => call[0])).toEqual([
+         './runtime/app/plugins/cms-field',
          './runtime/app/plugins/cms-preview',
       ])
    })

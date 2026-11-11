@@ -257,6 +257,8 @@
                            :description="blockField.description"
                            :icon="cmsIcon(fieldIcon(blockField))"
                            :required="blockField.required"
+                           :data-cms-field="blockKey"
+                           :class="{ 'cms-search-focus': highlighted === blockKey }"
                         >
                            <CmsFieldInput
                               :model-value="selectedItem[blockKey]"
@@ -407,6 +409,7 @@ import {
    moveBlock,
    parseFrameMessage,
    previewEnvelope,
+   previewFieldConfig,
    previewMedia,
    removeBlock,
    selectionAfterMove,
@@ -952,6 +955,9 @@ function onFrameMessage(message: CmsPreviewFrameMessage) {
       case 'paste':
          void paste(message.index, message.text ?? null)
          break
+      case 'focus-field':
+         focusField(message.index, message.key)
+         break
       case 'undo':
          undo()
          break
@@ -995,6 +1001,24 @@ function revealField(key: string) {
    select(null)
    activeTab.value = tabOfKey(key) === 'seo' ? 'seo' : 'content'
    showPanel('inspector')
+}
+
+function fieldAt(index: number | null, key: string) {
+   return previewFieldConfig(
+      { index, key, blockType: index === null ? null : String(blocks.value[index]?.type) },
+      blocksField.value,
+      props.content ? props.fields : null,
+      props.fieldKey
+   )
+}
+
+function focusField(index: number | null, key: string) {
+   if (index !== null && index >= blocks.value.length) return
+   if (!fieldAt(index, key)) return
+   select(index)
+   if (index === null) activeTab.value = tabOfKey(key) === 'seo' ? 'seo' : 'content'
+   if (!compact.value) layout.value.inspector.collapsed = false
+   reveal(() => panelBody.value, key)
 }
 
 function applyFocus(focus: CmsSearchFocus) {

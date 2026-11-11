@@ -32,6 +32,8 @@
          <PreviewOverlay
             ref="overlay"
             :field="field"
+            :field-key="state.field"
+            :fields="item ? fields : null"
             :total="state.blocks.length"
             :selected="state.selected"
             :highlighted="highlighted"
@@ -81,6 +83,7 @@ import type { CmsBlockItem } from '../blocks/resolve'
 import { useCmsLinkTargets } from '../composables/cms-link-targets'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import PreviewOverlay from '../preview/PreviewOverlay.vue'
+import { cmsFieldMarking } from '../preview/field-marker'
 
 definePageMeta({ middleware: 'cms-auth' })
 
@@ -186,12 +189,14 @@ function onMessage(event: MessageEvent) {
 }
 
 onMounted(() => {
+   cmsFieldMarking.value = true
    standalone.value = window.parent === window
    window.addEventListener('message', onMessage)
    post({ type: 'ready' })
 })
 
 onBeforeUnmount(() => {
+   cmsFieldMarking.value = false
    window.removeEventListener('message', onMessage)
 })
 </script>
@@ -245,6 +250,36 @@ onBeforeUnmount(() => {
    font-weight: 600;
    letter-spacing: 0.01em;
    white-space: nowrap;
+}
+
+.cms-preview-field {
+   position: absolute;
+   box-sizing: border-box;
+   outline: 1px solid color-mix(in oklab, var(--cms-preview-accent) 55%, transparent);
+   outline-offset: 2px;
+   border-radius: 2px;
+   background: color-mix(in oklab, var(--cms-preview-accent) 5%, transparent);
+}
+
+.cms-preview-field-label {
+   position: absolute;
+   top: 100%;
+   left: -3px;
+   margin-top: 6px;
+   padding: 3px 6px;
+   border-radius: 4px;
+   background: var(--cms-preview-surface);
+   color: var(--cms-preview-accent);
+   box-shadow: 0 0 0 1px color-mix(in oklab, var(--cms-preview-accent) 40%, transparent);
+   font-size: 11px;
+   font-weight: 600;
+   white-space: nowrap;
+}
+
+.cms-preview-field-label.is-above {
+   top: auto;
+   bottom: 100%;
+   margin: 0 0 6px;
 }
 
 .cms-preview-toolbar {

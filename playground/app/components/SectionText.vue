@@ -1,7 +1,9 @@
 <template>
    <section class="mx-auto w-full max-w-3xl px-6 py-8">
-      <h2 v-if="heading" class="site-display text-2xl font-semibold">{{ heading }}</h2>
-      <div class="prose mt-3 text-(--k-text-muted)" v-html="body" />
+      <CmsField v-if="heading" name="heading" as="h2" class="site-display text-2xl font-semibold">
+         {{ heading }}
+      </CmsField>
+      <div v-cms-field="'body'" class="prose mt-3 text-(--k-text-muted)" v-html="body" />
    </section>
 </template>
 

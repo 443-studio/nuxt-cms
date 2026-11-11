@@ -377,6 +377,28 @@ runtime. The `annotate` prop adds `data-cms-block` (the index) and `data-cms-blo
 element of each block, for tools that need to find a block in the page. The visual editor uses it,
 so give each block component a single root element.
 
+### Marking fields
+
+Tell the visual editor which element shows which field, so that a click on it in the canvas opens
+that field in the inspector. Use the `<CmsField>` component or the `v-cms-field` directive, both
+registered by the module:
+
+```vue
+<template>
+   <section>
+      <CmsField name="heading" as="h2">{{ heading }}</CmsField>
+      <div v-cms-field="'body'" v-html="body" />
+   </section>
+</template>
+```
+
+`<CmsField>` renders the tag given by `as` (default `span`) with its slot; attributes like `class`
+pass through. Both add `data-cms-field` only inside the editor preview: on the public site they
+render nothing extra. Inside a block, the name is a field of that block (the block is the nearest
+`data-cms-block` ancestor). Outside every block, for example in a
+[preview component](schema.md#preview-component), the name is a field of the item (`title`,
+`excerpt`, an extra field). Unknown names and private fields are ignored.
+
 ## Example
 
 ```ts

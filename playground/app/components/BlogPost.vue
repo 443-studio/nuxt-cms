@@ -6,8 +6,12 @@
                <span>{{ item.publishedAt?.slice(0, 10) }}</span>
                <span v-if="item.readingTime">{{ item.readingTime }} min read</span>
             </div>
-            <h1 class="site-display mt-2 text-4xl font-bold">{{ item.title }}</h1>
-            <p v-if="item.excerpt" class="mt-4 text-(--k-text-muted)">{{ item.excerpt }}</p>
+            <CmsField name="title" as="h1" class="site-display mt-2 text-4xl font-bold">
+               {{ item.title }}
+            </CmsField>
+            <p v-if="item.excerpt" v-cms-field="'excerpt'" class="mt-4 text-(--k-text-muted)">
+               {{ item.excerpt }}
+            </p>
          </header>
          <figure v-if="item.cover?.url" class="mx-auto mt-8 w-full max-w-5xl px-6">
             <img

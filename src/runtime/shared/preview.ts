@@ -101,6 +101,7 @@ export type CmsPreviewFrameMessage =
    | { type: 'copy'; index: number }
    | { type: 'cut'; index: number }
    | { type: 'paste'; index: number; text?: string }
+   | { type: 'focus-field'; index: number | null; key: string }
    | { type: 'undo' }
    | { type: 'redo' }
    | { type: 'save' }
@@ -119,6 +120,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isIndex(value: unknown): value is number {
    return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+const FIELD_KEY = /^[a-z_]\w{0,99}$/i
+
+export function isFieldKey(value: unknown): value is string {
+   return typeof value === 'string' && FIELD_KEY.test(value)
 }
 
 function envelope(data: unknown): Record<string, unknown> | null {
@@ -155,6 +162,10 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
       case 'copy':
       case 'cut':
          return isIndex(message.index) ? { type: message.type, index: message.index } : null
+      case 'focus-field':
+         return (message.index === null || isIndex(message.index)) && isFieldKey(message.key)
+            ? { type: 'focus-field', index: message.index, key: message.key }
+            : null
       case 'paste':
          if (!isIndex(message.index)) return null
          if (message.text === undefined) return { type: 'paste', index: message.index }
@@ -194,6 +205,28 @@ export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
          selected: state.selected as number | null,
       },
    }
+}
+
+export interface CmsFieldTarget {
+   index: number | null
+   key: string
+}
+
+export function previewFieldConfig(
+   target: CmsFieldTarget & { blockType?: string | null },
+   blocksField: FieldConfig | undefined,
+   entryFields: Record<string, FieldConfig> | null | undefined,
+   blocksKey: string
+): FieldConfig | undefined {
+   if (!isFieldKey(target.key)) return undefined
+   if (target.index !== null) {
+      const block = target.blockType ? blocksField?.blocks?.[target.blockType] : undefined
+      return block && Object.hasOwn(block.fields, target.key) ? block.fields[target.key] : undefined
+   }
+   if (!entryFields || target.key === blocksKey || !Object.hasOwn(entryFields, target.key))
+      return undefined
+   const field = entryFields[target.key]!
+   return isPrivateField(field) ? undefined : field
 }
 
 export type CmsEditorShortcut =
