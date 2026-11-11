@@ -1,5 +1,5 @@
 <template>
-   <div class="cms-stack is-loose">
+   <KStack gap="lg">
       <KSettingsGroup label="Profile">
          <template v-if="editable" #actions>
             <KButton
@@ -15,14 +15,14 @@
             </KButton>
          </template>
          <KForm :id="profileFormId" :form="profileForm" :disabled="!editable || undefined">
-            <div class="cms-form-grid">
+            <KGrid :columns="{ base: 1, sm: 2 }">
                <KFormField label="Name" name="name" :hint="lockReason">
                   <KInput v-model="profile.name" placeholder="Optional" autocomplete="off" />
                </KFormField>
                <KFormField label="Email">
                   <KInput :model-value="account.email" type="email" disabled />
                </KFormField>
-            </div>
+            </KGrid>
          </KForm>
       </KSettingsGroup>
 
@@ -87,7 +87,7 @@
             </KFormField>
          </KForm>
       </KSettingsGroup>
-   </div>
+   </KStack>
 </template>
 
 <script setup lang="ts">
@@ -97,10 +97,12 @@ import {
    Button as KButton,
    Form as KForm,
    FormField as KFormField,
+   Grid as KGrid,
    Input as KInput,
    PasswordInput as KPasswordInput,
    Select as KSelect,
    SettingsGroup as KSettingsGroup,
+   Stack as KStack,
    toast,
    useForm,
 } from '@xleddyl/443-components-vue'

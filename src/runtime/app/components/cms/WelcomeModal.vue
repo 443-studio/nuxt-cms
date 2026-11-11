@@ -3,24 +3,19 @@
       :open="open"
       size="sm"
       :title="`Welcome to ${cmsBrand.title}`"
+      description="You signed in with a password that someone shared with you. Set your own password now, or keep this one. You can change it later in Settings, Account."
       :form="form"
       :guard="false"
       @update:open="(value: boolean) => !value && keep()"
    >
-      <div class="cms-stack">
-         <p class="cms-hint">
-            You signed in with a password that someone shared with you. Set your own password now,
-            or keep this one. You can change it later in Settings, Account.
-         </p>
-         <KFormField label="New password" name="password" required>
-            <KPasswordInput
-               v-model="draft.password"
-               autocomplete="new-password"
-               :generate="generatePassword"
-               copy
-            />
-         </KFormField>
-      </div>
+      <KFormField label="New password" name="password" required>
+         <KPasswordInput
+            v-model="draft.password"
+            autocomplete="new-password"
+            :generate="generatePassword"
+            copy
+         />
+      </KFormField>
       <template #footer="{ submit }">
          <KButton variant="ghost" tone="neutral" :disabled="form.submitting.value" @click="keep">
             Keep current password

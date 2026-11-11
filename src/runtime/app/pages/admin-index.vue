@@ -1,5 +1,5 @@
 <template>
-   <div class="k-page cms-page">
+   <div class="k-page">
       <KEmptyState
          :icon="cmsIcon(access?.known === false ? 'exclamation-triangle' : 'lock-closed')"
          :title="access?.known === false ? 'Your role no longer exists' : 'Nothing to show yet'"

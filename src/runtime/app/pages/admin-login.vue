@@ -1,5 +1,5 @@
 <template>
-   <KRoot class="cms-scope cms-canvas" :theme="theme" preset="default">
+   <KRoot class="cms-scope is-canvas" :theme="theme" preset="default">
       <KAuthLogin
          :submit="login"
          :submit-error="loginError"

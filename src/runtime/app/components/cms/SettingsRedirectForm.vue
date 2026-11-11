@@ -1,6 +1,6 @@
 <template>
-   <KForm :id="formId" :form="form" class="cms-stack">
-      <div class="cms-form-grid">
+   <KForm :id="formId" :form="form">
+      <KGrid :columns="{ base: 1, sm: 2 }">
          <KFormField label="From" name="from" required>
             <KInput v-model="draft.from" placeholder="/old-page" autocomplete="off" />
          </KFormField>
@@ -11,15 +11,15 @@
                autocomplete="off"
             />
          </KFormField>
-      </div>
-      <div class="cms-form-grid">
+      </KGrid>
+      <KGrid :columns="{ base: 1, sm: 2 }">
          <KFormField label="Status" name="status">
             <KSelect v-model="draft.status" :options="REDIRECT_STATUS_OPTIONS" />
          </KFormField>
          <KFormField label="Query string" name="keepQuery">
             <KSwitch v-model="draft.keepQuery" label="Keep the visitor's query" />
          </KFormField>
-      </div>
+      </KGrid>
    </KForm>
 </template>
 
@@ -29,6 +29,7 @@ import { redirectFromErrors, redirectToErrors } from '#nuxt-cms'
 import {
    Form as KForm,
    FormField as KFormField,
+   Grid as KGrid,
    Input as KInput,
    Select as KSelect,
    Switch as KSwitch,

@@ -7,7 +7,6 @@
       multiple
       clearable
       clear-label="Clear filters"
-      class="cms-list-filters"
       @update:model-value="onPillsUpdate"
    >
       <template v-for="key in relationKeys" #[`panel-${key}`]="{ close }" :key="key">

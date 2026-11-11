@@ -1,5 +1,5 @@
 <template>
-   <div v-if="config.kind === 'single'" class="k-page cms-page is-form">
+   <div v-if="config.kind === 'single'" class="k-page">
       <KPageHeader
          :title="config.label"
          :icon="cmsIcon(kindMeta.icon)"
@@ -54,7 +54,6 @@
       v-model:search="search"
       v-model:sort="sort"
       v-model:selected="selected"
-      class="cms-page"
       :title="config.label"
       :icon="cmsIcon(kindMeta.icon)"
       :description="kindMeta.description"
@@ -349,7 +348,13 @@ import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
 
 definePageMeta({
    layout: 'cms-admin',
-   middleware: 'cms-auth',
+   middleware: [
+      'cms-auth',
+      (to) => {
+         if ((cmsConfig as CmsConfig)[to.params.collection as string]?.kind === 'single')
+            to.meta.content = 'page'
+      },
+   ],
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
    content: 'fill',
    key: (route) =>

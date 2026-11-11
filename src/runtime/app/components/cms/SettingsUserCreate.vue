@@ -1,6 +1,6 @@
 <template>
-   <KForm :id="formId" :form="form" class="cms-stack">
-      <div class="cms-form-grid">
+   <KForm :id="formId" :form="form">
+      <KGrid :columns="{ base: 1, sm: 2 }">
          <KFormField label="Email" name="email" required>
             <KInput
                v-model="draft.email"
@@ -12,7 +12,7 @@
          <KFormField label="Name" name="name">
             <KInput v-model="draft.name" placeholder="Optional" autocomplete="off" />
          </KFormField>
-      </div>
+      </KGrid>
       <KFormField label="Role" name="role" required :description="roleDescription">
          <KSelect v-model="draft.role" :options="grantableOptions" />
       </KFormField>
@@ -33,6 +33,7 @@ import { MIN_PASSWORD_LENGTH } from '#nuxt-cms'
 import {
    Form as KForm,
    FormField as KFormField,
+   Grid as KGrid,
    Input as KInput,
    PasswordInput as KPasswordInput,
    Select as KSelect,

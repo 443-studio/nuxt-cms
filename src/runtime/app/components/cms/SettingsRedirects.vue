@@ -3,7 +3,7 @@
       <CmsSettingsRedirectForm :key="page.id" :redirect="current" @saved="onSaved" />
    </KFieldset>
    <KSkeletonForm v-else-if="page && !store.loaded.value" :fields="4" :columns="2" />
-   <div v-else class="cms-stack">
+   <KStack v-else>
       <KInput
          v-if="store.items.value.length"
          v-model="search"
@@ -53,7 +53,7 @@
          :page-size="PAGE_SIZE"
          size="sm"
       />
-   </div>
+   </KStack>
 </template>
 
 <script setup lang="ts">
@@ -66,6 +66,7 @@ import {
    Pagination as KPagination,
    RecordList as KRecordList,
    SkeletonForm as KSkeletonForm,
+   Stack as KStack,
 } from '@xleddyl/443-components-vue'
 import { computed, onMounted, ref, watch } from '#imports'
 import { CMS_NEW_RECORD } from '../../composables/cms-route'

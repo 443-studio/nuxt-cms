@@ -1,5 +1,5 @@
 <template>
-   <div class="k-page cms-page">
+   <div class="k-page">
       <KPageHeader
          :trail="breadcrumb"
          trail-label="Page"

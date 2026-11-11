@@ -16,35 +16,6 @@ body:has(.cms-scope) {
    overscroll-behavior-y: none;
 }
 
-.cms-canvas {
-   min-height: 100dvh;
-   background-color: var(--k-canvas);
-}
-
-.cms-form-main {
-   display: flex;
-   min-width: 0;
-   flex-direction: column;
-   gap: 1.375rem;
-}
-
-.cms-form-section.is-titled {
-   border: 1px solid var(--k-line);
-   border-radius: var(--k-radius-lg);
-   background: var(--k-surface);
-}
-
-.cms-form-rows {
-   display: flex;
-   flex-direction: column;
-   gap: 1.375rem;
-}
-
-.cms-form-section.is-titled > .cms-form-rows {
-   padding: 1rem 1rem 1.125rem;
-   border-top: 1px solid var(--k-line);
-}
-
 .cms-settings-grip,
 .cms-settings-item-icon {
    flex: none;
@@ -206,20 +177,6 @@ body:has(.cms-scope) {
    gap: 0.25rem;
 }
 
-.cms-page {
-   display: flex;
-   flex-direction: column;
-   gap: 1.5rem;
-   min-width: 0;
-   animation: k-enter 320ms var(--k-ease-out) backwards;
-}
-
-.cms-page.is-form {
-   width: 100%;
-   max-width: 72rem;
-   margin-inline: auto;
-}
-
 .cms-list-loading {
    padding: 1rem 1.125rem;
 }
@@ -352,21 +309,9 @@ body:has(.cms-scope) {
    color: var(--k-text-muted);
 }
 
-.cms-editor-schedule-panel {
-   display: flex;
-   flex-direction: column;
-   gap: 0.875rem;
-   width: 18rem;
-   padding: 0.875rem;
-}
-
-.cms-list-filters {
-   animation: k-fade 300ms var(--k-ease) backwards;
-}
-
+.cms-editor-schedule-panel,
 .cms-list-filter-panel {
    width: 18rem;
-   padding: 0.75rem;
 }
 
 .cms-confirm-groups {
@@ -478,27 +423,6 @@ body:has(.cms-scope) {
    gap: 0.25rem;
    font-size: 0.75rem;
    color: var(--k-success);
-}
-
-.cms-stack {
-   display: flex;
-   flex-direction: column;
-   gap: 1rem;
-}
-
-.cms-stack.is-loose {
-   gap: 1.5rem;
-}
-
-.cms-form-grid {
-   display: grid;
-   gap: 1rem;
-}
-
-@media (min-width: 640px) {
-   .cms-form-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-   }
 }
 
 .cms-hint {
@@ -1625,30 +1549,6 @@ body:has(.cms-scope) {
    display: flex;
    flex-direction: column;
    gap: 1.375rem;
-}
-
-.cms-form-main,
-.cms-form-rows {
-   display: flex;
-   min-width: 0;
-   flex-direction: column;
-   gap: 1.375rem;
-}
-
-.cms-form-main {
-   container-type: inline-size;
-}
-
-.cms-form-row {
-   display: grid;
-   grid-template-columns: minmax(0, 1fr);
-   gap: 1.375rem 1rem;
-}
-
-@container (min-width: 32rem) {
-   .cms-form-row {
-      grid-template-columns: repeat(var(--cms-row-cols, 1), minmax(0, 1fr));
-   }
 }
 
 .cms-form-section-body {

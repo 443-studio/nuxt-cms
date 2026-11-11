@@ -21,14 +21,14 @@
             </KButton>
          </template>
          <KForm :id="profileFormId" :form="profileForm">
-            <div class="cms-form-grid">
+            <KGrid :columns="{ base: 1, sm: 2 }">
                <KFormField label="Name" name="name">
                   <KInput v-model="profile.name" placeholder="Your name" autocomplete="name" />
                </KFormField>
                <KFormField label="Email">
                   <KInput :model-value="email" type="email" disabled />
                </KFormField>
-            </div>
+            </KGrid>
          </KForm>
       </KSettingsGroup>
 
@@ -48,7 +48,7 @@
                Change password
             </KButton>
          </template>
-         <KForm :id="passwordFormId" :form="passwordForm" class="cms-stack">
+         <KForm :id="passwordFormId" :form="passwordForm">
             <KFormField label="Current password" name="currentPassword" required>
                <KPasswordInput
                   v-model="password.currentPassword"
@@ -76,6 +76,7 @@ import {
    Button as KButton,
    Form as KForm,
    FormField as KFormField,
+   Grid as KGrid,
    Input as KInput,
    PasswordInput as KPasswordInput,
    SettingsGroup as KSettingsGroup,

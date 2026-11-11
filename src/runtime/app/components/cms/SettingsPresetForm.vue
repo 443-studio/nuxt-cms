@@ -1,5 +1,5 @@
 <template>
-   <KForm :id="formId" :form="form" class="cms-stack">
+   <KForm :id="formId" :form="form">
       <KFormField label="Name" name="name" required>
          <KInput
             v-model="draft.name"

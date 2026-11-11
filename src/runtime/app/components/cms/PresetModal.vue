@@ -2,6 +2,7 @@
    <KFormModal
       v-model:open="open"
       :title="title"
+      :description="hint"
       size="sm"
       :form="form"
       :submit-label="submitLabel"
@@ -9,25 +10,22 @@
       creating
       nested
    >
-      <div class="cms-stack">
-         <p v-if="hint" class="cms-hint">{{ hint }}</p>
-         <KFormField label="Name" name="name" required>
-            <KInput
-               v-model="draft.name"
-               :maxlength="CMS_PRESET_NAME_MAX"
-               placeholder="Article intro"
-               autocomplete="off"
-            />
-         </KFormField>
-         <KFormField label="Description" name="description">
-            <KTextarea
-               v-model="draft.description"
-               :maxlength="CMS_PRESET_DESCRIPTION_MAX"
-               :rows="3"
-               placeholder="Optional"
-            />
-         </KFormField>
-      </div>
+      <KFormField label="Name" name="name" required>
+         <KInput
+            v-model="draft.name"
+            :maxlength="CMS_PRESET_NAME_MAX"
+            placeholder="Article intro"
+            autocomplete="off"
+         />
+      </KFormField>
+      <KFormField label="Description" name="description">
+         <KTextarea
+            v-model="draft.description"
+            :maxlength="CMS_PRESET_DESCRIPTION_MAX"
+            :rows="3"
+            placeholder="Optional"
+         />
+      </KFormField>
    </KFormModal>
 </template>
 

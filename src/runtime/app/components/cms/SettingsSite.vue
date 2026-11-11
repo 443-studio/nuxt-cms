@@ -1,57 +1,63 @@
 <template>
    <KSkeletonForm v-if="!loaded" :fields="4" :columns="2" />
 
-   <KForm v-else :id="formId" :form="form" class="cms-stack is-loose">
-      <KSettingsGroup
-         label="Search results"
-         description="How the pages of the site show up in search engines and browser tabs."
-      >
-         <template v-if="multilingual" #actions>
-            <CmsLocaleSwitch v-model="locale" :progress="progress" />
-         </template>
-         <div class="cms-stack">
-            <div class="cms-form-grid">
-               <KFormField label="Site name" name="name">
-                  <CmsTranslatableField v-model="state.name" :field="NAME_FIELD" :locale="locale" />
-               </KFormField>
+   <KForm v-else :id="formId" :form="form">
+      <KStack gap="lg">
+         <KSettingsGroup
+            label="Search results"
+            description="How the pages of the site show up in search engines and browser tabs."
+         >
+            <template v-if="multilingual" #actions>
+               <CmsLocaleSwitch v-model="locale" :progress="progress" />
+            </template>
+            <KStack>
+               <KGrid :columns="{ base: 1, sm: 2 }">
+                  <KFormField label="Site name" name="name">
+                     <CmsTranslatableField
+                        v-model="state.name"
+                        :field="NAME_FIELD"
+                        :locale="locale"
+                     />
+                  </KFormField>
+                  <KFormField
+                     label="Title template"
+                     name="titleTemplate"
+                     :description="`${TITLE_PLACEHOLDER} is the page title, ${SITE_NAME_PLACEHOLDER} the site name.`"
+                  >
+                     <KInput v-model="titleTemplate" :placeholder="DEFAULT_TITLE_TEMPLATE" />
+                  </KFormField>
+               </KGrid>
                <KFormField
-                  label="Title template"
-                  name="titleTemplate"
-                  :description="`${TITLE_PLACEHOLDER} is the page title, ${SITE_NAME_PLACEHOLDER} the site name.`"
+                  label="Default description"
+                  name="description"
+                  description="Used by the pages that have no description of their own."
                >
-                  <KInput v-model="titleTemplate" :placeholder="DEFAULT_TITLE_TEMPLATE" />
+                  <CmsTranslatableField
+                     v-model="state.description"
+                     :field="DESCRIPTION_FIELD"
+                     :locale="locale"
+                  />
                </KFormField>
-            </div>
-            <KFormField
-               label="Default description"
-               name="description"
-               description="Used by the pages that have no description of their own."
-            >
-               <CmsTranslatableField
-                  v-model="state.description"
-                  :field="DESCRIPTION_FIELD"
-                  :locale="locale"
-               />
-            </KFormField>
-         </div>
-      </KSettingsGroup>
+            </KStack>
+         </KSettingsGroup>
 
-      <KSettingsGroup
-         label="Share image"
-         description="Shown when a page without its own image is shared. 1200 x 630 pixels works best."
-      >
-         <CmsMediaField v-model="state.image" media-type="image" />
-      </KSettingsGroup>
+         <KSettingsGroup
+            label="Share image"
+            description="Shown when a page without its own image is shared. 1200 x 630 pixels works best."
+         >
+            <CmsMediaField v-model="state.image" media-type="image" />
+         </KSettingsGroup>
 
-      <KSettingsGroup
-         row
-         label="Hide the site from search engines"
-         description="Every page is sent with noindex and the sitemap is empty. For a staging site or one not launched yet."
-      >
-         <template #actions>
-            <KSwitch v-model="state.hidden" aria-label="Hide the site from search engines" />
-         </template>
-      </KSettingsGroup>
+         <KSettingsGroup
+            row
+            label="Hide the site from search engines"
+            description="Every page is sent with noindex and the sitemap is empty. For a staging site or one not launched yet."
+         >
+            <template #actions>
+               <KSwitch v-model="state.hidden" aria-label="Hide the site from search engines" />
+            </template>
+         </KSettingsGroup>
+      </KStack>
    </KForm>
 </template>
 
@@ -67,9 +73,11 @@ import {
 import {
    Form as KForm,
    FormField as KFormField,
+   Grid as KGrid,
    Input as KInput,
    SettingsGroup as KSettingsGroup,
    SkeletonForm as KSkeletonForm,
+   Stack as KStack,
    Switch as KSwitch,
    toast,
    useForm,

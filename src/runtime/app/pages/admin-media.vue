@@ -1,5 +1,5 @@
 <template>
-   <div class="k-page cms-page">
+   <div class="k-page">
       <KPageHeader
          title="Media"
          :icon="cmsIcon('photo')"

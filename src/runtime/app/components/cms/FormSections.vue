@@ -1,31 +1,33 @@
 <template>
-   <div class="cms-form-main">
+   <KStack gap="lg">
       <component
          :is="section.title ? KAccordion : 'div'"
          v-for="section in sections"
          :key="section.id"
          v-bind="sectionBinding(section)"
-         class="cms-form-section"
       >
-         <div class="cms-form-rows" :class="{ 'cms-form-section-body': section.title }">
-            <div
+         <KStack gap="lg" :class="{ 'cms-form-section-body': section.title }">
+            <KGrid
                v-for="row in section.rows"
                :key="row.join('|')"
-               class="cms-form-row"
-               :style="{ '--cms-row-cols': row.length }"
+               :columns="{ base: 1, sm: row.length }"
             >
                <template v-for="key in row" :key="key">
                   <slot name="field" :field-key="key" />
                </template>
-            </div>
-         </div>
+            </KGrid>
+         </KStack>
       </component>
-   </div>
+   </KStack>
 </template>
 
 <script setup lang="ts">
 import type { CmsFormLayout, CmsLayoutSection } from '#nuxt-cms'
-import { Accordion as KAccordion } from '@xleddyl/443-components-vue'
+import {
+   Accordion as KAccordion,
+   Grid as KGrid,
+   Stack as KStack,
+} from '@xleddyl/443-components-vue'
 import { computed, ref } from '#imports'
 
 const props = withDefaults(
