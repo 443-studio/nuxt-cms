@@ -457,7 +457,8 @@ const filters = computed<CmsListFilters>({
    },
 })
 
-const filterQuery = computed(() => listFilterQuery(filters.value))
+const filterQueryKey = computed(() => JSON.stringify(listFilterQuery(filters.value)))
+const filterQuery = computed<Record<string, string>>(() => JSON.parse(filterQueryKey.value))
 const filterCount = computed(() => Object.keys(filterQuery.value).length)
 const narrowed = computed(() => !!searchTerm.value || filterCount.value > 0)
 
@@ -490,12 +491,9 @@ function clearNarrowing() {
    filters.value = {}
 }
 
-watch(
-   () => JSON.stringify(filterQuery.value),
-   () => {
-      page.value = 1
-   }
-)
+watch(filterQueryKey, () => {
+   page.value = 1
+})
 
 const sortQuery = computed(() =>
    sort.value ? { sort: sort.value.key, order: sort.value.direction } : {}
