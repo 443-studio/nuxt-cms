@@ -13,6 +13,7 @@ export interface CmsBlockPickerItem {
    icon: string
    keywords: string[]
    disabled: boolean
+   disabledReason?: string
 }
 
 export interface CmsBlockPickerGroup {
@@ -23,7 +24,7 @@ export interface CmsBlockPickerGroup {
 
 export function blockPickerGroups(
    blocks: Record<string, BlockConfig>,
-   disabled: (type: string) => boolean = () => false
+   disabledReason: (type: string) => string | undefined = () => undefined
 ): CmsBlockPickerGroup[] {
    const entries = Object.entries(blocks)
    const grouped = entries.some(([, block]) => !!block.group?.trim())
@@ -40,13 +41,15 @@ export function blockPickerGroups(
          group = groups.get(name) ?? { id: name, label: name, items: [] }
          groups.set(name, group)
       }
+      const reason = disabledReason(type) || undefined
       group.items.push({
          type,
          label: block.label,
          description: block.description || undefined,
          icon: block.icon ?? CMS_BLOCK_ICON,
          keywords: [type, ...(name ? [name] : []), ...(block.tags ?? [])],
-         disabled: disabled(type),
+         disabled: !!reason,
+         ...(reason ? { disabledReason: reason } : {}),
       })
    }
    return [...groups.values(), other].filter((group) => group.items.length)

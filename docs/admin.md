@@ -244,11 +244,13 @@ bar and three panels:
 - **Block tree** (left): every block of the body, in order. A row shows the block icon and label
   and a short summary (the first text, rich text or email value in the current language, or the
   name of its media file) so that similar blocks are easy to tell apart. A hidden block is dimmed
-  with an eye icon, and a red dot and a red label mark a block with a validation error. Drag a row
-  by its handle to move it, or focus it and press Alt with the up or down arrow. On hover, on focus
-  (Tab from the row) and on the selected row, the row shows **+** (add a block after it) and a `...`
-  menu (opening it selects the block): add before or after, move up or down, **Duplicate**,
-  **Hide** or **Show**, and **Delete**. **Add a block** at the bottom adds one at the end.
+  with an eye icon, and a red dot before the label and a red label mark a block with a validation
+  error. Drag a row by its handle to move it, or focus it and press Alt with the up or down arrow.
+  On hover, on focus (Tab from the row) and on the selected row, the row shows **+** (add a block
+  after it) and a `...` menu: add before or after, move up or down, **Duplicate**, **Hide** or
+  **Show**, and **Delete**. The menu acts on its row and leaves the selection as it is, and it stays
+  open while the pointer crosses other rows to reach it. On touch screens **+** and `...` are always
+  visible. **Add a block** at the bottom adds one at the end.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
   layout and CSS apply. Every change is shown at once, before saving. The bar above it shows or
   hides each side panel, sets the preview width (desktop, tablet 768 px or mobile 390 px), shows
@@ -344,7 +346,7 @@ narrower than 640 px it opens as a dialog. The search box has the focus: type to
 by label, description, [group and tags](schema.md#block-components) (case and accents do not
 matter), move with ↑ and ↓, pick with Enter or a click, close with Escape. Blocks with a `group`
 are listed under its heading. Each block shows its icon, label and description. When the field is
-full the blocks are disabled. After you copy or cut blocks that the field accepts, the first row is
+full the blocks are disabled, and hovering one (or reaching it with ↑ and ↓) says why. After you copy or cut blocks that the field accepts, the first row is
 **Paste N blocks**. The [presets](#block-presets) that fit the field are listed last, under
 **Presets**.
 

@@ -18,10 +18,7 @@
          @hover="onHover"
       >
          <template #label="{ node }">
-            <span
-               class="cms-block-tree-text"
-               :class="{ 'is-hidden': rowOf(node)?.hidden, 'is-invalid': node.invalid }"
-            >
+            <span class="cms-block-tree-text" :class="{ 'is-hidden': rowOf(node)?.hidden }">
                <span class="cms-block-tree-label">{{ node.label }}</span>
                <span v-if="node.description" class="cms-block-tree-summary">
                   {{ node.description }}
@@ -34,7 +31,7 @@
                <KVisuallyHidden>Hidden</KVisuallyHidden>
             </template>
          </template>
-         <template #actions="{ node, selected: active }">
+         <template #actions="{ node }">
             <KButton
                v-if="canAdd"
                :icon="cmsIcon('plus')"
@@ -52,7 +49,6 @@
                   variant="ghost"
                   tone="neutral"
                   :aria-label="`${node.label} actions`"
-                  @click="active || onSelect(node)"
                />
             </KDropdownMenu>
          </template>

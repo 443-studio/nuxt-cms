@@ -5,7 +5,6 @@
       :label="label"
       placeholder="Search blocks"
       :empty-text="emptyText"
-      :notice="disabledReason"
       @select="choose"
       @close="emit('close')"
    />
@@ -38,6 +37,10 @@ const props = withDefaults(
 
 const emit = defineEmits<{ pick: [type: string]; paste: []; preset: [id: string]; close: [] }>()
 
+const disabledState = computed(() =>
+   props.disabledReason ? { disabled: true, disabledReason: props.disabledReason } : {}
+)
+
 const presetGroup = computed<CommandGroup<string>[]>(() =>
    props.presets.length
       ? [
@@ -50,7 +53,7 @@ const presetGroup = computed<CommandGroup<string>[]>(() =>
                     ...item,
                     id: `${PRESET_PREFIX}${item.id}`,
                     icon: cmsIcon(CMS_PRESET_ICON),
-                    disabled: !!props.disabledReason,
+                    ...disabledState.value,
                  }
               }),
            },
@@ -59,7 +62,7 @@ const presetGroup = computed<CommandGroup<string>[]>(() =>
 )
 
 const groups = computed<CommandGroup<string>[]>(() => [
-   ...blockPickerGroups(props.blocks, () => !!props.disabledReason).map((group) => ({
+   ...blockPickerGroups(props.blocks, () => props.disabledReason).map((group) => ({
       id: group.id || 'other',
       label: group.label ?? (presetGroup.value.length ? 'Blocks' : undefined),
       items: group.items.map((item) => ({
@@ -69,6 +72,7 @@ const groups = computed<CommandGroup<string>[]>(() => [
          icon: cmsIcon(item.icon),
          keywords: item.keywords,
          disabled: item.disabled,
+         disabledReason: item.disabledReason,
          data: item.type,
       })),
    })),
@@ -84,7 +88,7 @@ function pinned(query: string): CommandItem<string>[] {
          label: `Paste ${count} ${count === 1 ? 'block' : 'blocks'}`,
          description: 'From the clipboard',
          icon: cmsIcon('clipboard'),
-         disabled: !!props.disabledReason,
+         ...disabledState.value,
       },
    ]
 }

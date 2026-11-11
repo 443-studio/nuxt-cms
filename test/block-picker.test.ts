@@ -36,7 +36,9 @@ describe('block picker groups', () => {
    })
 
    it('fills item labels, descriptions, icons, keywords and the disabled state', () => {
-      const [headers, content] = blockPickerGroups(blocks, (type) => type === 'hero')
+      const [headers, content] = blockPickerGroups(blocks, (type) =>
+         type === 'hero' ? 'This field holds at most 1 block.' : undefined
+      )
       expect(headers!.items[0]).toEqual({
          type: 'hero',
          label: 'Hero',
@@ -44,6 +46,7 @@ describe('block picker groups', () => {
          icon: 'star',
          keywords: ['hero', 'Headers'],
          disabled: true,
+         disabledReason: 'This field holds at most 1 block.',
       })
       expect(content!.items[0]).toMatchObject({
          description: 'A paragraph of rich text.',
@@ -51,6 +54,7 @@ describe('block picker groups', () => {
          keywords: ['text', 'Content', 'paragraph', 'body'],
          disabled: false,
       })
+      expect('disabledReason' in content!.items[0]!).toBe(false)
    })
 
    it('leaves the group out of the keywords of ungrouped blocks', () => {
