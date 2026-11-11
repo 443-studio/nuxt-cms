@@ -770,18 +770,23 @@ export default defineNuxtModule<ModuleOptions>({
       }
       for (const warning of roles.warnings) logger.warn(`[nuxt-cms] ${warning}`)
       const rolesTypes = resolver.resolve('./runtime/shared/roles').replace(/\\/g, '/')
-      const rolesTemplate = addTemplate({
-         filename: 'cms/roles.ts',
+      addTemplate({
+         filename: 'cms/roles.d.ts',
          write: true,
          getContents: () =>
             [
                `import type { CmsRoles } from '${rolesTypes}'`,
                ``,
-               `const roles: CmsRoles = ${JSON.stringify(roles.roles, null, 3)}`,
+               `declare const roles: CmsRoles`,
                ``,
                `export default roles`,
                ``,
             ].join('\n'),
+      })
+      const rolesTemplate = addTemplate({
+         filename: 'cms/roles.js',
+         write: true,
+         getContents: () => `export default ${JSON.stringify(roles.roles, null, 3)}\n`,
       })
       nuxt.options.alias['#cms-roles'] = rolesTemplate.dst
 
