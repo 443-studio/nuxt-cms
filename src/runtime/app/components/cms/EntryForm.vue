@@ -175,7 +175,7 @@ const layout = computed<CmsFormLayout>(() =>
 
 function isShown(key: string) {
    const field = props.fields[key]
-   if (!field || !isFieldVisible(field, state.value)) return false
+   if (!field || !isFieldVisible(field, state.value, props.fields)) return false
    if (!tabList.value.length) return true
    return fieldTab(field, tabList.value) === activeTab.value
 }

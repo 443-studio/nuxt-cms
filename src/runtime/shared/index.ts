@@ -1,5 +1,6 @@
 import type { PgTable } from 'drizzle-orm/pg-core'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { CmsShowIf } from './conditions'
 import type { CmsLayoutBlock, CmsListInput } from './layout'
 
 export type CmsTable = SQLiteTable | PgTable
@@ -336,14 +337,6 @@ export function selectDisplayValue(field: Pick<FieldConfig, 'options'>, value: u
    return selectOptionLabel(field, value)
 }
 
-export type ConditionValue = string | number | boolean
-
-export interface FieldCondition {
-   field: string
-   eq?: ConditionValue
-   in?: ConditionValue[]
-}
-
 export interface CmsTab {
    id: string
    label: string
@@ -374,7 +367,7 @@ export interface FieldConfig {
    to?: string
    cardinality?: 'many-to-one' | 'one-to-one' | 'many-to-many'
    onDelete?: 'set null' | 'cascade' | 'restrict'
-   showIf?: FieldCondition | FieldCondition[]
+   showIf?: CmsShowIf
 }
 
 export function isPrivateField(field: FieldConfig): boolean {
@@ -383,25 +376,6 @@ export function isPrivateField(field: FieldConfig): boolean {
 
 export function isRequiredField(field: FieldConfig): boolean {
    return !!field.required && !field.showIf
-}
-
-export function fieldConditions(field: FieldConfig): FieldCondition[] {
-   if (!field.showIf) return []
-   return Array.isArray(field.showIf) ? field.showIf : [field.showIf]
-}
-
-function matchesCondition(condition: FieldCondition, value: unknown): boolean {
-   if (condition.in) return condition.in.some((option) => option === value)
-   return condition.eq === value
-}
-
-export function isFieldVisible(
-   field: FieldConfig,
-   values: Record<string, unknown> | null | undefined
-): boolean {
-   const conditions = fieldConditions(field)
-   if (!conditions.length) return true
-   return conditions.every((condition) => matchesCondition(condition, values?.[condition.field]))
 }
 
 export function isTranslatableField(field: FieldConfig): boolean {
@@ -1030,7 +1004,7 @@ interface FieldInputBase {
    required?: boolean
    private?: boolean
    tab?: string
-   showIf?: FieldCondition | FieldCondition[]
+   showIf?: CmsShowIf
 }
 
 export interface TextFieldInput extends FieldInputBase {
@@ -1101,7 +1075,7 @@ export interface RelationFieldInput extends FieldInputBase {
    onDelete?: 'set null' | 'cascade' | 'restrict'
 }
 
-type BlockField<T> = Omit<T, 'private' | 'showIf' | 'tab'>
+type BlockField<T> = Omit<T, 'private' | 'tab'>
 
 export type BlockFieldInput =
    | BlockField<TextFieldInput>
@@ -1211,6 +1185,7 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
    return blocks
 }
 
+export * from './conditions'
 export * from './layout'
 export * from './media-focal'
 export * from './users'

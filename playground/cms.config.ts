@@ -285,9 +285,14 @@ export default defineCmsConfig({
             type: 'text',
             showIf: [
                { field: 'featured', eq: true },
-               { field: 'visibility', in: ['public', 'members'] },
+               {
+                  any: [
+                     { field: 'visibility', notIn: ['hidden'] },
+                     { field: 'keywords', has: 'sponsored' },
+                  ],
+               },
             ],
-            description: 'Shown only on featured events that are not hidden.',
+            description: 'Shown on featured events that are not hidden or are tagged "sponsored".',
          },
          category: { label: 'Category', type: 'relation', to: 'categories' },
          tags: { label: 'Tags', type: 'relation', to: 'tags', cardinality: 'many-to-many' },
@@ -345,6 +350,11 @@ export default defineCmsConfig({
                   fields: {
                      text: { label: 'Text', type: 'text', textarea: true, required: true },
                      author: { label: 'Author', type: 'text' },
+                     role: {
+                        label: 'Role',
+                        type: 'text',
+                        showIf: { field: 'author', empty: false },
+                     },
                   },
                },
                session: {
@@ -355,8 +365,18 @@ export default defineCmsConfig({
                      day: { label: 'Day', type: 'date' },
                      startsAt: { label: 'Starts at', type: 'datetime' },
                      minutes: { label: 'Minutes', type: 'number', integer: true },
-                     fee: { label: 'Fee (EUR)', type: 'number' },
                      indoor: { label: 'Indoor', type: 'boolean' },
+                     fee: {
+                        label: 'Fee (EUR)',
+                        type: 'number',
+                        required: true,
+                        showIf: {
+                           all: [
+                              { field: 'indoor', eq: true },
+                              { field: 'minutes', gt: 0 },
+                           ],
+                        },
+                     },
                      level: {
                         label: 'Level',
                         type: 'select',

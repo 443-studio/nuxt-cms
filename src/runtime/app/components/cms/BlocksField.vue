@@ -267,6 +267,7 @@ import type { FieldConfig } from '#nuxt-cms'
 import {
    canAddBlock,
    declaresHiddenField,
+   isFieldVisible,
    isHiddenBlock,
    isTranslatableMediaField,
    mediaFilename,
@@ -571,7 +572,13 @@ const editorItem = computed(() =>
    editorIndex.value === null ? undefined : items.value[editorIndex.value]
 )
 
-const editorFields = computed(() => (editorItem.value ? blockOf(editorItem.value)?.fields : {}))
+const editorFields = computed(() => {
+   const item = editorItem.value
+   const fields = item ? blockOf(item)?.fields ?? {} : {}
+   return Object.fromEntries(
+      Object.entries(fields).filter(([, field]) => isFieldVisible(field, item, fields))
+   )
+})
 
 const editorTitle = computed(() => (editorItem.value ? labelOf(editorItem.value) : ''))
 

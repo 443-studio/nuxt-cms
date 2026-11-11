@@ -408,7 +408,7 @@ languages: { label: 'Languages', type: 'tags', required: true, max: 5, suggestio
 - Filters with a [`StringListFilter`](querying.md#list-filters) (`hasAny`, `hasAll`, `isEmpty`;
   exact, case-sensitive match), never sorts.
 - Not allowed inside `blocks` (like multi-select), not translatable, and it cannot be a
-  `titleField` or the target of a `showIf`.
+  `titleField`. A `showIf` can test it with `empty` or `has` only.
 
 ## Relations
 
@@ -467,7 +467,8 @@ gallery: { label: 'Gallery', type: 'blocks', min: 2, max: 8, blocks: { ... } }
   They are only valid on `blocks` fields. The schema, the column and the query shape do not change.
 
 Block fields accept every field type **except** `slug`, `relation`, `blocks`, `tags` and
-multi-select (`select` with `multiple: true`). They can be `translatable` (see below) but not `private`: mark the
+multi-select (`select` with `multiple: true`). A block field can take a `showIf` that tests the other fields of
+the same block item (see [Conditional fields](#conditional-fields)). They can be `translatable` (see below) but not `private`: mark the
 whole `blocks` field private instead.
 `required` inside a block is an admin and save-time rule: the API and the generated types always
 return block fields as nullable, since stored items can predate a field or its `required` flag.
@@ -636,31 +637,63 @@ to it.
 
 ## Conditional fields
 
-`showIf` hides a field in the admin editor until another field of the same entry has a given value. This is
-useful when one `select` decides which of the remaining fields are meaningful.
+`showIf` hides a field in the admin editor until a condition on the other fields of the same entry
+holds. This is useful when one `select` decides which of the remaining fields are meaningful.
 
 ```ts
 type: { label: 'Type', type: 'select', options: ['text', 'image'], required: true },
 body:  { label: 'Body',  type: 'richtext', showIf: { field: 'type', eq: 'text' } },
 photo: { label: 'Photo', type: 'media', showIf: { field: 'type', eq: 'image' } },
+alt:   { label: 'Alt text', type: 'text', showIf: { field: 'photo', empty: false } },
 ```
 
-- Use `eq` for a single value or `in` for a list; pass an **array of conditions** to require all of
-  them (AND).
+A condition is `{ field, <operator>: value }`. Several operators in one condition must all hold
+(`{ field: 'seats', gte: 10, lt: 100 }`).
+
+| operator | holds when the value of `field` | target field types |
+| -------- | ------------------------------- | ------------------ |
+| `eq` / `neq` | equals / differs from the value | `select`, `boolean`, `text`, `number`, `date`, `datetime`, `email`, `slug` |
+| `in` / `notIn` | is / is not one of a non-empty list | same as `eq` |
+| `gt` / `gte` / `lt` / `lte` | is greater / greater or equal / lower / lower or equal | `number` (a number), `date` (`yyyy-mm-dd`), `datetime` (ISO 8601 with a time zone, compared as instants) |
+| `empty: true \| false` | is / is not empty | every type except `boolean` |
+| `has` | is a list that contains the value | `tags` (case-insensitive), multi-select, many-to-many `relation` (a related id) |
+
+Combine conditions with `{ all: [...] }`, `{ any: [...] }` and `{ not: condition }`, nested as
+deep as you need. An array at the top is the same as `all`:
+
+```ts
+sponsor: {
+   label: 'Sponsor',
+   type: 'text',
+   showIf: [
+      { field: 'featured', eq: true },
+      { any: [{ field: 'visibility', neq: 'hidden' }, { not: { field: 'keywords', empty: true } }] },
+   ],
+},
+```
+
 - **Only the admin editor is affected.** The GraphQL schema, the database column and the query shape
   are unchanged: a condition cannot make a column conditional.
 - A hidden field **keeps the value it already has**; it is not cleared on save, so toggling the
   controlling field back and forth does not lose work.
-- On a conditional field, `required` means **"required while visible"**: it is enforced by the admin
-  form only. The column stays nullable and the GraphQL field stays optional, because two fields
-  belonging to opposite branches can never both be filled, and a `NOT NULL` on either would make every
-  entry unsavable. Treat a conditional field as optional when you read it.
-- The condition may point at a `select`, `boolean`, `text`, `number`, `date`, `email` or `slug`
-  field. It cannot point at `blocks`, `relation`, `media`, `json`, multi-select, `tags` or translatable fields, whose
-  values have no single comparable form.
-- When the target is a `select`, the referenced values are checked against its `options` at build
-  time, so a typo fails the build instead of silently hiding the field forever.
-- The `titleField` cannot be conditional, and `showIf` is not supported inside `blocks`.
+- On a conditional field, `required` means **"required while visible"**, and `min` / `max` also
+  apply only while the field is visible. The same rule runs in the admin form and in the
+  validation of the admin API and of the import (one shared evaluator), never in the database: the
+  column stays nullable and the GraphQL field stays optional, because two fields belonging to
+  opposite branches can never both be filled, and a `NOT NULL` on either would make every entry
+  unsavable. Treat a conditional field as optional when you read it.
+- A missing value never matches `eq`, `in`, `has` or the comparisons, and always matches `neq` and
+  `notIn`. Empty means `null`, a blank string, an empty list, a translatable value with no locale
+  filled, or a `json` value of `{}` or `[]`; `0` and `false` are not empty.
+- A translatable field can only be tested with `empty`. Every other operator is checked against the
+  target type at build time: the value type (a boolean for a `boolean` field, a number for a
+  `number` field, a valid date for `date` and `datetime`), select values against the `options` (so a
+  typo fails the build instead of silently hiding the field forever), non-empty lists, unknown keys
+  and groups with anything next to `all` / `any` / `not`.
+- Inside `blocks`, `showIf` on a block field tests the **sibling fields of the same block item**:
+  `{ field: 'layout', eq: 'image' }` reads the `layout` of that block. It cannot reach the fields of
+  the entry. The block editor, the visual editor and the block validation follow it.
+- The `titleField` cannot be conditional.
 
 ## Validation hooks
 
@@ -886,7 +919,7 @@ export default defineCmsConfig({
 - `validate` on an entry or a block must be a function.
 - Multi-select (`select` with `multiple: true`) and `tags` are not allowed inside `blocks` and are excluded from sorting.
 - `translatable` is only valid on `text`, `richtext` and `media`, at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
-- `showIf` must reference another declared field of a comparable type, cannot be used on the `titleField` or inside `blocks`, and needs exactly one of `eq` / `in`.
+- `showIf` must reference another declared field (a sibling field inside `blocks`) with an operator that fits its type and a value of the right type (see [Conditional fields](#conditional-fields)); groups take only `all`, `any` or `not`; the `titleField` cannot be conditional.
 - `tab` must name a tab declared by the same entry; tab ids must be unique and every tab needs a label.
 - `slug.from` must point to a `text` field. When that field is translatable, the slug is generated
   from its value in the default locale (as the `slug` of a content entry is from the title).

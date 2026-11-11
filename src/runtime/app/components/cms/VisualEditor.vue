@@ -128,7 +128,7 @@
                            />
                            <KStack gap="md" class="cms-editor-fields">
                               <KFormField
-                                 v-for="(blockField, blockKey) in selectedBlock?.fields ?? {}"
+                                 v-for="(blockField, blockKey) in selectedFields"
                                  :key="`${selected}-${blockKey}`"
                                  :name="`${fieldKey}.${selected}.${blockKey}`"
                                  :label="blockField.label"
@@ -332,6 +332,14 @@ const selectedBlock = computed(() =>
    selectedItem.value ? blocksField.value.blocks?.[String(selectedItem.value.type)] : undefined
 )
 
+const selectedFields = computed(() => {
+   const fields = selectedBlock.value?.fields ?? {}
+   const item = selectedItem.value
+   return Object.fromEntries(
+      Object.entries(fields).filter(([, field]) => isFieldVisible(field, item, fields))
+   )
+})
+
 const tabList = computed(() => {
    if (!props.content) return [{ id: 'block', label: 'Block' }]
    const tabs = [
@@ -395,7 +403,7 @@ const sections = computed(() => {
          description: section.description,
          keys: section.rows.flat().filter((key) => {
             const field = props.fields[key]
-            return !!field && isFieldVisible(field, state.value)
+            return !!field && isFieldVisible(field, state.value, props.fields)
          }),
       }))
       .filter((section) => section.keys.length)

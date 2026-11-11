@@ -3,7 +3,8 @@ import type { BlockConfig, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from './r
 import {
    CONTENT_SYSTEM_FIELDS,
    PAGE_PATH_FIELD,
-   fieldConditions,
+   CONDITION_GROUPS,
+   CONDITION_OPERATORS,
    isCollectionKind,
    isMultiSelect,
    isRequiredField,
@@ -41,7 +42,7 @@ const RESERVED_ENTRY_KEYS = [
 const RESERVED_COLUMNS = ['id', 'status', 'created_at', 'updated_at']
 const TITLE_FIELD_TYPES = ['text', 'slug', 'email', 'number', 'date', 'datetime', 'select']
 const TRANSLATABLE_FIELD_TYPES = ['text', 'richtext', 'media']
-const CONDITION_FIELD_TYPES = [
+const CONDITION_VALUE_TYPES = [
    'select',
    'boolean',
    'text',
@@ -51,6 +52,10 @@ const CONDITION_FIELD_TYPES = [
    'email',
    'slug',
 ]
+const CONDITION_ORDER_TYPES = ['number', 'date', 'datetime']
+const CONDITION_LIST_TYPES = ['tags', 'select (multiple)', 'relation (many-to-many)']
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
 const COMPONENT_RESERVED_KEYS = ['key', 'ref', 'class', 'style']
 const RESERVED_TYPE_NAMES = [
    'Query',
@@ -236,50 +241,10 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                errors.push(`${fat}: mobile needs the key '${mobileKey}', which is already declared`)
          }
          if (field.type === 'select') errors.push(...selectOptionErrors(fat, field))
-         if (field.showIf) {
+         if (field.showIf !== undefined) {
             if (entry.titleField === key)
                errors.push(`${fat}: the titleField cannot be conditional`)
-            for (const condition of fieldConditions(field)) {
-               const cat = `${fat}, showIf on '${condition.field}'`
-               const target = allFields[condition.field]
-               if (!condition.field || !target) {
-                  errors.push(`${cat}: '${condition.field}' is not a declared field`)
-                  continue
-               }
-               if (condition.field === key) {
-                  errors.push(`${cat}: a field cannot depend on itself`)
-                  continue
-               }
-               if (!CONDITION_FIELD_TYPES.includes(target.type) || isMultiSelect(target)) {
-                  errors.push(
-                     `${cat}: showIf can only depend on ${CONDITION_FIELD_TYPES.join(
-                        ', '
-                     )} fields (got '${target.type}')`
-                  )
-                  continue
-               }
-               if (isTranslatableField(target)) {
-                  errors.push(`${cat}: showIf cannot depend on a translatable field`)
-                  continue
-               }
-               const values = condition.in ?? (condition.eq === undefined ? null : [condition.eq])
-               if (!values || !values.length) {
-                  errors.push(`${cat}: showIf requires 'eq' or a non-empty 'in'`)
-                  continue
-               }
-               if (condition.in && condition.eq !== undefined)
-                  errors.push(`${cat}: showIf accepts either 'eq' or 'in', not both`)
-               if (target.type === 'select') {
-                  const options = selectOptionValues(target)
-                  const unknown = values.filter((value) => !options.includes(String(value)))
-                  if (unknown.length)
-                     errors.push(
-                        `${cat}: ${unknown
-                           .map((value) => `'${String(value)}'`)
-                           .join(', ')} not in the options of '${condition.field}'`
-                     )
-               }
-            }
+            errors.push(...showIfErrors(fat, key, field.showIf, allFields, 'a declared field'))
          }
          if (field.type === 'slug' && field.from) {
             const source = entry.fields?.[field.from]
@@ -334,8 +299,16 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                   }
                   if (blockField.private)
                      errors.push(`${bfat}: private fields are not supported inside blocks`)
-                  if (blockField.showIf)
-                     errors.push(`${bfat}: showIf is not supported inside blocks`)
+                  if (blockField.showIf !== undefined)
+                     errors.push(
+                        ...showIfErrors(
+                           bfat,
+                           blockFieldKey,
+                           blockField.showIf,
+                           block.fields ?? {},
+                           'a field of this block'
+                        )
+                     )
                   if ((blockField as FieldConfig).mobile)
                      errors.push(`${bfat}: mobile is not supported inside blocks`)
                   if (blockField.type === 'select')
@@ -478,6 +451,201 @@ function blocksCountErrors(at: string, field: FieldConfig): string[] {
       errors.push(`${at}: max must be an integer of 1 or more`)
    if (isCount(field.min, 0) && isCount(field.max, 1) && field.min! > field.max!)
       errors.push(`${at}: min (${field.min}) cannot be greater than max (${field.max})`)
+   return errors
+}
+
+function conditionTypeName(field: FieldConfig): string {
+   if (isMultiSelect(field)) return 'select (multiple)'
+   if (field.type === 'relation') return `relation (${field.cardinality ?? 'many-to-one'})`
+   return field.type
+}
+
+function isConditionListTarget(field: FieldConfig): boolean {
+   return isStringListField(field) || isManyToMany(field)
+}
+
+function isDateValue(value: unknown): boolean {
+   return (
+      typeof value === 'string' &&
+      DATE_PATTERN.test(value) &&
+      !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())
+   )
+}
+
+function isDateTimeValue(value: unknown): boolean {
+   return (
+      typeof value === 'string' &&
+      DATETIME_PATTERN.test(value) &&
+      !Number.isNaN(new Date(value).getTime())
+   )
+}
+
+function conditionValueExpectation(field: FieldConfig): {
+   label: string
+   test: (value: unknown) => boolean
+} {
+   switch (field.type) {
+      case 'boolean':
+         return { label: 'a boolean', test: (value) => typeof value === 'boolean' }
+      case 'number':
+         return {
+            label: 'a number',
+            test: (value) => typeof value === 'number' && Number.isFinite(value),
+         }
+      case 'date':
+         return { label: 'a yyyy-mm-dd date', test: isDateValue }
+      case 'datetime':
+         return {
+            label: 'an ISO 8601 date and time with a time zone',
+            test: isDateTimeValue,
+         }
+      default:
+         return { label: 'a string', test: (value) => typeof value === 'string' }
+   }
+}
+
+function conditionOptionErrors(
+   at: string,
+   name: string,
+   target: FieldConfig,
+   values: unknown[]
+): string[] {
+   const options = selectOptionValues(target)
+   const unknown = values.filter((value) => !options.includes(String(value)))
+   if (!unknown.length) return []
+   return [
+      `${at}: ${unknown
+         .map((value) => `'${String(value)}'`)
+         .join(', ')} not in the options of '${name}'`,
+   ]
+}
+
+const ORDER_OPERATORS: readonly string[] = ['gt', 'gte', 'lt', 'lte']
+
+function conditionLeafErrors(
+   at: string,
+   key: string,
+   condition: Record<string, unknown>,
+   scope: Record<string, FieldConfig>,
+   scopeLabel: string
+): string[] {
+   const name = condition.field
+   const cat = `${at}, showIf on '${String(name)}'`
+   if (typeof name !== 'string' || !name || !Object.hasOwn(scope, name))
+      return [`${cat}: '${String(name)}' is not ${scopeLabel}`]
+   if (name === key) return [`${cat}: a field cannot depend on itself`]
+   const errors: string[] = []
+   const target = scope[name]!
+   const operators: readonly string[] = CONDITION_OPERATORS
+   const unknown = Object.keys(condition).filter((k) => k !== 'field' && !operators.includes(k))
+   if (unknown.length)
+      errors.push(`${cat}: unknown showIf key ${unknown.map((k) => `'${k}'`).join(', ')}`)
+   const used = CONDITION_OPERATORS.filter((operator) => condition[operator] !== undefined)
+   if (!used.length) {
+      errors.push(`${cat}: showIf needs an operator (${CONDITION_OPERATORS.join(', ')})`)
+      return errors
+   }
+   const type = conditionTypeName(target)
+   for (const operator of used) {
+      const value = condition[operator]
+      if (operator === 'empty') {
+         if (target.type === 'boolean')
+            errors.push(`${cat}: 'empty' does not apply to boolean fields, use 'eq'`)
+         else if (typeof value !== 'boolean') errors.push(`${cat}: 'empty' must be true or false`)
+         continue
+      }
+      if (isTranslatableField(target)) {
+         errors.push(
+            `${cat}: showIf cannot depend on a translatable field with '${operator}', only with 'empty'`
+         )
+         continue
+      }
+      if (operator === 'has') {
+         if (!isConditionListTarget(target))
+            errors.push(
+               `${cat}: showIf can only depend on ${CONDITION_LIST_TYPES.join(
+                  ', '
+               )} fields with 'has' (got '${type}')`
+            )
+         else if (typeof value !== 'string' || !value)
+            errors.push(`${cat}: 'has' needs a non-empty string`)
+         else if (target.type === 'select')
+            errors.push(...conditionOptionErrors(cat, name, target, [value]))
+         continue
+      }
+      const allowed = ORDER_OPERATORS.includes(operator)
+         ? CONDITION_ORDER_TYPES
+         : CONDITION_VALUE_TYPES
+      if (!allowed.includes(target.type) || isMultiSelect(target)) {
+         errors.push(
+            `${cat}: showIf can only depend on ${allowed.join(
+               ', '
+            )} fields with '${operator}' (got '${type}')`
+         )
+         continue
+      }
+      const isList = operator === 'in' || operator === 'notIn'
+      if (isList && (!Array.isArray(value) || !value.length)) {
+         errors.push(`${cat}: '${operator}' needs a non-empty list`)
+         continue
+      }
+      const values = isList ? (value as unknown[]) : [value]
+      const expectation = conditionValueExpectation(target)
+      const wrong = values.filter((item) => !expectation.test(item))
+      if (wrong.length)
+         errors.push(
+            `${cat}: '${operator}' needs ${expectation.label} for a ${type} field (got ${wrong
+               .map((item) => JSON.stringify(item))
+               .join(', ')})`
+         )
+      else if (target.type === 'select')
+         errors.push(...conditionOptionErrors(cat, name, target, values))
+   }
+   return errors
+}
+
+function showIfErrors(
+   at: string,
+   key: string,
+   showIf: unknown,
+   scope: Record<string, FieldConfig>,
+   scopeLabel: string
+): string[] {
+   const errors: string[] = []
+   const visit = (node: unknown) => {
+      if (Array.isArray(node)) {
+         if (!node.length) errors.push(`${at}: showIf needs at least one condition`)
+         for (const child of node) visit(child)
+         return
+      }
+      if (!node || typeof node !== 'object') {
+         errors.push(`${at}: every showIf condition must be an object`)
+         return
+      }
+      const record = node as Record<string, unknown>
+      const group = CONDITION_GROUPS.find((name) => Object.hasOwn(record, name))
+      if (!group) {
+         errors.push(...conditionLeafErrors(at, key, record, scope, scopeLabel))
+         return
+      }
+      if (Object.keys(record).length !== 1) {
+         errors.push(`${at}: a showIf group holds only one of 'all', 'any' or 'not'`)
+         return
+      }
+      const inner = record[group]
+      if (group === 'not') {
+         if (!inner || typeof inner !== 'object' || Array.isArray(inner))
+            errors.push(`${at}: showIf 'not' takes one condition`)
+         else visit(inner)
+         return
+      }
+      if (!Array.isArray(inner) || !inner.length) {
+         errors.push(`${at}: showIf '${group}' takes a non-empty list of conditions`)
+         return
+      }
+      for (const child of inner) visit(child)
+   }
+   visit(showIf)
    return errors
 }
 

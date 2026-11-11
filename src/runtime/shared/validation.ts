@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type {
+   BlockConfig,
    CmsEntry,
    CmsI18n,
    CmsValidateContext,
@@ -134,18 +135,33 @@ function blockFieldSchema(
    return optionalize(blockField, scalarSchema(blockField, m), m)
 }
 
+function blockVariantSchema(
+   type: string,
+   block: BlockConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages
+) {
+   const variant = z.object({
+      type: z.literal(type),
+      ...(declaresHiddenField(block) ? {} : { [BLOCK_HIDDEN_KEY]: z.boolean().optional() }),
+      ...Object.fromEntries(
+         Object.entries(block.fields).map(([key, blockField]) => [
+            key,
+            blockFieldSchema(unconditional(blockField), i18n, m),
+         ])
+      ),
+   })
+   const conditional = conditionalFields(block.fields)
+   if (!conditional.length) return variant
+   return variant.superRefine((item, ctx) => {
+      for (const issue of conditionalIssues(conditional, item, block.fields, i18n, m))
+         ctx.addIssue({ code: 'custom', ...issue })
+   })
+}
+
 function blocksSchema(field: FieldConfig, i18n: CmsI18n, m: ValidationMessages) {
    const variants = Object.entries(field.blocks ?? {}).map(([type, block]) =>
-      z.object({
-         type: z.literal(type),
-         ...(declaresHiddenField(block) ? {} : { [BLOCK_HIDDEN_KEY]: z.boolean().optional() }),
-         ...Object.fromEntries(
-            Object.entries(block.fields).map(([key, blockField]) => [
-               key,
-               blockFieldSchema(blockField, i18n, m),
-            ])
-         ),
-      })
+      blockVariantSchema(type, block, i18n, m)
    )
    return z.array(z.discriminatedUnion('type', variants as never))
 }
@@ -171,10 +187,44 @@ export function tagsCountMessage(
    return null
 }
 
-function countMessage(field: FieldConfig, count: number, m: ValidationMessages): string | null {
-   return field.type === 'tags'
-      ? tagsCountMessage(field, count, m)
-      : blocksCountMessage(field, count, m)
+function boundsMessage(field: FieldConfig, value: unknown, m: ValidationMessages): string | null {
+   if (field.type === 'tags')
+      return Array.isArray(value) ? tagsCountMessage(field, value.length, m) : null
+   if (field.type === 'blocks')
+      return Array.isArray(value) ? blocksCountMessage(field, value.length, m) : null
+   return null
+}
+
+function unconditional(field: FieldConfig): FieldConfig {
+   return field.showIf ? { ...field, required: false } : field
+}
+
+function conditionalFields(fields: Record<string, FieldConfig>): [string, FieldConfig][] {
+   return Object.entries(fields).filter(
+      ([, field]) =>
+         !!field.showIf && (!!field.required || field.min !== undefined || field.max !== undefined)
+   )
+}
+
+function conditionalIssues(
+   conditional: [string, FieldConfig][],
+   values: Record<string, unknown>,
+   scope: Record<string, FieldConfig>,
+   i18n: CmsI18n,
+   m: ValidationMessages
+): { path: string[]; message: string }[] {
+   const issues: { path: string[]; message: string }[] = []
+   for (const [key, field] of conditional) {
+      if (!isFieldVisible(field, values, scope)) continue
+      const value = values[key]
+      if (field.required && isEmptyValue(field, value, i18n.defaultLocale)) {
+         issues.push({ path: [key], message: m.required })
+         continue
+      }
+      const message = boundsMessage(field, value, m)
+      if (message) issues.push({ path: [key], message })
+   }
+   return issues
 }
 
 function tagsSchema(field: FieldConfig, bounded: boolean, m: ValidationMessages): z.ZodType {
@@ -297,17 +347,9 @@ export function buildEntrySchema(
 ) {
    const m: ValidationMessages = { ...DEFAULT_MESSAGES, ...messages }
    const shape: Record<string, z.ZodType> = {}
-   const conditional: [string, FieldConfig][] = []
-   const conditionalBounds: [string, FieldConfig][] = []
+   const conditional = conditionalFields(entry.fields)
    for (const [key, declared] of Object.entries(entry.fields)) {
-      const field = declared.showIf ? { ...declared, required: false } : declared
-      if (declared.showIf && declared.required) conditional.push([key, declared])
-      if (
-         declared.showIf &&
-         (declared.type === 'blocks' || declared.type === 'tags') &&
-         (declared.min !== undefined || declared.max !== undefined)
-      )
-         conditionalBounds.push([key, declared])
+      const field = unconditional(declared)
       if (field.type === 'relation' && field.cardinality === 'many-to-many') {
          const list = z.array(z.string().min(1))
          shape[key] = field.required
@@ -355,21 +397,12 @@ export function buildEntrySchema(
 
    const schema = z.object(shape)
    const hooks = hasValidateHooks(entry)
-   if (!conditional.length && !conditionalBounds.length && !hooks) return schema
+   if (!conditional.length && !hooks) return schema
 
    return schema.superRefine((parsed, ctx) => {
       const values = parsed as Record<string, unknown>
-      for (const [key, field] of conditional) {
-         if (!isFieldVisible(field, values)) continue
-         if (!isEmptyValue(field, values[key], i18n.defaultLocale)) continue
-         ctx.addIssue({ code: 'custom', path: [key], message: m.required })
-      }
-      for (const [key, field] of conditionalBounds) {
-         const list = values[key]
-         if (!isFieldVisible(field, values) || !Array.isArray(list)) continue
-         const message = countMessage(field, list.length, m)
-         if (message) ctx.addIssue({ code: 'custom', path: [key], message })
-      }
+      for (const issue of conditionalIssues(conditional, values, entry.fields, i18n, m))
+         ctx.addIssue({ code: 'custom', ...issue })
       if (!hooks) return
       for (const issue of entryValidationIssues(entry, values, i18n, entry.path)) {
          if (issue.level === 'error')
