@@ -8,6 +8,7 @@
       :title="headerTitle"
       :focus="focus"
       :locked="locked"
+      :readonly="!!lock"
       content
       @save="saveShortcut"
    >
@@ -215,6 +216,7 @@ const formKeys = [...Object.keys(config.fields), 'status']
 const editor = ref<{
    validate: () => boolean
    setIssues: (issues: CmsResponseIssue[]) => void
+   applyChange: (values: Record<string, unknown>) => void
    locale: string
 } | null>(null)
 
@@ -264,22 +266,41 @@ const { items: translationItems } = useCmsTranslationActions({
    state: formState,
    locale: () => editor.value?.locale,
    disabled: () => !!lock.value,
+   apply: (values) => editor.value?.applyChange(values),
 })
 const canShare = computed(() => !isNew && !!config.route && can(`${name}.update`))
 const shareOpen = ref(false)
-const entryItems = computed<MenuEntry[]>(() =>
+const itemActions = computed<MenuEntry[]>(() =>
    isNew
       ? []
       : [
            ...(canShare.value
-              ? [{ label: 'Share preview', onSelect: () => (shareOpen.value = true) }]
+              ? [
+                   {
+                      label: 'Share preview',
+                      icon: cmsIcon('link'),
+                      onSelect: () => (shareOpen.value = true),
+                   },
+                ]
               : []),
-           ...(can(`${name}.create`) ? [{ label: 'Duplicate', onSelect: duplicate }] : []),
-           ...(can(`${name}.delete`) ? [{ label: 'Delete', onSelect: remove }] : []),
+           ...(can(`${name}.create`)
+              ? [
+                   {
+                      label: 'Duplicate',
+                      icon: cmsIcon('document-duplicate'),
+                      onSelect: duplicate,
+                   },
+                ]
+              : []),
         ]
 )
+const deleteActions = computed<MenuEntry[]>(() =>
+   !isNew && can(`${name}.delete`)
+      ? [{ label: 'Delete', icon: cmsIcon('trash'), tone: 'danger', onSelect: remove }]
+      : []
+)
 const moreItems = computed<MenuEntry[][]>(() =>
-   [translationItems.value, entryItems.value].filter((group) => group.length)
+   [itemActions.value, translationItems.value, deleteActions.value].filter((group) => group.length)
 )
 
 const locked = computed(() =>

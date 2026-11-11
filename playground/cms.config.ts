@@ -35,7 +35,7 @@ const sections = defineCmsBlocks({
       tags: ['citation', 'testimonial'],
       fields: {
          text: { label: 'Text', type: 'text', textarea: true, translatable: true, required: true },
-         author: { label: 'Author', type: 'text' },
+         author: { label: 'Author', type: 'text', max: 60 },
       },
       layout: ['text', { title: 'Attribution', description: 'Who said it.', rows: ['author'] }],
    },

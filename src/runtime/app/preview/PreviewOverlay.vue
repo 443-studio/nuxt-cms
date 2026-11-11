@@ -13,7 +13,7 @@
             <span class="cms-preview-label">{{ labelOf(box) }}</span>
          </div>
          <div
-            v-if="box.index === hovered || box.index === selected"
+            v-if="editable && (box.index === hovered || box.index === selected)"
             class="cms-preview-toolbar"
             :class="{ 'is-selected': box.index === selected }"
             :style="toolbarStyle(box)"
@@ -134,6 +134,8 @@ import type { FieldConfig } from '../../shared/index'
 import type { CmsInlineOverride } from '../../shared/inline-text'
 import {
    editableText,
+   inlineFieldPath,
+   inlineTextLimit,
    isInlineTextField,
    isPlainTextContent,
    matchesInlineValue,
@@ -191,6 +193,7 @@ const props = defineProps<{
    item: Record<string, unknown> | null
    locale: string
    editable: boolean
+   lockedFields: readonly string[]
    total: number
    selected: number | null
    highlighted: number | null
@@ -275,6 +278,7 @@ function startEditing(hit: FieldHit, point: { x: number; y: number }) {
    emit('inline', { index, key, value: fieldValue(hit), settled: false })
    const session = startInlineText(hit.element, {
       multiline,
+      maxLength: inlineTextLimit(field),
       point,
       onInput: (value, commit) =>
          emit(
@@ -296,6 +300,7 @@ function startEditing(hit: FieldHit, point: { x: number; y: number }) {
 function canEditInline(hit: FieldHit) {
    if (!props.editable || !isInlineTextField(hit.field) || !isPlainTextContent(hit.element))
       return false
+   if (props.lockedFields.includes(inlineFieldPath(hit.index, hit.key))) return false
    const text = normalizeInlineText(editableText(hit.element), !!hit.field.textarea)
    return matchesInlineValue(text, fieldValue(hit))
 }
@@ -353,7 +358,7 @@ const INSERT_MARGIN = 14
 const canAdd = computed(() => canAddBlock(props.field, props.total))
 
 const insertSlots = computed(() => {
-   if (!canAdd.value) return []
+   if (!props.editable || !canAdd.value) return []
    const list = boxes.value
    const near = new Set([hovered.value, props.selected])
    const maxY = viewportHeight.value - INSERT_MARGIN
@@ -414,7 +419,7 @@ function onHandleClick(index: number) {
 }
 
 function startDrag(event: PointerEvent, index: number) {
-   if (event.button !== 0) return
+   if (event.button !== 0 || !props.editable) return
    drag.value = { from: index, startY: event.clientY, y: event.clientY, moved: false }
    window.addEventListener('pointermove', onDragMove)
    window.addEventListener('pointerup', onDragEnd)
@@ -525,6 +530,7 @@ function onKeydown(event: KeyboardEvent) {
    const action = editorShortcut(event, onApplePlatform())
    const index = props.selected
    if (!action || !shortcutApplies(action, shortcutTarget(event, index !== null))) return
+   if (!props.editable && action !== 'deselect') return
    event.preventDefault()
    if (action === 'undo' || action === 'redo' || action === 'save') {
       emit('message', { type: action })
@@ -559,6 +565,7 @@ function onKeydown(event: KeyboardEvent) {
 function onClipboard(event: ClipboardEvent) {
    if (event.defaultPrevented) return
    const action = event.type as CmsClipboardAction
+   if (!props.editable && action !== 'copy') return
    const index = props.selected
    if (!clipboardActionApplies(action, clipboardTarget(event, index !== null))) return
    if (action !== 'paste') {

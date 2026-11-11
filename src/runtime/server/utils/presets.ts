@@ -5,25 +5,26 @@ import { useDb } from '#cms-db'
 import { cms_settings } from '#cms-tables'
 import type { CmsSessionUser, FieldConfig } from '../../shared/index'
 import { entryFieldsFor } from '../../shared/index'
-import type { CmsBlockPreset } from '../../shared/presets'
+import type { CmsBlockPreset, CmsPresetAction } from '../../shared/presets'
 import {
    CMS_PRESET_KEY_PREFIX,
    CMS_PRESET_MAX_BYTES,
    parseStoredPreset,
    presetKey,
+   presetPermission,
 } from '../../shared/presets'
 import { getRegistryEntry } from './registry'
-import { requireAdmin } from './require-admin'
-
-export type CmsPresetAction = 'use' | 'manage'
+import { assertCmsPermission, requireCmsAccess } from './permissions'
 
 const PRESET_ID = /^preset_[A-Za-z0-9]{1,64}$/
 
 export async function requirePresetAccess(
    event: H3Event,
-   _action: CmsPresetAction
+   action: CmsPresetAction
 ): Promise<CmsSessionUser> {
-   return requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
+   assertCmsPermission(access, presetPermission(action, getRouterParam(event, 'collection') ?? ''))
+   return user
 }
 
 export function presetBlocksField(event: H3Event): { source: string; field: FieldConfig } {

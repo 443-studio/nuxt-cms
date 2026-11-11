@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FieldConfig } from '../src/runtime/shared/index'
+import type { CmsConfig, FieldConfig } from '../src/runtime/shared/index'
 import { blockSignature } from '../src/runtime/shared/block-signature'
 import { pasteBlocks } from '../src/runtime/shared/clipboard'
 import type { CmsBlockPreset } from '../src/runtime/shared/presets'
@@ -13,12 +13,14 @@ import {
    presetFits,
    presetInsertNotice,
    presetKey,
+   presetPermission,
    presetPickerItem,
    presetTypes,
    presetUpdateSchema,
    renamePreset,
    sortPresets,
 } from '../src/runtime/shared/presets'
+import { can, resolveCmsAccess, resolveRoles } from '../src/runtime/shared/roles'
 import { I18N } from './fixtures'
 
 const field: FieldConfig = {
@@ -64,6 +66,32 @@ function preset(overrides: Partial<CmsBlockPreset> = {}): CmsBlockPreset {
 describe('preset keys', () => {
    it('namespaces presets in the settings table', () => {
       expect(presetKey('preset_abc')).toBe(`${CMS_PRESET_KEY_PREFIX}preset_abc`)
+   })
+})
+
+describe('preset permissions', () => {
+   const config: CmsConfig = {
+      news: { id: 'news', label: 'News', kind: 'content', drafts: true, fields: {} },
+      blog: { id: 'blog', label: 'Blog', kind: 'content', drafts: true, fields: {} },
+   }
+   const roles = resolveRoles({
+      writer: { can: ['news.update'] },
+      reader: { can: ['*.read'] },
+      manager: { can: ['settings.manage'] },
+   })
+
+   it('uses presets with update on the entry and manages them with settings.manage', () => {
+      expect(presetPermission('use', 'news')).toBe('news.update')
+      expect(presetPermission('manage', 'news')).toBe('settings.manage')
+      const allows = (role: string, action: 'use' | 'manage', entry: string) =>
+         can(resolveCmsAccess(role, roles, config), presetPermission(action, entry))
+      expect(allows('writer', 'use', 'news')).toBe(true)
+      expect(allows('writer', 'use', 'blog')).toBe(false)
+      expect(allows('writer', 'manage', 'news')).toBe(false)
+      expect(allows('reader', 'use', 'news')).toBe(false)
+      expect(allows('manager', 'manage', 'news')).toBe(true)
+      expect(allows('admin', 'use', 'blog')).toBe(true)
+      expect(allows('admin', 'manage', 'blog')).toBe(true)
    })
 })
 

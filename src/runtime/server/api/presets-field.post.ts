@@ -12,7 +12,7 @@ import {
 import { getContentI18n } from '../utils/registry'
 
 export default defineEventHandler(async (event): Promise<CmsBlockPreset> => {
-   await requirePresetAccess(event, 'manage')
+   await requirePresetAccess(event, 'use')
    const { source, field } = presetBlocksField(event)
    const parsed = presetCreateSchema.safeParse(await readPresetBody(event))
    if (!parsed.success) {

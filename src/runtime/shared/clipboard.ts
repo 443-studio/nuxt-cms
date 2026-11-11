@@ -73,7 +73,7 @@ function localizedShape(raw: unknown, i18n: CmsI18n): Record<string, string> | n
 }
 
 function plainShape(field: FieldConfig, raw: unknown, i18n: CmsI18n): unknown {
-   if (field.type === 'json' || !isRecord(raw)) return raw
+   if (field.type === 'json' || field.type === 'link' || !isRecord(raw)) return raw
    const value = raw[i18n.defaultLocale]
    if (typeof value === 'string') return value
    return Object.values(raw).find((entry) => typeof entry === 'string') ?? null

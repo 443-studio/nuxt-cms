@@ -84,6 +84,7 @@ export interface CmsPreviewState {
    media: Record<string, CmsPreviewMedia>
    selected: number | null
    editable: boolean
+   lockedFields: string[]
 }
 
 export type CmsPreviewHostMessage =
@@ -234,6 +235,9 @@ export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
          media: state.media as Record<string, CmsPreviewMedia>,
          selected: state.selected as number | null,
          editable: state.editable !== false,
+         lockedFields: Array.isArray(state.lockedFields)
+            ? state.lockedFields.filter((path): path is string => typeof path === 'string')
+            : [],
       },
    }
 }

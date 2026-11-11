@@ -17,6 +17,12 @@ export const CMS_PRESET_MAX_BYTES = 1_000_000
 
 export const CMS_PRESET_MAX_COUNT = 500
 
+export type CmsPresetAction = 'use' | 'manage'
+
+export function presetPermission(action: CmsPresetAction, entry: string): string {
+   return action === 'use' ? `${entry}.update` : 'settings.manage'
+}
+
 export interface CmsBlockPreset {
    id: string
    name: string

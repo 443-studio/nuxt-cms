@@ -52,7 +52,7 @@
          <CmsSettingsRedirects v-model:creating="redirectsCreating" />
       </template>
 
-      <template v-if="hasBlocks" #section-presets>
+      <template v-if="hasBlocks && can('settings.manage')" #section-presets>
          <CmsSettingsPresets />
       </template>
 
@@ -175,7 +175,7 @@ const sections = computed<SettingsModalSection[]>(() => [
            },
         ]
       : []),
-   ...(hasBlocks
+   ...(hasBlocks && can('settings.manage')
       ? [
            {
               id: 'presets',

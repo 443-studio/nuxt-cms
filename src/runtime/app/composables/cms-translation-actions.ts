@@ -19,6 +19,7 @@ export interface CmsTranslationActionsOptions {
    state: Ref<Values>
    locale?: MaybeRefOrGetter<string | null | undefined>
    disabled?: MaybeRefOrGetter<boolean | null | undefined>
+   apply?: (values: Values) => void
 }
 
 function code(locale: string) {
@@ -34,6 +35,11 @@ export function useCmsTranslationActions(options: CmsTranslationActionsOptions) 
    const confirmAction = useCmsConfirm()
    const toast = useCmsToast()
 
+   function commit(values: Values) {
+      if (options.apply) options.apply(values)
+      else options.state.value = values
+   }
+
    function copy(from: string, to: string, overwrite: boolean) {
       const result = copyTranslations(toValue(options.fields), options.state.value, i18n, {
          from,
@@ -41,7 +47,7 @@ export function useCmsTranslationActions(options: CmsTranslationActionsOptions) 
          overwrite,
       })
       if (!result.count) return
-      options.state.value = result.values
+      commit(result.values)
       toast.add({
          title: `Copied ${valuesLabel(result.count)} from ${code(from)} to ${code(to)}`,
          color: 'success',
@@ -67,7 +73,7 @@ export function useCmsTranslationActions(options: CmsTranslationActionsOptions) 
       )
       if (!confirmed) return
       const result = clearTranslations(toValue(options.fields), options.state.value, i18n, locale)
-      options.state.value = result.values
+      commit(result.values)
       toast.add({
          title: `Cleared ${valuesLabel(result.count)} in ${code(locale)}`,
          color: 'success',

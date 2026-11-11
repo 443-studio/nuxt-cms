@@ -198,9 +198,9 @@ matter. Each language is **complete** (every value), **partial** (some) or **mis
   values** writes only the values that IT does not have yet, and **Replace all values...** asks
   first, then overwrites every IT value that has an EN version. **Clear IT...** asks first, then
   removes the IT values so the site falls back to the default language. The visual editor acts on
-  the language picked in its top bar; a form lists every language other than the default. The
-  actions change the form only: nothing is written until you save. They are hidden when your role
-  cannot edit the item.
+  the language picked in its top bar, and each action there is one undo step; a form lists every
+  language other than the default. The actions change the form only: nothing is written until you
+  save. They are hidden when your role cannot edit the item.
 
 Read-only users can still switch languages to read every translation.
 
@@ -297,7 +297,10 @@ translation shows the default language until you type). Pasted text arrives as p
 editing needs the element to show the value as it is, with no other markup inside; otherwise a
 double-click only opens the field in the inspector, as it does for every other field type. Rich
 text is edited in the inspector only. Validation (for example `required`) shows in the inspector
-as for any other edit, and nothing is editable in the canvas while the editor form is read-only.
+as for any other edit. Typing stops at the `max` length of the field. A field hidden by its
+`showIf` and an `immutable` field that already has a saved value are not edited in the canvas
+(a double-click opens them in the inspector), and nothing is editable while the editor is read
+only.
 
 **Undo and redo.** The editor keeps the last 100 changes of the open item, from the canvas and from
 the inspector forms alike. Typing in one field is one step once you pause. Undo restores the block
@@ -384,8 +387,10 @@ that were inserted from it.
 
 **Settings → Block presets** lists every preset with its size and where it was saved from, to
 rename or delete it. Presets live in the `cms_settings` table (one row per preset, keyed
-`cms:presets:<id>`), up to 500 presets of up to 100 blocks and 1 MB each, and every admin can use
-and manage them.
+`cms:presets:<id>`), up to 500 presets of up to 100 blocks and 1 MB each. **Save as preset** and
+the **Presets** of the picker need `update` on the entry; **Settings → Block presets** (list,
+rename, delete) needs `settings.manage`. Saving, renaming and deleting a preset fires no hook or
+webhook.
 
 ### Share preview
 
@@ -445,7 +450,8 @@ The account button at the bottom of the sidebar opens **Settings**:
   [SEO](seo.md#site-settings).
 - **Redirects** (roles with `redirects.manage`): the redirects of the site, with search, import and
   export. Changing the slug of a published item adds one. See [SEO](seo.md#redirects).
-- **Block presets**: rename and delete the [block presets](#block-presets).
+- **Block presets** (roles with `settings.manage`): rename and delete the
+  [block presets](#block-presets).
 - **Content** (roles with `settings.manage`): one item for each entry the role can read.
   - **Table columns** (collections only): show, hide and drag the columns of the table, including
     **Status** and **Translations**.
@@ -510,6 +516,14 @@ what their `can` list grants.
   Redirects needs `redirects.manage` (every `/api/cms/redirects` endpoint). The redirect left by a
   slug change is part of the item save, so it only needs the permissions of the save. **Share
   preview** needs `<entry>.update` (listing the links of an item needs `<entry>.read`).
+- **Visual editor.** When the form of the item would be read only (no `update`, or a published item
+  without `publish`), the visual editor is read only too: the inspector is disabled, the canvas
+  shows no block toolbar, no **+** and no inline editing, the block tree cannot be reordered and
+  its `...` menu only has **Copy**, the block picker, Undo and Redo are gone, and the keys that
+  change blocks do nothing. The language switch, selection, hover and copy keep working.
+- **Block presets.** Using them (the field list and **Save as preset**,
+  `/api/cms/presets/<entry>/<field>`) needs `<entry>.update`; listing, renaming and deleting them
+  in Settings needs `settings.manage`.
 - **Links.** The link picker only searches the entries the role can read, and the preview only
   resolves links to them. `POST /api/cms/link-usage` needs `read` on the entry of every target
   and only reports the entries the role can read.

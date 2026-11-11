@@ -8,7 +8,7 @@
          size="sm"
          :bordered="false"
          :move-buttons="false"
-         reorderable
+         :reorderable="!readonly"
          empty-variant="plain"
          :empty-icon="cmsIcon('rectangle-stack')"
          empty-text="No blocks yet"
@@ -99,6 +99,7 @@ const props = defineProps<{
    canAdd: boolean
    label: string
    menu: (index: number) => MenuItems
+   readonly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -164,6 +165,7 @@ function onSelect(node: TreeNode) {
 }
 
 function onMove(move: TreeMove) {
+   if (props.readonly) return
    emit('move', move.from.index, move.to.index)
 }
 

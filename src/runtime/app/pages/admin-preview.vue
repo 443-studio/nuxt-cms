@@ -55,6 +55,7 @@
             :item="item"
             :locale="state.locale"
             :editable="state.editable"
+            :locked-fields="state.lockedFields"
             :total="state.blocks.length"
             :selected="state.selected"
             :highlighted="highlighted"

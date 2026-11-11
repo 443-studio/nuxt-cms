@@ -151,7 +151,7 @@
 
       <p v-if="countHint" class="cms-field-hint">{{ countHint }}</p>
 
-      <div v-if="visual && !disabled">
+      <div v-if="visual">
          <KButton
             label="Open visual editor"
             :icon="cmsIcon('window')"
@@ -177,6 +177,7 @@
             :field-key="fieldKey!"
             :fields="{ [fieldKey!]: field }"
             :title="field.label"
+            :readonly="disabled"
             @update:state="onVisualUpdate"
          >
             <template #start>
@@ -335,6 +336,7 @@ import type { CmsBlockValue, CmsClipboardAction } from '../../../shared/preview'
 import { clipboardActionApplies } from '../../../shared/preview'
 import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsPresets } from '../../composables/cms-presets'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { clipboardTarget } from '../../utils/keyboard'
@@ -729,7 +731,16 @@ function onClipboard(event: ClipboardEvent) {
    }
 }
 
-const presetsEnabled = computed(() => !mediaOnly.value && !!props.entryName && !!props.fieldKey)
+const { can } = useCmsPermissions()
+
+const presetsEnabled = computed(
+   () =>
+      !mediaOnly.value &&
+      !disabled.value &&
+      !!props.entryName &&
+      !!props.fieldKey &&
+      can(`${props.entryName}.update`)
+)
 
 const {
    presets: fieldPresets,

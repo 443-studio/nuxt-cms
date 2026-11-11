@@ -1,8 +1,14 @@
-import { CMS_INLINE_INPUT_DELAY, editableText, normalizeInlineText } from '../../shared/inline-text'
+import {
+   CMS_INLINE_INPUT_DELAY,
+   editableText,
+   fitInlineInsertion,
+   normalizeInlineText,
+} from '../../shared/inline-text'
 import { onApplePlatform } from '../utils/keyboard'
 
 export interface CmsInlineTextOptions {
    multiline: boolean
+   maxLength?: number
    point?: { x: number; y: number }
    onInput: (value: string, commit: boolean) => void
    onStop: (value: string) => void
@@ -104,11 +110,34 @@ export function startInlineText(
       }
    }
 
+   function selectedLength() {
+      const selection = window.getSelection()
+      if (!selection?.rangeCount || !element.contains(selection.anchorNode)) return 0
+      return selection.toString().length
+   }
+
+   function insertedText(event: InputEvent) {
+      if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak')
+         return '\n'
+      return event.data ?? event.dataTransfer?.getData('text/plain') ?? ''
+   }
+
+   function limitInsertion(event: InputEvent) {
+      const max = options.maxLength
+      if (max === undefined || !event.inputType.startsWith('insert')) return
+      const text = insertedText(event)
+      const fitted = fitInlineInsertion(text, max - (read().length - selectedLength()))
+      if (fitted === text) return
+      event.preventDefault()
+      if (fitted) document.execCommand('insertText', false, fitted)
+   }
+
    function onBeforeInput(event: InputEvent) {
       const type = event.inputType
       if (type.startsWith('format')) event.preventDefault()
       else if (!options.multiline && (type === 'insertParagraph' || type === 'insertLineBreak'))
          event.preventDefault()
+      else limitInsertion(event)
    }
 
    function onPaste(event: ClipboardEvent) {

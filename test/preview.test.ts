@@ -46,10 +46,15 @@ import type { CmsInlineNode } from '../src/runtime/shared/inline-text'
 import {
    CMS_INLINE_TEXT_MAX_LENGTH,
    applyInlineOverride,
+   clampInlineText,
    editableText,
+   fitInlineInsertion,
+   inlineFieldPath,
    inlineFieldValue,
+   inlineTextLimit,
    isInlineTextField,
    isPlainTextContent,
+   lockedInlineFields,
    matchesInlineValue,
    normalizeInlineText,
 } from '../src/runtime/shared/inline-text'
@@ -138,8 +143,29 @@ describe('preview message protocol', () => {
       }
       expect(parseHostMessage(previewEnvelope({ type: 'render', state }))).toEqual({
          type: 'render',
-         state: { ...state, blocks: [{ type: 'text' }], editable: true },
+         state: { ...state, blocks: [{ type: 'text' }], editable: true, lockedFields: [] },
       })
+   })
+
+   it('keeps the string paths of the locked fields of a render message', () => {
+      const state = {
+         entry: 'news',
+         field: 'body',
+         locale: 'en',
+         blocks: [],
+         item: null,
+         media: {},
+         selected: null,
+      }
+      const parse = (lockedFields: unknown) => {
+         const message = parseHostMessage(
+            previewEnvelope({ type: 'render', state: { ...state, lockedFields } })
+         )
+         return message?.type === 'render' ? message.state.lockedFields : undefined
+      }
+      expect(parse(['title', '0.heading', 3, null])).toEqual(['title', '0.heading'])
+      expect(parse('title')).toEqual([])
+      expect(parse(undefined)).toEqual([])
    })
 
    it('reads the editable flag of a render message, true unless false', () => {
@@ -495,6 +521,73 @@ describe('inline text editing', () => {
    })
 })
 
+describe('inline editing limits', () => {
+   const short = { label: 'Kicker', type: 'text' as const, max: 5 }
+
+   it('reads the length limit of a text field', () => {
+      expect(inlineTextLimit(short)).toBe(5)
+      expect(inlineTextLimit({ label: 'Kicker', type: 'text' })).toBeUndefined()
+      expect(inlineTextLimit({ label: 'Count', type: 'number', max: 5 })).toBeUndefined()
+      expect(inlineTextLimit(undefined)).toBeUndefined()
+   })
+
+   it('cuts typed text to the limit', () => {
+      expect(clampInlineText('Hello world', 5)).toBe('Hello')
+      expect(clampInlineText('Hi', 5)).toBe('Hi')
+      expect(clampInlineText('Hello world', undefined)).toBe('Hello world')
+      expect(fitInlineInsertion('abcdef', 3)).toBe('abc')
+      expect(fitInlineInsertion('abc', 0)).toBe('')
+      expect(fitInlineInsertion('abc', -2)).toBe('')
+   })
+
+   it('locks hidden and immutable text fields of the item and of each block', () => {
+      const fields = {
+         kind: { label: 'Kind', type: 'select' as const, options: ['a', 'b'] },
+         code: { label: 'Code', type: 'text' as const, immutable: true },
+         note: { label: 'Note', type: 'text' as const, showIf: { field: 'kind', eq: 'b' } },
+         intro: { label: 'Intro', type: 'text' as const },
+         count: { label: 'Count', type: 'number' as const },
+      }
+      const blocksField = {
+         label: 'Body',
+         type: 'blocks' as const,
+         blocks: {
+            cta: {
+               label: 'Call to action',
+               fields: {
+                  style: { label: 'Style', type: 'select' as const, options: ['plain', 'button'] },
+                  label: {
+                     label: 'Label',
+                     type: 'text' as const,
+                     showIf: { field: 'style', eq: 'button' },
+                  },
+                  title: { label: 'Title', type: 'text' as const },
+               },
+            },
+         },
+      }
+      const blocks = [
+         { type: 'cta', style: 'plain' },
+         { type: 'cta', style: 'button' },
+         { type: 'unknown' },
+      ]
+      expect(
+         lockedInlineFields({
+            fields,
+            values: { kind: 'a' },
+            blocksField,
+            blocks,
+            locked: ['code'],
+         })
+      ).toEqual(['code', 'note', inlineFieldPath(0, 'label')])
+      expect(
+         lockedInlineFields({ fields: null, values: {}, blocksField, blocks: blocks.slice(1) })
+      ).toEqual([])
+      expect(inlineFieldPath(null, 'title')).toBe('title')
+      expect(inlineFieldPath(2, 'title')).toBe('2.title')
+   })
+})
+
 describe('block list operations', () => {
    const list: CmsBlockValue[] = [
       { type: 'text', heading: 'a' },
@@ -705,6 +798,35 @@ describe('preview data', () => {
       ).toBe('Fish & chips now')
       expect(blockSummary(text, { type: 'text', heading: { en: 'Hi' } }, 'it', 'en')).toBe('Hi')
       expect(blockSummary(body.blocks!.image, values.body[1]!, 'en', 'en')).toBe('river.jpg')
+   })
+
+   it('summarizes a block from its link label and target', () => {
+      const button = {
+         label: 'Button',
+         fields: {
+            link: {
+               label: 'Link',
+               type: 'link' as const,
+               withLabel: true,
+               translatable: true,
+            },
+            note: { label: 'Note', type: 'text' as const },
+         },
+      }
+      expect(
+         blockSummary(
+            button,
+            { type: 'button', link: { url: '/join', label: { en: 'Join', it: 'Unisciti' } } },
+            'it',
+            'en'
+         )
+      ).toBe('Unisciti (/join)')
+      expect(
+         blockSummary(button, { type: 'button', link: { entry: 'news', id: '7' } }, 'en', 'en')
+      ).toBe('news #7')
+      expect(blockSummary(button, { type: 'button', link: null, note: 'Plain' }, 'en', 'en')).toBe(
+         'Plain'
+      )
    })
 
    it('maps form error keys to block indexes', () => {

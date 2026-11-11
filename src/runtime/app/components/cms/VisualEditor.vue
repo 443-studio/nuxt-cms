@@ -16,7 +16,7 @@
             />
          </div>
          <div class="cms-editor-bar-end">
-            <KTooltip text="Undo" shortcut="mod+z">
+            <KTooltip v-if="!readonly" text="Undo" shortcut="mod+z">
                <KButton
                   :icon="cmsIcon('arrow-uturn-left')"
                   size="sm"
@@ -27,7 +27,7 @@
                   @click="undo"
                />
             </KTooltip>
-            <KTooltip text="Redo" shortcut="mod+shift+z">
+            <KTooltip v-if="!readonly" text="Redo" shortcut="mod+shift+z">
                <KButton
                   :icon="cmsIcon('arrow-uturn-right')"
                   size="sm"
@@ -76,16 +76,17 @@
                   :selected="selected"
                   :highlighted="canvasHover"
                   :errors="blockErrors"
-                  :can-add="canAdd"
+                  :can-add="canAdd && !readonly"
                   :label="blocksField.label"
                   :menu="blockMenu"
+                  :readonly="readonly"
                   @select="selectFromTree"
                   @move="move"
                   @hover="highlight"
                   @insert="openPalette"
                />
             </div>
-            <div v-if="blocks.length" class="cms-editor-side-foot">
+            <div v-if="blocks.length && !readonly" class="cms-editor-side-foot">
                <KButton
                   v-if="canAdd"
                   :icon="cmsIcon('plus')"
@@ -413,8 +414,12 @@ import { CMS_EDITOR_PANEL_LIMITS, CMS_PREVIEW_DEVICE_WIDTHS } from '../../../sha
 import type { CmsSearchFocus } from '../../../shared/search'
 import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
 import {
+   clampInlineText,
+   inlineFieldPath,
    inlineFieldValue,
+   inlineTextLimit,
    isInlineTextField,
+   lockedInlineFields,
    normalizeInlineText,
 } from '../../../shared/inline-text'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
@@ -456,6 +461,7 @@ import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsEditorLayout } from '../../composables/cms-editor-layout'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsHistory } from '../../composables/cms-history'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsPresets } from '../../composables/cms-presets'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
@@ -657,6 +663,7 @@ function revealInPanel(key: string) {
 const translations = computed(() => translationProgress(props.fields, state.value, i18n))
 
 function setValue(key: string, value: unknown, coalesce?: string, hold = false) {
+   if (props.readonly) return
    change(coalesce, hold)
    state.value = { ...state.value, [key]: value }
 }
@@ -712,7 +719,7 @@ function pasteFromPalette() {
 }
 
 function openPalette(index: number, anchor: OverlayAnchorTarget | null = null) {
-   if (!canAdd.value) return
+   if (props.readonly || !canAdd.value) return
    paletteIndex.value = index
    paletteAnchor.value = anchor ?? canvasAnchor(index) ?? focusedElement() ?? frame.value
    paletteOpen.value = true
@@ -796,7 +803,7 @@ function copy(index: number, event?: ClipboardEvent) {
 
 function cut(index: number, event?: ClipboardEvent) {
    const item = blocks.value[index]
-   if (!item) return
+   if (!item || props.readonly) return
    clipboard.copy([item], event)
    remove(index)
    clipboard.notify(copyNotice(1, true))
@@ -813,17 +820,22 @@ function insertItems(index: number, items: readonly CmsBlockValue[]) {
 }
 
 async function paste(index: number, text?: string | null) {
+   if (props.readonly) return
    const items = await clipboard.read(text)
    const result = items ? insertItems(index, items) : null
    clipboard.notify(pasteNotice(result, blocksField.value))
 }
+
+const { can } = useCmsPermissions()
+
+const presetsAllowed = computed(() => !props.readonly && can(`${props.entryName}.update`))
 
 const {
    presets,
    load: loadPresets,
    create: createPreset,
 } = useCmsPresets(
-   () => props.entryName,
+   () => (presetsAllowed.value ? props.entryName : undefined),
    () => props.fieldKey
 )
 
@@ -867,6 +879,7 @@ function onClipboard(event: ClipboardEvent) {
    if (event.defaultPrevented || paletteOpen.value) return
    if (isInForeignOverlay(event.target, root.value)) return
    const action = event.type as CmsClipboardAction
+   if (props.readonly && action !== 'copy') return
    const index = selected.value
    if (!clipboardActionApplies(action, clipboardTarget(event, index !== null))) return
    if (action === 'paste') {
@@ -881,9 +894,19 @@ function onClipboard(event: ClipboardEvent) {
    }
 }
 
+function copyMenuItem(index: number) {
+   return {
+      label: 'Copy',
+      icon: cmsIcon('clipboard-document'),
+      shortcut: 'mod+c',
+      onSelect: () => copy(index),
+   }
+}
+
 function blockMenu(index: number): MenuItems {
    const item = blocks.value[index]
    if (!item) return []
+   if (props.readonly) return [[copyMenuItem(index)]]
    const full = canAdd.value ? undefined : maxReached.value
    const hidden = isHiddenBlock(item)
    return [
@@ -934,12 +957,7 @@ function blockMenu(index: number): MenuItems {
             : []),
       ],
       [
-         {
-            label: 'Copy',
-            icon: cmsIcon('clipboard-document'),
-            shortcut: 'mod+c',
-            onSelect: () => copy(index),
-         },
+         copyMenuItem(index),
          {
             label: 'Cut',
             icon: cmsIcon('scissors'),
@@ -954,11 +972,15 @@ function blockMenu(index: number): MenuItems {
             disabledReason: full,
             onSelect: () => void paste(index + 1),
          },
-         {
-            label: 'Save as preset',
-            icon: cmsIcon(CMS_PRESET_ICON),
-            onSelect: () => openPresetSave(index),
-         },
+         ...(presetsAllowed.value
+            ? [
+                 {
+                    label: 'Save as preset',
+                    icon: cmsIcon(CMS_PRESET_ICON),
+                    onSelect: () => openPresetSave(index),
+                 },
+              ]
+            : []),
       ],
       [
          {
@@ -995,6 +1017,7 @@ function runShortcut(event: KeyboardEvent) {
    const action = editorShortcut(event, onApplePlatform())
    const index = selected.value
    if (!action || !shortcutApplies(action, shortcutTarget(event, index !== null))) return
+   if (props.readonly && action !== 'deselect') return
    event.preventDefault()
    if (action === 'undo') undo()
    else if (action === 'redo') redo()
@@ -1044,7 +1067,16 @@ const previewState = computed<CmsPreviewState>(() => ({
    media: media.value,
    selected: selected.value,
    editable: !props.readonly,
+   lockedFields: lockedInlineFields({
+      fields: props.content ? props.fields : null,
+      values: state.value,
+      blocksField: blocksField.value,
+      blocks: blocks.value,
+      locked: props.locked,
+   }),
 }))
+
+const READONLY_FRAME_MESSAGES = new Set(['ready', 'select', 'hover', 'copy', 'focus-field'])
 
 function post(message: CmsPreviewHostMessage) {
    const target = frame.value?.contentWindow
@@ -1065,6 +1097,7 @@ function reloadPreview() {
 }
 
 function onFrameMessage(message: CmsPreviewFrameMessage) {
+   if (props.readonly && !READONLY_FRAME_MESSAGES.has(message.type)) return
    switch (message.type) {
       case 'ready':
          sendState()
@@ -1174,9 +1207,13 @@ function inlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-inp
    const { index, key, locale: code } = message
    const field = fieldAt(index, key)
    if (props.readonly || !isInlineTextField(field)) return
+   if (previewState.value.lockedFields.includes(inlineFieldPath(index, key))) return
    if (isTranslatableField(field) && !i18n.locales.includes(code)) return
    const item = index === null ? undefined : blocks.value[index]
-   const text = normalizeInlineText(message.value, !!field.textarea)
+   const text = clampInlineText(
+      normalizeInlineText(message.value, !!field.textarea),
+      inlineTextLimit(field)
+   )
    const value = inlineFieldValue(
       field,
       item ? item[key] : state.value[key],
@@ -1351,5 +1388,11 @@ watch(
    }
 )
 
-defineExpose({ validate, setIssues, locale })
+function applyChange(values: Record<string, unknown>) {
+   if (props.readonly) return
+   change()
+   state.value = values
+}
+
+defineExpose({ validate, setIssues, applyChange, locale })
 </script>

@@ -48,7 +48,7 @@ interface CmsEntryChange {
 
 An item created directly as published is a `create` with `status: 'published'`. A scheduled content
 item (published with a future `publishedAt`) is a `publish`. Admin settings (columns, layout,
-Settings → Site), redirects, preview links and user accounts fire nothing. The redirect that a
+Settings → Site), block presets, redirects, preview links and user accounts fire nothing. The redirect that a
 slug change leaves behind is written in the same batch as the item and is part of its `update` or
 `publish` event, with no event of its own.
 

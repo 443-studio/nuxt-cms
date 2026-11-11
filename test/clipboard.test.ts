@@ -119,6 +119,29 @@ describe('pasted values', () => {
       ).toEqual({ en: 'a.jpg', it: 'b.jpg' })
    })
 
+   it('keeps link values with their labels and targets', () => {
+      const link: FieldConfig = { label: 'Link', type: 'link', withLabel: true }
+      const localized: FieldConfig = { ...link, translatable: true }
+      expect(pastedFieldValue(link, { url: 'https://example.com', label: 'Read' }, I18N)).toEqual({
+         url: 'https://example.com',
+         label: 'Read',
+      })
+      expect(pastedFieldValue(link, { entry: 'news', id: '7', newTab: true }, I18N)).toEqual({
+         entry: 'news',
+         id: '7',
+         newTab: true,
+      })
+      expect(
+         pastedFieldValue(
+            localized,
+            { url: '/about', label: { en: 'About', it: 'Chi siamo' } },
+            I18N
+         )
+      ).toEqual({ url: '/about', label: { en: 'About', it: 'Chi siamo' } })
+      expect(pastedFieldValue(link, { url: 'javascript:alert(1)' }, I18N)).toBeNull()
+      expect(pastedFieldValue(link, 'https://example.com', I18N)).toBeNull()
+   })
+
    it('checks scalar values against the field type like the form', () => {
       const stat = blocks.stat!.fields
       expect(pastedFieldValue(stat.value!, 3, I18N)).toBe(3)

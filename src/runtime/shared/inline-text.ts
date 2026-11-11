@@ -1,5 +1,5 @@
 import type { FieldConfig } from './index'
-import { decodeTranslatableValue, isTranslatableField } from './index'
+import { decodeTranslatableValue, isFieldVisible, isTranslatableField } from './index'
 
 export const CMS_INLINE_TEXT_MAX_LENGTH = 100_000
 
@@ -51,6 +51,47 @@ export function editableText(node: CmsInlineNode): string {
 export function normalizeInlineText(text: string, multiline: boolean): string {
    const value = text.replace(/ /g, ' ').replace(/\r\n?/g, '\n').replace(/\n$/, '')
    return multiline ? value : value.replace(/[^\S\n]*\n\s*/g, ' ')
+}
+
+export function inlineTextLimit(field: FieldConfig | undefined): number | undefined {
+   return isInlineTextField(field) && typeof field.max === 'number' ? field.max : undefined
+}
+
+export function clampInlineText(text: string, max: number | undefined): string {
+   return max === undefined || text.length <= max ? text : text.slice(0, max)
+}
+
+export function fitInlineInsertion(text: string, room: number): string {
+   return text.slice(0, Math.max(room, 0))
+}
+
+export function inlineFieldPath(index: number | null, key: string): string {
+   return index === null ? key : `${index}.${key}`
+}
+
+export interface CmsInlineLockOptions {
+   fields: Record<string, FieldConfig> | null
+   values: Record<string, unknown>
+   blocksField: FieldConfig
+   blocks: readonly Record<string, unknown>[]
+   locked?: readonly string[]
+}
+
+export function lockedInlineFields(options: CmsInlineLockOptions): string[] {
+   const paths: string[] = []
+   for (const [key, field] of Object.entries(options.fields ?? {})) {
+      if (!isInlineTextField(field)) continue
+      if (options.locked?.includes(key) || !isFieldVisible(field, options.values, options.fields!))
+         paths.push(key)
+   }
+   options.blocks.forEach((item, index) => {
+      const fields = options.blocksField.blocks?.[String(item.type)]?.fields ?? {}
+      for (const [key, field] of Object.entries(fields)) {
+         if (isInlineTextField(field) && !isFieldVisible(field, item, fields))
+            paths.push(inlineFieldPath(index, key))
+      }
+   })
+   return paths
 }
 
 export function matchesInlineValue(text: string, value: unknown): boolean {
