@@ -204,7 +204,7 @@
 
          <KStack v-if="visibleFolders.length" as="section" gap="sm">
             <KSeparator v-if="query" variant="heading" label="Folders" :level="3" :lines="false" />
-            <KGrid :columns="6" :min-item-width="selectable ? '10rem' : '13rem'" gap="sm">
+            <KGrid :columns="6" min-item-width="13rem" gap="sm">
                <KTooltip v-for="child in visibleFolders" :key="child" :text="child">
                   <KCard
                      as="button"
