@@ -1680,11 +1680,6 @@ body:has(.cms-scope) {
    }
 }
 
-.cms-drawer-loading {
-   min-height: 12rem;
-}
-
-.cms-drawer-actions,
 .cms-block-editor-actions {
    flex: 1;
 }

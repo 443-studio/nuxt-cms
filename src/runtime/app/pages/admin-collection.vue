@@ -38,8 +38,7 @@
             :tabs="config.tabs"
             :entry-name="name"
             :form-id="FORM_ID"
-            :footer="false"
-            :loading="saving"
+            :tab-query="CMS_TAB_QUERY"
             :focus="focus"
             :lock="singleLock"
             :locked="singleLocked"
@@ -328,6 +327,8 @@ import {
    CMS_ENTRY_FOCUS_KEYS,
    CMS_ENTRY_ROUTE_KEY,
    CMS_ENTRY_TAB_ROUTE_KEY,
+   CMS_TAB_QUERY,
+   cmsPageKey,
    readSearchFocus,
 } from '../../shared/search'
 import type { CmsTransferFormat } from '../../shared/transfer'
@@ -351,10 +352,11 @@ definePageMeta({
    middleware: 'cms-auth',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
    content: 'fill',
-   key: (route) => {
-      const { [CMS_LIST_SEARCH_PARAM]: _search, ...query } = withoutListFilterQuery(route.query)
-      return `${route.path}${JSON.stringify(query)}`
-   },
+   key: (route) =>
+      cmsPageKey({ path: route.path, query: withoutListFilterQuery(route.query) }, [
+         CMS_LIST_SEARCH_PARAM,
+         CMS_TAB_QUERY,
+      ]),
 })
 
 const FORM_ID = 'cms-single-form'

@@ -44,16 +44,6 @@
             </CmsFormSections>
          </template>
       </component>
-      <KStack v-if="footer && !lock" direction="row" justify="end" gap="sm">
-         <KButton type="submit" label="Save" :loading="loading" />
-         <KButton
-            v-if="drafts && canPublish"
-            type="submit"
-            :label="published ? 'Make draft' : 'Publish'"
-            :loading="loading"
-            @click="togglePublished"
-         />
-      </KStack>
    </component>
 </template>
 
@@ -71,19 +61,18 @@ import {
 import type { FormErrors } from '@xleddyl/443-components-vue'
 import {
    Alert as KAlert,
-   Button as KButton,
    Form as KForm,
    FormField as KFormField,
-   Stack as KStack,
    Tabs as KTabs,
 } from '@xleddyl/443-components-vue'
 import type { Component } from 'vue'
-import { computed, nextTick, onMounted, ref, watch } from '#imports'
+import { computed, nextTick, onMounted, ref } from '#imports'
 import type { CmsSearchFocus } from '../../../shared/search'
 import { translationProgress } from '../../../shared/translations'
 import type { CmsEntryForm } from '../../composables/cms-entry-form'
 import { useCmsEntryForm } from '../../composables/cms-entry-form'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
+import { useCmsPageQuery } from '../../composables/cms-route'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
 import type { CmsResponseIssue } from '../../utils/ui'
@@ -94,25 +83,21 @@ const props = withDefaults(
       fields: CmsEntry['fields']
       tabs?: CmsTab[]
       entryName?: string
-      drafts?: boolean
-      loading?: boolean
       formId?: string
-      footer?: boolean
       focus?: CmsSearchFocus | null
       path?: string
       lock?: string | null
-      canPublish?: boolean
       locked?: string[]
       form?: CmsEntryForm
       tab?: string
+      tabQuery?: string
    }>(),
    {
-      footer: true,
       lock: null,
-      canPublish: true,
       locked: () => [],
       form: undefined,
       tab: undefined,
+      tabQuery: undefined,
    }
 )
 
@@ -128,17 +113,27 @@ const activeLocale = ref<Record<string, string>>({})
 
 const tabList = computed(() => props.tabs ?? [])
 
-const localTab = ref(tabList.value[0]?.id ?? '')
+const localTab = ref('')
 
-watch(tabList, (tabs) => {
-   if (!tabs.some((tab) => tab.id === localTab.value)) localTab.value = tabs[0]?.id ?? ''
+const routeTab = props.tabQuery ? useCmsPageQuery(props.tabQuery) : null
+
+const ownTab = computed({
+   get: () => {
+      const tabs = tabList.value
+      const wanted = routeTab ? routeTab.value : localTab.value
+      return tabs.some((tab) => tab.id === wanted) ? wanted : tabs[0]?.id ?? ''
+   },
+   set: (value: string) => {
+      if (!routeTab) localTab.value = value
+      else routeTab.value = value === tabList.value[0]?.id ? '' : value
+   },
 })
 
 const activeTab = computed({
-   get: () => (props.tab !== undefined ? props.tab : localTab.value),
+   get: () => (props.tab !== undefined ? props.tab : ownTab.value),
    set: (value: string) => {
       if (props.tab !== undefined) emit('update:tab', value)
-      else localTab.value = value
+      else ownTab.value = value
    },
 })
 
@@ -227,7 +222,6 @@ const form =
       state,
       fields: () => props.fields,
       entryName: () => props.entryName,
-      drafts: () => props.drafts,
       path: () => props.path,
       onSubmit: () => emit('submit'),
       onInvalid: (errors) => onError(firstErrorKey(errors)),
@@ -239,17 +233,6 @@ const wrapper: Component | string = external ? 'div' : KForm
 const formBinding = computed<Record<string, unknown>>(() =>
    external ? {} : { form, focusOnError: false, disabled: props.lock ? true : undefined }
 )
-
-const published = computed({
-   get: () => state.value.status === 'published',
-   set: (value: boolean) => {
-      state.value.status = value ? 'published' : 'draft'
-   },
-})
-
-function togglePublished() {
-   published.value = !published.value
-}
 
 const formRef = ref<HTMLElement | { $el: HTMLElement } | null>(null)
 

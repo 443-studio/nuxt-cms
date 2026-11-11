@@ -52,27 +52,3 @@ export function useCmsPresets(
 
    return { presets, load, create }
 }
-
-export function useCmsPresetLibrary() {
-   const cache = usePresetCache()
-
-   async function list() {
-      return cmsApi<CmsBlockPreset[]>(PRESETS_ENDPOINT)
-   }
-
-   async function update(id: string, input: { name: string; description?: string }) {
-      const preset = await cmsApi<CmsBlockPreset>(`${PRESETS_ENDPOINT}/${id}`, {
-         method: 'PUT',
-         body: input,
-      })
-      cache.value = {}
-      return preset
-   }
-
-   async function remove(id: string) {
-      await cmsApi(`${PRESETS_ENDPOINT}/${id}`, { method: 'DELETE' })
-      cache.value = {}
-   }
-
-   return { list, update, remove }
-}

@@ -505,6 +505,7 @@ import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsHistory } from '../../composables/cms-history'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsPresets } from '../../composables/cms-presets'
+import { useCmsPageQuery } from '../../composables/cms-route'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
 import {
@@ -537,6 +538,7 @@ const props = defineProps<{
    focus?: CmsSearchFocus | null
    locked?: string[]
    readonly?: boolean
+   tabQuery?: string
 }>()
 
 const state = defineModel<Record<string, unknown>>('state', { required: true })
@@ -650,12 +652,25 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => {
 
 const seoKeys = computed(() => SEO_KEYS.filter((key) => Object.hasOwn(props.fields, key)))
 
-const activeTab = ref<EntryTab>('content')
-
 const tabList = computed(() => {
    const tabs: { id: EntryTab; label: string }[] = [{ id: 'content', label: 'Content' }]
    if (seoKeys.value.length) tabs.push({ id: 'seo', label: 'SEO' })
    return tabs
+})
+
+const localTab = ref<EntryTab>('content')
+
+const routeTab = props.tabQuery ? useCmsPageQuery(props.tabQuery) : null
+
+const activeTab = computed<EntryTab>({
+   get: () => {
+      const wanted = routeTab ? routeTab.value : localTab.value
+      return tabList.value.some((tab) => tab.id === wanted) ? (wanted as EntryTab) : 'content'
+   },
+   set: (value) => {
+      if (!routeTab) localTab.value = value
+      else routeTab.value = value === 'content' ? '' : value
+   },
 })
 
 const tabbed = computed(() => tabList.value.length > 1)

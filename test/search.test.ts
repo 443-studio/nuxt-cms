@@ -12,6 +12,8 @@ import { normalizeCmsConfig, pageFields } from '../src/runtime/shared/index'
 import { resolvePageRoutes } from '../src/runtime/shared/page-routes'
 import type { CmsSearchHit, CmsSearchResponse } from '../src/runtime/shared/search'
 import {
+   CMS_TAB_QUERY,
+   cmsPageKey,
    cmsSearchLink,
    cmsEntryLink,
    readSearchFocus,
@@ -363,6 +365,15 @@ describe('search helpers', () => {
       ).toBe('/cms/events#entry/a%26b&field/body&locale/it&block/2.items.0')
       expect(cmsEntryLink('events', 'new', { tab: 'seo' })).toBe(
          '/cms/events#entry/new&entrytab/seo'
+      )
+   })
+
+   it('keys a page by path and query without the omitted params', () => {
+      const route = { path: '/cms/pages/home', query: { field: 'intro', [CMS_TAB_QUERY]: 'seo' } }
+      expect(cmsPageKey(route)).toBe('/cms/pages/home{"field":"intro","tab":"seo"}')
+      expect(cmsPageKey(route, [CMS_TAB_QUERY])).toBe('/cms/pages/home{"field":"intro"}')
+      expect(cmsPageKey({ path: '/cms/news/1', query: { tab: 'seo' } }, [CMS_TAB_QUERY])).toBe(
+         cmsPageKey({ path: '/cms/news/1', query: {} })
       )
    })
 

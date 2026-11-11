@@ -6,22 +6,8 @@
          :title="headerTitle"
          :icon="cmsIcon(config.icon ?? 'window')"
       >
-         <template v-if="drafts" #badge>
-            <CmsStatusBadge :published="published" />
-         </template>
          <template #actions>
             <CmsTranslationMenu v-model="formState" :fields="fields" :disabled="!!lock" size="sm" />
-            <KButton
-               v-if="drafts && !lock && canPublish"
-               type="submit"
-               :form="FORM_ID"
-               :label="published ? 'Make draft' : 'Publish'"
-               variant="soft"
-               tone="neutral"
-               size="sm"
-               :loading="saving"
-               @click="togglePublished"
-            />
             <KButton
                v-if="!lock"
                type="submit"
@@ -40,17 +26,13 @@
             :fields="fields"
             :tabs="config.tabs"
             :entry-name="name"
-            :drafts="drafts"
             :form-id="FORM_ID"
-            :footer="false"
-            :loading="saving"
+            :tab-query="CMS_TAB_QUERY"
             :focus="focus"
             :path="pageRoute?.path"
             :lock="lock"
-            :can-publish="canPublish"
             :locked="locked"
             @submit="save"
-            @error="revertStatus"
          />
       </KCard>
    </div>
@@ -67,7 +49,6 @@ import {
    ref,
    useFetch,
    useRoute,
-   watch,
 } from '#imports'
 import type { BreadcrumbItem } from '@xleddyl/443-components-vue'
 import {
@@ -80,11 +61,10 @@ import {
 import cmsConfig from '#cms-config'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { cloneState, mergeSavedState } from '../../shared/save-state'
-import { cmsEntryLink, readSearchFocus } from '../../shared/search'
+import { CMS_TAB_QUERY, cmsEntryLink, cmsPageKey, readSearchFocus } from '../../shared/search'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { CMS_NEW_RECORD } from '../composables/cms-route'
 import { useCmsRuntime } from '../composables/cms-runtime'
-import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
 import { cmsApi } from '../utils/api'
 import type { CmsResponseIssue } from '../utils/ui'
 import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
@@ -96,7 +76,7 @@ definePageMeta({
    middleware: 'cms-auth',
    content: 'page',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
-   key: (route) => route.fullPath,
+   key: (route) => cmsPageKey(route, [CMS_TAB_QUERY]),
 })
 
 const route = useRoute()
@@ -109,9 +89,8 @@ if (!config || (config.kind !== 'collection' && config.kind !== 'page')) {
 }
 
 const id = route.params.id as string | undefined
-const isPage = config.kind === 'page'
 
-if (!isPage) {
+if (config.kind === 'collection') {
    const text = (key: string) => {
       const value = route.query[key]
       return typeof value === 'string' ? value : undefined
@@ -121,13 +100,13 @@ if (!isPage) {
          field: text('field'),
          locale: text('locale'),
          block: text('block'),
-         tab: text('tab'),
+         tab: text(CMS_TAB_QUERY),
       }),
       { replace: true }
    )
 }
-const pageRoute = isPage && id ? pageRouteOf(config, id) : undefined
-if (isPage && !pageRoute) {
+const pageRoute = config.kind === 'page' && id ? pageRouteOf(config, id) : undefined
+if (config.kind === 'page' && !pageRoute) {
    throw createError({ statusCode: 404, statusMessage: 'Unknown page', fatal: true })
 }
 
@@ -147,12 +126,9 @@ const breadcrumb = ((): BreadcrumbItem[] => {
    return links
 })()
 
-const isNew = !isPage && id === undefined
-const drafts = !isPage && !!config.drafts
 const fields = pageRoute ? pageFields(config, pageRoute.path) : config.fields
-const headerTitle = pageRoute ? pageRoute.label : isNew ? 'New entry' : 'Edit entry'
-const fieldKeys = Object.keys(fields)
-const formKeys = drafts ? [...fieldKeys, 'status'] : fieldKeys
+const headerTitle = pageRoute?.label ?? config.label
+const formKeys = Object.keys(fields)
 
 const endpoint: string = `/api/cms/admin/${name}`
 
@@ -171,7 +147,7 @@ function pickFields(row: Record<string, unknown>) {
 
 const formState = ref<Record<string, unknown>>(emptyState())
 
-if (!isNew && isPage) {
+if (pageRoute) {
    const { data, error } = await useFetch<Record<string, unknown> | null>(`${endpoint}/${id}`)
    if (error.value || !data.value) {
       const statusCode = error.value?.statusCode ?? 404
@@ -188,78 +164,38 @@ const saving = ref(false)
 
 const snapshot = ref(JSON.stringify(formState.value))
 
-const handoff = useCmsSaveHandoff(name)
-const handedOver = id && !isNew ? handoff.take(id) : null
-if (handedOver) formState.value = handedOver
-
-const { can, entryLock } = useCmsPermissions()
-const canPublish = computed(() => can(`${name}.publish`))
-const lock = computed(() =>
-   entryLock(name, config, {
-      isNew,
-      status: (JSON.parse(snapshot.value) as Record<string, unknown>).status,
-   })
-)
+const { entryLock } = useCmsPermissions()
+const lock = computed(() => entryLock(name, config, { isNew: false }))
 
 const locked = computed(() =>
-   isNew ? [] : lockedFieldKeys(fields, JSON.parse(snapshot.value) as Record<string, unknown>)
+   lockedFieldKeys(fields, JSON.parse(snapshot.value) as Record<string, unknown>)
 )
 
 const formRef = ref<{ setIssues: (issues: CmsResponseIssue[]) => void } | null>(null)
 
 const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
-const leave = useLeaveGuard(dirty)
-
-const published = computed({
-   get: () => formState.value.status === 'published',
-   set: (value: boolean) => {
-      formState.value.status = value ? 'published' : 'draft'
-   },
-})
-
-function togglePublished() {
-   published.value = !published.value
-}
-
-function revertStatus() {
-   if (!drafts) return
-   formState.value.status = (JSON.parse(snapshot.value) as Record<string, unknown>).status ?? null
-}
-
-function goBack() {
-   navigateTo(`/cms/${name}`)
-}
+useLeaveGuard(dirty)
 
 async function save() {
    saving.value = true
    const submitted = cloneState(formState.value)
    try {
-      const row = await (isNew
-         ? cmsApi<Record<string, unknown>>(endpoint, { method: 'POST', body: submitted })
-         : cmsApi<Record<string, unknown>>(`${endpoint}/${id}`, {
-              method: 'PUT',
-              body: submitted,
-           }))
+      const row = await cmsApi<Record<string, unknown>>(`${endpoint}/${id}`, {
+         method: 'PUT',
+         body: submitted,
+      })
       const saved = pickFields(row ?? submitted)
       const merged = mergeSavedState(submitted, formState.value, saved)
       snapshot.value = JSON.stringify(saved)
+      formState.value = merged.state
       if (merged.clean) {
-         formState.value = merged.state
          toast.success('Saved')
-         goBack()
+         await navigateTo(`/cms/${name}`)
          return
       }
-      formState.value = merged.state
       toast.success('Saved', { description: 'Changes made while saving are not saved yet.' })
-      const createdId = isNew && row?.id ? String(row.id) : null
-      if (createdId) {
-         handoff.stash(createdId, merged.state)
-         leave.allowNext()
-         await navigateTo(`/cms/${name}/${createdId}`, { replace: true })
-      }
    } catch (error) {
-      revertStatus()
       formRef.value?.setIssues(errorIssues(error))
       toast.error('Save failed', { description: errorMessage(error) })
    } finally {

@@ -39,7 +39,8 @@ example `/cms/events#entry/42&editblock/gallery.0`:
 | `#settings/<section>`, `#settings/<section>/<id>` | settings modal, see [Settings](#settings) |
 
 The state of a page stays in the query: filters (`?filter.<field>=`), the search of a list (`?q=`),
-the open media folder (`?folder=`).
+the open media folder (`?folder=`), the open tab of a page or a single form and the **SEO** tab of
+the visual editor (`?tab=<tab>`; the first tab leaves it out).
 
 A [`page` entry](schema.md#pages) gets its own section in the sidebar. The list is a tree that
 follows the routes of the site: a child path sits under its parent, indented. On the right of each

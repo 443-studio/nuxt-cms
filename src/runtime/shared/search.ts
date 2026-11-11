@@ -127,12 +127,14 @@ export function searchFieldPath(...labels: string[]): string {
    return labels.join(CMS_SEARCH_PATH_SEPARATOR)
 }
 
+export const CMS_TAB_QUERY = 'tab'
+
 export function cmsSearchLink(path: string, focus: CmsSearchLinkFocus = {}): string {
    const params = new URLSearchParams()
    if (focus.field) params.set('field', focus.field)
    if (focus.locale) params.set('locale', focus.locale)
    if (focus.block != null) params.set('block', String(focus.block))
-   if (focus.tab) params.set('tab', focus.tab)
+   if (focus.tab) params.set(CMS_TAB_QUERY, focus.tab)
    const query = params.toString()
    return query ? `${path}?${query}` : path
 }
@@ -158,6 +160,16 @@ export function cmsHashLink(
    return text ? `${path}#${text}` : path
 }
 
+export function cmsPageKey(
+   route: { path: string; query: Record<string, unknown> },
+   omit: string[] = []
+): string {
+   const query = Object.fromEntries(
+      Object.entries(route.query).filter(([key]) => !omit.includes(key))
+   )
+   return `${route.path}${JSON.stringify(query)}`
+}
+
 export function cmsEntryLink(
    collection: string,
    id: string,
@@ -178,7 +190,7 @@ export function readSearchFocus(query: Record<string, unknown>): CmsSearchFocus 
       return typeof first === 'string' && first ? first : undefined
    }
    const field = text(query.field)
-   const tab = text(query.tab)
+   const tab = text(query[CMS_TAB_QUERY])
    if (!field && !tab) return null
    const blockText = text(query.block)
    const block = Number.parseInt(blockText ?? '', 10)

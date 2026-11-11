@@ -9,6 +9,7 @@
       :focus="focus"
       :locked="locked"
       :readonly="!!lock"
+      :tab-query="CMS_TAB_QUERY"
       content
       @save="saveShortcut"
    >
@@ -175,7 +176,7 @@ import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { cloneState, mergeSavedState } from '../../shared/save-state'
-import { readSearchFocus } from '../../shared/search'
+import { CMS_TAB_QUERY, cmsPageKey, readSearchFocus } from '../../shared/search'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsRouteFlag } from '../composables/cms-route'
 import { useCmsLinkedDelete } from '../composables/cms-link-usage'
@@ -189,7 +190,7 @@ import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
 definePageMeta({
    layout: 'cms-editor',
    middleware: 'cms-auth',
-   key: (route) => route.fullPath,
+   key: (route) => cmsPageKey(route, [CMS_TAB_QUERY]),
 })
 
 type Status = 'draft' | 'published'
