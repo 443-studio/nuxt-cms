@@ -21,8 +21,8 @@ function setup(initial: Record<string, unknown>, options: { max?: number; omit?:
       state.value = next
       history.observe()
    }
-   function edit(key: string, value: unknown, coalesce?: string) {
-      history.change(coalesce)
+   function edit(key: string, value: unknown, coalesce?: string, hold = false) {
+      history.change(coalesce, hold)
       set({ ...state.value, [key]: value })
    }
    return { state, selected, history, updates, set, edit }
@@ -153,6 +153,49 @@ describe('editor history', () => {
       edit('title', 'a')
       history.flush()
       expect(history.canUndo()).toBe(false)
+   })
+
+   it('keeps a held session as one step across pauses until released', () => {
+      const { history, state, edit } = setup({ title: 'a' })
+      edit('title', 'ab', 'inline:title', true)
+      vi.advanceTimersByTime(1000)
+      edit('title', 'abc', 'inline:title', true)
+      vi.advanceTimersByTime(1000)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(history.canUndo()).toBe(true)
+      history.release()
+      edit('title', 'abcd', 'inline:title', true)
+      history.release()
+      history.undo()
+      expect(state.value.title).toBe('abc')
+      history.undo()
+      expect(state.value.title).toBe('a')
+      expect(history.canUndo()).toBe(false)
+   })
+
+   it('keeps a held session that returns to the start value and records nothing', () => {
+      const { history, state, edit } = setup({ title: 'a' })
+      edit('title', 'ab', 'inline:title', true)
+      edit('title', 'a', 'inline:title', true)
+      edit('title', 'ax', 'inline:title', true)
+      edit('title', 'a', 'inline:title', true)
+      history.release()
+      expect(history.canUndo()).toBe(false)
+      expect(state.value.title).toBe('a')
+   })
+
+   it('ends a held session on another change, on undo and ignores release without one', () => {
+      const { history, state, edit } = setup({ title: 'a', slug: '' })
+      history.release()
+      edit('title', 'ab', 'inline:title', true)
+      edit('slug', 'x')
+      history.undo()
+      expect(state.value).toEqual({ title: 'ab', slug: '' })
+      edit('title', 'abc', 'inline:title', true)
+      history.undo()
+      expect(state.value).toEqual({ title: 'ab', slug: '' })
+      history.redo()
+      expect(state.value).toEqual({ title: 'abc', slug: '' })
    })
 
    it('reports status changes and clears its timer on dispose', () => {

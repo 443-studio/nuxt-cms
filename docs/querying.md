@@ -399,6 +399,12 @@ render nothing extra. Inside a block, the name is a field of that block (the blo
 [preview component](schema.md#preview-component), the name is a field of the item (`title`,
 `excerpt`, an extra field). Unknown names and private fields are ignored.
 
+A marked `text` field can also be edited in place from the canvas (double-click). For that, the
+element must render the value as is, as its only content: `{{ heading }}` inside the element, no
+formatting of the value and no child elements. Keep rendering the element when the value is empty
+if it should stay clickable. For a `textarea` field, add `white-space: pre-line` so the line
+breaks show. Rich text fields are not edited in place: a click opens them in the inspector.
+
 ## Example
 
 ```ts

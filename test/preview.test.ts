@@ -42,6 +42,17 @@ import {
    toggleBlockHidden,
 } from '../src/runtime/shared/preview'
 import { buildEntrySchema } from '../src/runtime/shared/validation'
+import type { CmsInlineNode } from '../src/runtime/shared/inline-text'
+import {
+   CMS_INLINE_TEXT_MAX_LENGTH,
+   applyInlineOverride,
+   editableText,
+   inlineFieldValue,
+   isInlineTextField,
+   isPlainTextContent,
+   matchesInlineValue,
+   normalizeInlineText,
+} from '../src/runtime/shared/inline-text'
 import { I18N, contentConfig } from './fixtures'
 
 const config = normalizeCmsConfig(contentConfig(), I18N)
@@ -127,8 +138,30 @@ describe('preview message protocol', () => {
       }
       expect(parseHostMessage(previewEnvelope({ type: 'render', state }))).toEqual({
          type: 'render',
-         state: { ...state, blocks: [{ type: 'text' }] },
+         state: { ...state, blocks: [{ type: 'text' }], editable: true },
       })
+   })
+
+   it('reads the editable flag of a render message, true unless false', () => {
+      const state = {
+         entry: 'news',
+         field: 'body',
+         locale: 'en',
+         blocks: [],
+         item: null,
+         media: {},
+         selected: null,
+      }
+      const parse = (extra: Record<string, unknown>) => {
+         const message = parseHostMessage(
+            previewEnvelope({ type: 'render', state: { ...state, ...extra } })
+         )
+         return message?.type === 'render' ? message.state.editable : undefined
+      }
+      expect(parse({ editable: false })).toBe(false)
+      expect(parse({ editable: true })).toBe(true)
+      expect(parse({ editable: 'no' })).toBe(true)
+      expect(parse({})).toBe(true)
    })
 
    it('rejects malformed render messages', () => {
@@ -210,6 +243,37 @@ describe('preview message protocol', () => {
          { index: 0, key: 3 },
       ]) {
          expect(parseFrameMessage(previewEnvelope({ type: 'focus-field', ...broken }))).toBeNull()
+      }
+   })
+
+   it('parses field-input frame messages', () => {
+      const message = { type: 'field-input', index: 1, key: 'heading', locale: 'it', value: 'Ciao' }
+      expect(parseFrameMessage(previewEnvelope(message))).toEqual(message)
+      expect(parseFrameMessage(previewEnvelope({ ...message, index: null, commit: true }))).toEqual(
+         {
+            ...message,
+            index: null,
+            commit: true,
+         }
+      )
+      expect(parseFrameMessage(previewEnvelope({ ...message, commit: 'yes' }))).toEqual(message)
+      expect(parseFrameMessage(previewEnvelope({ ...message, value: '' }))).toEqual({
+         ...message,
+         value: '',
+      })
+      for (const broken of [
+         { index: -1 },
+         { index: undefined },
+         { key: 'a.b' },
+         { locale: '' },
+         { locale: 'it it' },
+         { locale: 'x'.repeat(36) },
+         { locale: 3 },
+         { value: null },
+         { value: 3 },
+         { value: 'x'.repeat(CMS_INLINE_TEXT_MAX_LENGTH + 1) },
+      ]) {
+         expect(parseFrameMessage(previewEnvelope({ ...message, ...broken }))).toBeNull()
       }
    })
 
@@ -306,6 +370,128 @@ describe('field targets', () => {
       expect(
          previewFieldConfig({ index: null, key: 'notes' }, body, secret, 'body')
       ).toBeUndefined()
+   })
+})
+
+function textNode(value: string): CmsInlineNode {
+   return { nodeType: 3, nodeName: '#text', nodeValue: value, childNodes: [] }
+}
+
+function elementNode(name: string, children: CmsInlineNode[] = []): CmsInlineNode {
+   return { nodeType: 1, nodeName: name, nodeValue: null, childNodes: children }
+}
+
+const comment: CmsInlineNode = {
+   nodeType: 8,
+   nodeName: '#comment',
+   nodeValue: 'v-if',
+   childNodes: [],
+}
+
+describe('inline text editing', () => {
+   const heading = body.blocks!.text!.fields.heading!
+   const excerpt = news.fields.excerpt!
+
+   it('edits text fields only', () => {
+      expect(isInlineTextField(heading)).toBe(true)
+      expect(isInlineTextField(excerpt)).toBe(true)
+      expect(isInlineTextField(body.blocks!.text!.fields.body!)).toBe(false)
+      expect(isInlineTextField(body.blocks!.image!.fields.image!)).toBe(false)
+      expect(isInlineTextField(undefined)).toBe(false)
+   })
+
+   it('only takes over elements that hold plain text', () => {
+      expect(isPlainTextContent(elementNode('H2', [textNode('Hi')]))).toBe(true)
+      expect(isPlainTextContent(elementNode('H2', [comment, textNode('Hi')]))).toBe(true)
+      expect(isPlainTextContent(elementNode('H2'))).toBe(true)
+      expect(isPlainTextContent(elementNode('H2', [elementNode('SPAN', [textNode('x')])]))).toBe(
+         false
+      )
+   })
+
+   it('reads the text of an edited element with its line breaks', () => {
+      expect(editableText(elementNode('P', [textNode('one'), comment, textNode(' two')]))).toBe(
+         'one two'
+      )
+      expect(
+         editableText(elementNode('P', [textNode('one'), elementNode('BR'), textNode('two')]))
+      ).toBe('one\ntwo')
+      expect(
+         editableText(
+            elementNode('P', [
+               textNode('one'),
+               elementNode('DIV', [textNode('two')]),
+               elementNode('DIV', [elementNode('BR')]),
+            ])
+         )
+      ).toBe('one\ntwo\n\n')
+   })
+
+   it('normalizes typed text for single and multi line fields', () => {
+      expect(normalizeInlineText('a\u00a0b', false)).toBe('a b')
+      expect(normalizeInlineText('one \r\n two\n', false)).toBe('one two')
+      expect(normalizeInlineText('one\r\ntwo\n', true)).toBe('one\ntwo')
+      expect(normalizeInlineText('one\n\ntwo', true)).toBe('one\n\ntwo')
+   })
+
+   it('compares the shown text with the field value', () => {
+      expect(matchesInlineValue('Hello', 'Hello')).toBe(true)
+      expect(matchesInlineValue(' Hello ', 'Hello')).toBe(true)
+      expect(matchesInlineValue('', null)).toBe(true)
+      expect(matchesInlineValue('HELLO', 'Hello')).toBe(false)
+      expect(matchesInlineValue('1', 1)).toBe(false)
+   })
+
+   it('writes the edited locale of a translatable value', () => {
+      expect(inlineFieldValue(heading, { en: 'Hi', it: 'Ciao' }, 'it', 'en', 'Salve')).toEqual({
+         en: 'Hi',
+         it: 'Salve',
+      })
+      expect(inlineFieldValue(heading, null, 'it', 'en', 'Ciao')).toEqual({ it: 'Ciao' })
+      expect(inlineFieldValue(heading, 'Hi', 'it', 'en', 'Ciao')).toEqual({ en: 'Hi', it: 'Ciao' })
+      expect(inlineFieldValue(heading, { en: 'Hi', it: 'Ciao' }, 'it', 'en', '')).toEqual({
+         en: 'Hi',
+      })
+      expect(inlineFieldValue(heading, { it: 'Ciao' }, 'it', 'en', '')).toBeNull()
+   })
+
+   it('writes a plain value of a field that is not translatable', () => {
+      const author = { label: 'Author', type: 'text' as const }
+      expect(inlineFieldValue(author, 'Ada', 'it', 'en', 'Grace')).toBe('Grace')
+      expect(inlineFieldValue(author, 'Ada', 'it', 'en', '')).toBeNull()
+   })
+
+   it('overrides the value shown in the canvas while a field is edited', () => {
+      const blocks = [
+         { type: 'text', heading: 'One' },
+         { type: 'text', heading: 'Two' },
+      ]
+      const item = { title: 'Title' }
+      expect(applyInlineOverride(blocks, item, null)).toEqual({ blocks, item })
+      const block = applyInlineOverride(blocks, item, {
+         index: 1,
+         key: 'heading',
+         value: 'Frozen',
+         settled: false,
+      })
+      expect(block.blocks).toEqual([blocks[0], { type: 'text', heading: 'Frozen' }])
+      expect(block.blocks[0]).toBe(blocks[0])
+      expect(block.item).toBe(item)
+      const entry = applyInlineOverride(blocks, item, {
+         index: null,
+         key: 'title',
+         value: 'Draft',
+         settled: true,
+      })
+      expect(entry).toEqual({ blocks, item: { title: 'Draft' } })
+      expect(
+         applyInlineOverride(blocks, null, {
+            index: null,
+            key: 'title',
+            value: 'x',
+            settled: false,
+         }).item
+      ).toBeNull()
    })
 })
 

@@ -25,6 +25,7 @@ interface Entry {
 interface Intent {
    key: string | null
    before: number | null
+   held: boolean
 }
 
 export function createCmsHistory(options: CmsHistoryOptions) {
@@ -86,17 +87,25 @@ export function createCmsHistory(options: CmsHistoryOptions) {
       refresh()
    }
 
-   function change(key?: string) {
+   function change(key?: string, hold = false) {
       const coalesce = key ?? null
       if (intent && (coalesce === null || intent.key !== coalesce)) flush()
-      if (!intent) intent = { key: coalesce, before: options.selected() }
+      if (!intent) intent = { key: coalesce, before: options.selected(), held: false }
+      if (hold && coalesce !== null) {
+         intent.held = true
+         clearTimer()
+      }
+   }
+
+   function release() {
+      if (intent?.held) flush()
    }
 
    function observe() {
       const json = serialize()
       const entry = entries[index]!
       if (json === entry.json) {
-         if (intent && timer === undefined) intent = null
+         if (intent && timer === undefined && !intent.held) intent = null
          refresh()
          return
       }
@@ -106,6 +115,10 @@ export function createCmsHistory(options: CmsHistoryOptions) {
       }
       if (intent.key === null) {
          flush()
+         return
+      }
+      if (intent.held) {
+         refresh()
          return
       }
       clearTimer()
@@ -140,6 +153,7 @@ export function createCmsHistory(options: CmsHistoryOptions) {
 
    return {
       change,
+      release,
       observe,
       undo,
       redo,

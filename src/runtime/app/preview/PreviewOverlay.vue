@@ -87,6 +87,7 @@
       <div
          v-if="fieldBox && !drag"
          class="cms-preview-field"
+         :class="{ 'is-editing': fieldBox.editing }"
          :style="{
             top: `${fieldBox.top}px`,
             left: `${fieldBox.left}px`,
@@ -127,8 +128,16 @@
 <script setup lang="ts">
 import { Icon as KIcon } from '@xleddyl/443-components-vue'
 import { cmsIcon } from '../utils/ui'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '#imports'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from '#imports'
 import type { FieldConfig } from '../../shared/index'
+import type { CmsInlineOverride } from '../../shared/inline-text'
+import {
+   editableText,
+   isInlineTextField,
+   isPlainTextContent,
+   matchesInlineValue,
+   normalizeInlineText,
+} from '../../shared/inline-text'
 import { canAddBlock } from '../../shared/index'
 import type {
    CmsClipboardAction,
@@ -146,6 +155,8 @@ import {
    shortcutApplies,
 } from '../../shared/preview'
 import { clipboardTarget, onApplePlatform, shortcutTarget } from '../utils/keyboard'
+import type { CmsInlineTextSession } from './inline-text'
+import { startInlineText } from './inline-text'
 
 interface Box {
    index: number
@@ -168,25 +179,34 @@ interface FieldBox {
    width: number
    height: number
    label: string
+   editing: boolean
 }
 
 const props = defineProps<{
    field: FieldConfig
    fieldKey: string
    fields: Record<string, FieldConfig> | null
+   blocks: readonly Record<string, unknown>[]
+   item: Record<string, unknown> | null
+   locale: string
+   editable: boolean
    total: number
    selected: number | null
    highlighted: number | null
    version: number
 }>()
 
-const emit = defineEmits<{ message: [message: CmsPreviewFrameMessage] }>()
+const emit = defineEmits<{
+   message: [message: CmsPreviewFrameMessage]
+   inline: [override: CmsInlineOverride | null]
+}>()
 
 const root = ref<HTMLElement | null>(null)
 const boxes = ref<Box[]>([])
 const hovered = ref<number | null>(null)
 const hoveredField = ref<FieldHit | null>(null)
 const fieldBox = ref<FieldBox | null>(null)
+const editing = shallowRef<{ hit: FieldHit; session: CmsInlineTextSession } | null>(null)
 const viewportWidth = ref(0)
 const viewportHeight = ref(0)
 
@@ -227,7 +247,7 @@ function measure() {
 }
 
 function measureField() {
-   const hit = hoveredField.value
+   const hit = editing.value?.hit ?? hoveredField.value
    if (!hit || !hit.element.isConnected) {
       fieldBox.value = null
       return
@@ -239,7 +259,56 @@ function measureField() {
       width: rect.width,
       height: rect.height,
       label: hit.field.label,
+      editing: hit === editing.value?.hit,
    }
+}
+
+function fieldValue(hit: FieldHit) {
+   return hit.index === null ? props.item?.[hit.key] : props.blocks[hit.index]?.[hit.key]
+}
+
+function startEditing(hit: FieldHit, point: { x: number; y: number }) {
+   const { index, key, field } = hit
+   const locale = props.locale
+   const multiline = !!field.textarea
+   emit('inline', { index, key, value: fieldValue(hit), settled: false })
+   const session = startInlineText(hit.element, {
+      multiline,
+      point,
+      onInput: (value, commit) =>
+         emit(
+            'message',
+            commit
+               ? { type: 'field-input', index, key, locale, value, commit: true }
+               : { type: 'field-input', index, key, locale, value }
+         ),
+      onStop: (value) => {
+         editing.value = null
+         emit('inline', { index, key, value: value === '' ? null : value, settled: true })
+         measureField()
+      },
+   })
+   editing.value = { hit, session }
+   measureField()
+}
+
+function canEditInline(hit: FieldHit) {
+   if (!props.editable || !isInlineTextField(hit.field) || !isPlainTextContent(hit.element))
+      return false
+   const text = normalizeInlineText(editableText(hit.element), !!hit.field.textarea)
+   return matchesInlineValue(text, fieldValue(hit))
+}
+
+function onDoubleClick(event: MouseEvent) {
+   if (editing.value || drag.value || insideOverlay(event.target)) return
+   const hit = fieldHitOf(event.target)
+   if (!hit || !canEditInline(hit)) return
+   event.preventDefault()
+   startEditing(hit, { x: event.clientX, y: event.clientY })
+}
+
+function insideEditing(target: EventTarget | null) {
+   return target instanceof Node && !!editing.value?.hit.element.contains(target)
 }
 
 function fieldHitOf(target: EventTarget | null): FieldHit | null {
@@ -428,6 +497,11 @@ function onClick(event: MouseEvent) {
       return
    }
    if (insideOverlay(event.target)) return
+   if (insideEditing(event.target)) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+   }
    const target = event.target instanceof Element ? event.target : null
    if (target?.closest('a, button, input, select, textarea, label, summary')) event.preventDefault()
    if (target?.closest('[data-cms-preview-keep]')) return
@@ -533,6 +607,7 @@ watch(
    () => props.version,
    async () => {
       await nextTick()
+      if (editing.value && !editing.value.hit.element.isConnected) editing.value.session.stop(true)
       measure()
       if (refocus) {
          refocus = false
@@ -559,6 +634,7 @@ onMounted(() => {
    document.addEventListener('pointermove', onPointerMove, { passive: true })
    document.documentElement.addEventListener('pointerleave', onPointerLeave)
    document.addEventListener('click', onClick, true)
+   document.addEventListener('dblclick', onDoubleClick, true)
    document.addEventListener('submit', onSubmit, true)
    document.addEventListener('keydown', onKeydown)
    document.addEventListener('copy', onClipboard)
@@ -577,10 +653,12 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
    stopDrag()
+   editing.value?.session.stop(true)
    if (frame) cancelAnimationFrame(frame)
    document.removeEventListener('pointermove', onPointerMove)
    document.documentElement.removeEventListener('pointerleave', onPointerLeave)
    document.removeEventListener('click', onClick, true)
+   document.removeEventListener('dblclick', onDoubleClick, true)
    document.removeEventListener('submit', onSubmit, true)
    document.removeEventListener('keydown', onKeydown)
    document.removeEventListener('copy', onClipboard)

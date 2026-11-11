@@ -21,6 +21,7 @@ export function useCmsHistory(options: Omit<CmsHistoryOptions, 'onUpdate'>) {
       canUndo: readonly(canUndo),
       canRedo: readonly(canRedo),
       change: history.change,
+      release: history.release,
       undo: history.undo,
       redo: history.redo,
       reset: history.reset,

@@ -1,8 +1,18 @@
 <template>
    <div class="cms-preview" :data-cms-preview="state ? 'ready' : 'waiting'">
       <template v-if="state && field">
-         <component :is="wrapper" v-if="wrapper && item" :item="item" :locale="state.locale">
-            <CmsBlocks :blocks="blocks" :entry="blockEntry" :field="state.field" annotate />
+         <component
+            :is="wrapper"
+            v-if="wrapper && rendered.item"
+            :item="rendered.item"
+            :locale="state.locale"
+         >
+            <CmsBlocks
+               :blocks="rendered.blocks"
+               :entry="blockEntry"
+               :field="state.field"
+               annotate
+            />
             <div v-if="!visibleCount && canAdd" class="cms-preview-empty">
                <button
                   type="button"
@@ -16,7 +26,12 @@
             </div>
          </component>
          <template v-else>
-            <CmsBlocks :blocks="blocks" :entry="blockEntry" :field="state.field" annotate />
+            <CmsBlocks
+               :blocks="rendered.blocks"
+               :entry="blockEntry"
+               :field="state.field"
+               annotate
+            />
             <div v-if="!visibleCount && canAdd" class="cms-preview-empty">
                <button
                   type="button"
@@ -34,11 +49,16 @@
             :field="field"
             :field-key="state.field"
             :fields="item ? fields : null"
+            :blocks="blocks"
+            :item="item"
+            :locale="state.locale"
+            :editable="state.editable"
             :total="state.blocks.length"
             :selected="state.selected"
             :highlighted="highlighted"
             :version="version"
             @message="post"
+            @inline="inline = $event"
          />
       </template>
       <p v-else-if="standalone" class="cms-preview-notice">
@@ -71,7 +91,7 @@ import {
 import { Icon as KIcon } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { cmsPreviewComponents } from '#cms-blocks'
-import type { CmsPreviewFrameMessage, CmsPreviewState } from '../../shared/preview'
+import type { CmsBlockValue, CmsPreviewFrameMessage, CmsPreviewState } from '../../shared/preview'
 import {
    isTrustedPreviewEvent,
    parseHostMessage,
@@ -79,6 +99,8 @@ import {
    previewEnvelope,
    previewItem,
 } from '../../shared/preview'
+import type { CmsInlineOverride } from '../../shared/inline-text'
+import { applyInlineOverride } from '../../shared/inline-text'
 import type { CmsBlockItem } from '../blocks/resolve'
 import { useCmsLinkTargets } from '../composables/cms-link-targets'
 import { useCmsRuntime } from '../composables/cms-runtime'
@@ -94,6 +116,7 @@ const version = ref(0)
 const highlighted = ref<number | null>(null)
 const overlay = ref<InstanceType<typeof PreviewOverlay> | null>(null)
 const standalone = ref(false)
+const inline = shallowRef<CmsInlineOverride | null>(null)
 
 useHead({
    title: 'Preview',
@@ -126,20 +149,22 @@ function resolveLink(value: unknown) {
    return resolveCmsLink(cmsConfig as CmsConfig, value, locale, i18n.defaultLocale, row)
 }
 
-const blocks = computed<CmsBlockItem[]>(() =>
+const blocks = computed<CmsBlockValue[]>(() =>
    state.value && field.value
-      ? (previewBlocks(
+      ? previewBlocks(
            field.value,
            state.value.blocks,
            state.value.locale,
            i18n.defaultLocale,
            state.value.media,
            resolveLink
-        ) as unknown as CmsBlockItem[])
+        )
       : []
 )
 
-const visibleCount = computed(() => blocks.value.filter((block) => !isHiddenBlock(block)).length)
+const visibleCount = computed(
+   () => rendered.value.blocks.filter((block) => !isHiddenBlock(block)).length
+)
 
 const canAdd = computed(
    () => !!state.value && !!field.value && canAddBlock(field.value, state.value.blocks.length)
@@ -159,6 +184,11 @@ const item = computed(() => {
    return { ...preview, path: contentItemPath(entry.value, state.value.item, state.value.locale) }
 })
 
+const rendered = computed(() => {
+   const view = applyInlineOverride(blocks.value, item.value, inline.value)
+   return { blocks: view.blocks as unknown as CmsBlockItem[], item: view.item }
+})
+
 const wrapper = computed(() =>
    state.value && entry.value?.kind === 'content'
       ? cmsPreviewComponents[state.value.entry]
@@ -176,6 +206,7 @@ function onMessage(event: MessageEvent) {
    if (!message) return
    switch (message.type) {
       case 'render':
+         if (inline.value?.settled) inline.value = null
          state.value = message.state
          version.value++
          break
@@ -259,6 +290,11 @@ onBeforeUnmount(() => {
    outline-offset: 2px;
    border-radius: 2px;
    background: color-mix(in oklab, var(--cms-preview-accent) 5%, transparent);
+}
+
+.cms-preview-field.is-editing {
+   outline: 2px solid var(--cms-preview-accent);
+   background: none;
 }
 
 .cms-preview-field-label {
@@ -399,6 +435,11 @@ onBeforeUnmount(() => {
 .cms-preview-grabbing * {
    cursor: grabbing !important;
    user-select: none !important;
+}
+
+.cms-preview [data-cms-editing] {
+   outline: none;
+   cursor: text;
 }
 
 .cms-preview-empty {

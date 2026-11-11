@@ -16,6 +16,7 @@ import {
    linkDisplayText,
    resolveCmsLink,
 } from './index'
+import { CMS_INLINE_TEXT_MAX_LENGTH } from './inline-text'
 
 export type CmsPreviewLinkResolver = (value: unknown) => CmsLink | null
 
@@ -82,6 +83,7 @@ export interface CmsPreviewState {
    item: Record<string, unknown> | null
    media: Record<string, CmsPreviewMedia>
    selected: number | null
+   editable: boolean
 }
 
 export type CmsPreviewHostMessage =
@@ -102,6 +104,14 @@ export type CmsPreviewFrameMessage =
    | { type: 'cut'; index: number }
    | { type: 'paste'; index: number; text?: string }
    | { type: 'focus-field'; index: number | null; key: string }
+   | {
+        type: 'field-input'
+        index: number | null
+        key: string
+        locale: string
+        value: string
+        commit?: boolean
+     }
    | { type: 'undo' }
    | { type: 'redo' }
    | { type: 'save' }
@@ -131,6 +141,24 @@ export function isFieldKey(value: unknown): value is string {
 function envelope(data: unknown): Record<string, unknown> | null {
    if (!isRecord(data) || data.channel !== CMS_PREVIEW_CHANNEL) return null
    return typeof data.type === 'string' ? data : null
+}
+
+const LOCALE_CODE = /^[a-z0-9_-]{1,35}$/i
+
+function parseFieldInput(message: Record<string, unknown>): CmsPreviewFrameMessage | null {
+   if (message.index !== null && !isIndex(message.index)) return null
+   if (!isFieldKey(message.key)) return null
+   if (typeof message.locale !== 'string' || !LOCALE_CODE.test(message.locale)) return null
+   if (typeof message.value !== 'string' || message.value.length > CMS_INLINE_TEXT_MAX_LENGTH)
+      return null
+   return {
+      type: 'field-input',
+      index: message.index,
+      key: message.key,
+      locale: message.locale,
+      value: message.value,
+      ...(message.commit === true ? { commit: true } : {}),
+   }
 }
 
 export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null {
@@ -166,6 +194,8 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
          return (message.index === null || isIndex(message.index)) && isFieldKey(message.key)
             ? { type: 'focus-field', index: message.index, key: message.key }
             : null
+      case 'field-input':
+         return parseFieldInput(message)
       case 'paste':
          if (!isIndex(message.index)) return null
          if (message.text === undefined) return { type: 'paste', index: message.index }
@@ -203,6 +233,7 @@ export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
          item: state.item as Record<string, unknown> | null,
          media: state.media as Record<string, CmsPreviewMedia>,
          selected: state.selected as number | null,
+         editable: state.editable !== false,
       },
    }
 }

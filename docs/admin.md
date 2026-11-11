@@ -284,6 +284,17 @@ bar, so a translatable field opens in that language). A marked element outside e
 as the title in the [preview component](schema.md#preview-component), opens the field in the
 **Content** or **SEO** tab.
 
+**Editing text in the canvas.** Double-click a marked `text` field (a `textarea` too) to edit it in
+place: the element gets a caret and a solid outline, and what you type reaches the inspector
+within a quarter of a second. Enter saves the text (⌘ Enter in a `textarea`, where Enter adds a
+line break), Escape restores the text you started from, and clicking elsewhere saves it. The whole
+edit is one undo step. A translatable field is edited in the language of the top bar (an empty
+translation shows the default language until you type). Pasted text arrives as plain text. Inline
+editing needs the element to show the value as it is, with no other markup inside; otherwise a
+double-click only opens the field in the inspector, as it does for every other field type. Rich
+text is edited in the inspector only. Validation (for example `required`) shows in the inspector
+as for any other edit, and nothing is editable in the canvas while the editor form is read-only.
+
 **Undo and redo.** The editor keeps the last 100 changes of the open item, from the canvas and from
 the inspector forms alike. Typing in one field is one step once you pause. Undo restores the block
 selection of that moment too. The history starts when the item opens, and saving does not reset

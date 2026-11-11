@@ -200,7 +200,13 @@
             :style="compact ? undefined : { width: `${layout.inspector.width}px` }"
             aria-label="Fields"
          >
-            <KForm as="div" :form="form" :alerts="false" class="cms-editor-inspector">
+            <KForm
+               as="div"
+               :form="form"
+               :alerts="false"
+               :disabled="readonly"
+               class="cms-editor-inspector"
+            >
                <template v-if="selectedItem && selected !== null">
                   <div class="cms-editor-block-head">
                      <span class="cms-editor-block-icon" aria-hidden="true">
@@ -379,12 +385,26 @@ import {
    Tooltip as KTooltip,
    useForm,
 } from '@xleddyl/443-components-vue'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from '#imports'
+import {
+   computed,
+   nextTick,
+   onBeforeUnmount,
+   onMounted,
+   ref,
+   shallowRef,
+   useId,
+   watch,
+} from '#imports'
 import cmsConfig from '#cms-config'
 import type { CmsPreviewDevice } from '../../../shared/editor-layout'
 import { CMS_EDITOR_PANEL_LIMITS, CMS_PREVIEW_DEVICE_WIDTHS } from '../../../shared/editor-layout'
 import type { CmsSearchFocus } from '../../../shared/search'
 import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
+import {
+   inlineFieldValue,
+   isInlineTextField,
+   normalizeInlineText,
+} from '../../../shared/inline-text'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
 import type {
    CmsBlockValue,
@@ -452,6 +472,7 @@ const props = defineProps<{
    content?: boolean
    focus?: CmsSearchFocus | null
    locked?: string[]
+   readonly?: boolean
 }>()
 
 const state = defineModel<Record<string, unknown>>('state', { required: true })
@@ -606,8 +627,8 @@ const sections = computed(() => {
 
 const translations = computed(() => translationProgress(props.fields, state.value, i18n))
 
-function setValue(key: string, value: unknown, coalesce?: string) {
-   change(coalesce)
+function setValue(key: string, value: unknown, coalesce?: string, hold = false) {
+   change(coalesce, hold)
    state.value = { ...state.value, [key]: value }
 }
 
@@ -835,7 +856,7 @@ function updateBlockField(key: string, value: unknown) {
    setValue(props.fieldKey, list.length ? list : null, `${props.fieldKey}.${index}.${key}`)
 }
 
-const { canUndo, canRedo, change, undo, redo } = useCmsHistory({
+const { canUndo, canRedo, change, release, undo, redo } = useCmsHistory({
    state: () => state.value,
    selected: () => selected.value,
    restore: (values, index) => {
@@ -899,6 +920,7 @@ const previewState = computed<CmsPreviewState>(() => ({
    item: props.content ? state.value : null,
    media: media.value,
    selected: selected.value,
+   editable: !props.readonly,
 }))
 
 function post(message: CmsPreviewHostMessage) {
@@ -957,6 +979,9 @@ function onFrameMessage(message: CmsPreviewFrameMessage) {
          break
       case 'focus-field':
          focusField(message.index, message.key)
+         break
+      case 'field-input':
+         inlineInput(message)
          break
       case 'undo':
          undo()
@@ -1019,6 +1044,32 @@ function focusField(index: number | null, key: string) {
    if (index === null) activeTab.value = tabOfKey(key) === 'seo' ? 'seo' : 'content'
    if (!compact.value) layout.value.inspector.collapsed = false
    reveal(() => panelBody.value, key)
+}
+
+function inlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-input' }>) {
+   const { index, key, locale: code } = message
+   const field = fieldAt(index, key)
+   if (props.readonly || !isInlineTextField(field)) return
+   if (isTranslatableField(field) && !i18n.locales.includes(code)) return
+   const item = index === null ? undefined : blocks.value[index]
+   const text = normalizeInlineText(message.value, !!field.textarea)
+   const value = inlineFieldValue(
+      field,
+      item ? item[key] : state.value[key],
+      code,
+      i18n.defaultLocale,
+      text
+   )
+   const coalesce = `inline:${index ?? ''}.${key}`
+   if (!item) setValue(key, value, coalesce, true)
+   else
+      setValue(
+         props.fieldKey,
+         blocks.value.map((current, i) => (i === index ? { ...item, [key]: value } : current)),
+         coalesce,
+         true
+      )
+   if (message.commit) void nextTick(release)
 }
 
 function applyFocus(focus: CmsSearchFocus) {
