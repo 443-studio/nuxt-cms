@@ -1,5 +1,5 @@
 <template>
-   <div class="cms-page">
+   <div class="k-page cms-page">
       <KPageHeader
          title="Media"
          :icon="cmsIcon('photo')"
@@ -21,7 +21,7 @@ import { normalizeMediaFolder } from '#nuxt-cms'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { cmsIcon } from '../utils/ui'
 
-definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth' })
+definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth', content: 'fill' })
 
 const runtime = useCmsRuntime()
 const route = useRoute()

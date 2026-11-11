@@ -3,6 +3,8 @@ import { isCollectionKind, listFilterKeys, selectOptions } from './index'
 
 export const LIST_FILTER_PREFIX = 'filter.'
 
+export const LIST_SEARCH_PARAM = 'q'
+
 export const LIST_FILTER_STATUS = 'status'
 
 export const LIST_FILTER_ID_MAX = 256

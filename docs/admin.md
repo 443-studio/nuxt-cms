@@ -118,10 +118,10 @@ typed, so Enter adds it as written. At `max` the input stops adding. The table s
 separated by commas, and the search box of the sidebar finds them.
 
 **Bulk actions.** Every row of a collection table has a checkbox. When rows are selected, the
-toolbar shows **Delete** and, on a collection with `drafts`, **Publish** and **Draft**. With one row
-selected it also shows **Duplicate**.
+toolbar shows **Delete**, **Duplicate** (enabled with one row selected) and, on a collection with
+`drafts`, **Publish** and **Draft**.
 
-**Duplicate.** **Duplicate** in the toolbar (one row selected), in the footer of the entry drawer,
+**Duplicate.** **Duplicate** in the toolbar (one row selected), in the header of the entry drawer,
 or in the `...` menu of the visual editor opens a new, unsaved entry filled with a copy of the
 values: translations, blocks, relations and media (the copy points at the same files, nothing is
 uploaded again). Nothing is written until you save. So that the save does not hit a unique index:
@@ -150,7 +150,9 @@ of the table; `list.filters: ['subject', 'type']` picks the fields and their ord
 whatever the columns.
 
 Filters combine with AND, with the search box, the sort and the pagination. They live in the URL
-(`?filter.subject=math&filter.type=quiz`), so a reload, a bookmark or a shared link keeps them.
+(`?filter.subject=math&filter.type=quiz`, and `?q=` for the search text), so a reload, a bookmark or
+a shared link keeps them. The list remembers them while the panel stays open: leave it and come
+back from the sidebar, and the same filters and search return.
 **Clear filters** removes them all. The admin list API applies them on the server: it accepts only
 the fields that the list offers and only their allowed values (the option values of a select,
 `true` or `false`, `draft` or `published`, a relation id of up to 256 characters), answers `400`

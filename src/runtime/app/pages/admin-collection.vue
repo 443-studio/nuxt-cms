@@ -1,16 +1,34 @@
 <template>
-   <div class="cms-page" :class="{ 'is-fill': isCollectionKind(config) && !error }">
+   <div class="k-page cms-page" :class="{ 'is-form': config.kind === 'single' }">
       <KPageHeader
          :title="config.label"
          :icon="cmsIcon(kindMeta.icon)"
          :description="kindMeta.description"
       >
          <template v-if="config.kind !== 'single' && total" #badge>
-            <span :key="total" class="cms-count">{{ total }}</span>
+            <KBadge :label="total" />
          </template>
          <template v-if="config.kind === 'single' && !singleLock" #actions>
-            <CmsTranslationMenu v-model="formState" :fields="config.fields" />
-            <KButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
+            <CmsTranslationMenu v-model="formState" :fields="config.fields" size="sm" />
+            <KButton type="submit" :form="FORM_ID" label="Save" size="sm" :loading="saving" />
+         </template>
+         <template v-else-if="isCollectionKind(config)" #actions>
+            <KDropdownMenu
+               v-if="transferItems.length"
+               :items="transferItems"
+               placement="bottom-end"
+            >
+               <KButton
+                  :icon="cmsIcon('arrows-up-down')"
+                  variant="ghost"
+                  tone="neutral"
+                  size="sm"
+                  square
+                  :loading="exporting"
+                  aria-label="Import and export"
+               />
+            </KDropdownMenu>
+            <KCommandButton v-if="newCommand" :command="newCommand" size="sm" />
          </template>
       </KPageHeader>
 
@@ -18,12 +36,15 @@
          v-if="error"
          :icon="cmsIcon('exclamation-triangle')"
          title="Could not load entries"
+         :description="errorMessage(error)"
       >
          <template #actions>
             <KButton
                label="Retry"
                :icon="cmsIcon('arrow-path')"
                variant="soft"
+               tone="neutral"
+               size="sm"
                :loading="status === 'pending'"
                @click="reload"
             />
@@ -38,6 +59,7 @@
             :tabs="config.tabs"
             :entry-name="name"
             :form-id="FORM_ID"
+            :footer="false"
             :loading="saving"
             :focus="focus"
             :lock="singleLock"
@@ -46,87 +68,47 @@
          />
       </KCard>
 
-      <template v-else-if="config.kind === 'page'">
-         <div v-if="total || searchTerm" class="cms-toolbar">
-            <KInput
-               v-model="search"
-               :icon="cmsIcon('magnifying-glass')"
-               placeholder="Search…"
-               aria-label="Search pages"
-               class="cms-toolbar-search"
-            />
-         </div>
+      <KEmptyState
+         v-else-if="firstRun"
+         :icon="cmsIcon(config.kind === 'page' ? 'document-text' : 'sparkles')"
+         :title="config.kind === 'page' ? 'No pages yet' : 'Nothing here yet'"
+         :description="
+            config.kind === 'page'
+               ? 'Pages come from the routes of the app.'
+               : 'Entries you create will show up here.'
+         "
+      >
+         <template v-if="newCommand" #actions>
+            <KCommandButton :command="newCommand" size="sm" />
+         </template>
+      </KEmptyState>
 
-         <KCard v-if="pageTree.length" variant="outline" padding="none" class="cms-tree">
-            <NuxtLink
-               v-for="(node, index) in pageTree"
-               :key="String(node.row.id)"
-               :to="`/cms/${name}/${node.row.id}`"
-               class="cms-tree-row"
-               :style="{
-                  paddingLeft: `${1 + node.depth * 1.5}rem`,
-                  '--cms-row-delay': `${Math.min(index, 14) * 24}ms`,
-               }"
-            >
-               <KIcon
-                  v-if="node.depth"
-                  :name="cmsIcon('arrow-turn-left-up')"
-                  class="cms-tree-branch"
+      <KCard v-else padding="none" class="cms-list-card">
+         <div class="cms-list-toolbar" role="search" aria-label="Search and filters">
+            <div class="cms-list-toolbar-start">
+               <KInput
+                  v-model="search"
+                  type="search"
+                  size="sm"
+                  icon="magnifying-glass"
+                  clearable
+                  :placeholder="config.kind === 'page' ? 'Search pages' : 'Search entries'"
+                  :aria-label="config.kind === 'page' ? 'Search pages' : 'Search entries'"
+                  class="cms-list-search"
                />
-               <span class="cms-tree-doc">
-                  <KIcon :name="cmsIcon('document-text')" />
-               </span>
-               <span class="cms-tree-text">
-                  <span class="cms-tree-title">{{ node.row.label }}</span>
-                  <span class="cms-tree-path">{{ node.row.path }}</span>
-               </span>
-               <CmsTranslationBadges
-                  v-if="pageTranslations"
-                  :progress="pageProgress(node.row)"
-                  class="cms-tree-translations"
+               <CmsListFilters
+                  v-if="filterKeys.length"
+                  v-model="filters"
+                  :config="config"
+                  :keys="filterKeys"
+                  :relations="relations"
                />
-               <span class="cms-tree-meta">{{ lastEdit(node.row.updatedAt) }}</span>
-               <KIcon name="chevron-right" class="cms-tree-chevron" />
-            </NuxtLink>
-         </KCard>
-
-         <KSpinner v-else-if="status === 'pending'" block />
-
-         <KEmptyState
-            v-else-if="searchTerm"
-            :icon="cmsIcon('magnifying-glass')"
-            title="No matching pages"
-         />
-
-         <KEmptyState
-            v-else
-            :icon="cmsIcon('document-text')"
-            title="No pages yet"
-            description="Pages come from the routes of the app."
-         />
-
-         <KPagination
-            v-model:page="page"
-            :total="total"
-            :page-size="PAGE_SIZE"
-            :show-summary="false"
-         />
-      </template>
-
-      <template v-else>
-         <div class="cms-toolbar">
-            <KInput
-               v-if="total || narrowed"
-               v-model="search"
-               :icon="cmsIcon('magnifying-glass')"
-               placeholder="Search…"
-               aria-label="Search entries"
-               class="cms-toolbar-search"
-            />
-            <div class="cms-toolbar-actions">
+            </div>
+            <div v-if="selectable" class="cms-list-toolbar-end">
                <KSelectionBar
                   :count="selected.length"
                   :total="rows.length"
+                  :selected-text="(count: number) => `${count} selected`"
                   :on-select-all="selectAll"
                   :on-clear="clearSelection"
                >
@@ -136,6 +118,8 @@
                            label="Draft"
                            :icon="cmsIcon('pencil-square')"
                            variant="soft"
+                           tone="neutral"
+                           size="sm"
                            :disabled="saving"
                            @click="bulkStatus('draft')"
                         />
@@ -143,64 +127,111 @@
                            label="Publish"
                            :icon="cmsIcon('check-circle')"
                            variant="soft"
+                           tone="neutral"
+                           size="sm"
                            :disabled="saving"
                            @click="bulkStatus('published')"
                         />
                      </template>
                      <KButton
-                        v-if="selected.length === 1 && canCreate"
+                        v-if="canCreate"
                         label="Duplicate"
                         :icon="cmsIcon('document-duplicate')"
                         variant="soft"
-                        :disabled="saving"
+                        tone="neutral"
+                        size="sm"
+                        :disabled="saving || selected.length !== 1"
+                        disabled-reason="Select one entry to duplicate"
                         @click="duplicateSelected"
                      />
                      <KButton
                         v-if="canDelete"
                         label="Delete"
-                        :icon="cmsIcon('trash')"
+                        icon="trash"
+                        variant="soft"
                         tone="danger"
+                        size="sm"
                         :loading="saving"
                         @click="bulkDelete"
                      />
                   </template>
                </KSelectionBar>
-               <template v-if="!selected.length">
-                  <KDropdownMenu
-                     v-if="transferItems.length"
-                     :items="transferItems"
-                     placement="bottom-end"
-                  >
-                     <KButton
-                        :icon="cmsIcon('arrows-up-down')"
-                        variant="soft"
-                        tone="neutral"
-                        :loading="exporting"
-                        aria-label="Import and export"
-                        title="Import and export"
-                     />
-                  </KDropdownMenu>
-                  <KButton v-if="canCreate" label="New entry" icon="plus" @click="openCreate" />
-               </template>
             </div>
          </div>
 
-         <CmsListFilters
-            v-if="filterKeys.length && (total || narrowed)"
-            v-model="filters"
-            :config="config"
-            :keys="filterKeys"
-            :relations="relations"
-         />
+         <template v-if="config.kind === 'page'">
+            <KSkeletonList
+               v-if="pending && !pageTree.length"
+               :rows="6"
+               :lines="2"
+               class="cms-list-loading"
+            />
+            <div v-else-if="pageTree.length" class="cms-tree" role="list" aria-label="Pages">
+               <NuxtLink
+                  v-for="(node, index) in pageTree"
+                  :key="String(node.row.id)"
+                  :to="`/cms/${name}/${node.row.id}`"
+                  class="cms-tree-row"
+                  role="listitem"
+                  :style="{
+                     paddingLeft: `${1.125 + node.depth * 1.5}rem`,
+                     '--cms-row-delay': `${Math.min(index, 14) * 24}ms`,
+                  }"
+               >
+                  <KIcon
+                     v-if="node.depth"
+                     :name="cmsIcon('arrow-turn-left-up')"
+                     class="cms-tree-branch"
+                  />
+                  <span class="cms-tree-doc">
+                     <KIcon :name="cmsIcon('document-text')" />
+                  </span>
+                  <span class="cms-tree-text">
+                     <span class="cms-tree-title">{{ node.row.label }}</span>
+                     <span class="cms-tree-path">{{ node.row.path }}</span>
+                  </span>
+                  <CmsTranslationBadges
+                     v-if="pageTranslations"
+                     :progress="pageProgress(node.row)"
+                     class="cms-tree-translations"
+                  />
+                  <span class="cms-tree-meta">{{ lastEdit(node.row.updatedAt) }}</span>
+                  <KIcon name="chevron-right" class="cms-tree-chevron" />
+               </NuxtLink>
+            </div>
+            <KEmptyState
+               v-else
+               variant="plain"
+               size="sm"
+               icon="magnifying-glass"
+               title="No matching pages"
+               class="cms-list-loading"
+            >
+               <template #actions>
+                  <KButton
+                     label="Clear search"
+                     variant="soft"
+                     tone="neutral"
+                     size="sm"
+                     @click="clearNarrowing"
+                  />
+               </template>
+            </KEmptyState>
+         </template>
 
          <KTable
-            v-if="rows.length"
+            v-else
             v-model:selected="selected"
             v-model:sort="sort"
             :selectable="selectable"
             :rows="rows"
             :columns="columns"
             :row-key="rowKey"
+            :label="config.label"
+            :loading="pending"
+            :loading-rows="Math.min(limit, 8)"
+            :bordered="false"
+            sticky-header
             @row-click="onSelect"
          >
             <template v-for="key in mediaKeys" #[`cell-${key}`]="{ row }" :key="key">
@@ -216,40 +247,43 @@
                   :at="formatDateTime(row.publishedAt)"
                />
             </template>
+            <template #empty>
+               <KEmptyState
+                  variant="plain"
+                  size="sm"
+                  icon="magnifying-glass"
+                  title="No matching entries"
+                  description="Try another search or clear the filters."
+               >
+                  <template #actions>
+                     <KButton
+                        label="Clear filters"
+                        variant="soft"
+                        tone="neutral"
+                        size="sm"
+                        @click="clearNarrowing"
+                     />
+                  </template>
+               </KEmptyState>
+            </template>
          </KTable>
 
-         <KSpinner v-else-if="status === 'pending'" block />
+         <template v-if="total" #footer>
+            <div class="cms-list-footer">
+               <KPagination
+                  v-model:page="page"
+                  v-model:page-size="pageSize"
+                  :total="total"
+                  :page-sizes="PAGE_SIZES"
+                  :disabled="pending"
+                  size="sm"
+                  class="cms-list-pagination"
+               />
+            </div>
+         </template>
+      </KCard>
 
-         <KEmptyState
-            v-else-if="narrowed"
-            :icon="cmsIcon('magnifying-glass')"
-            title="No matching entries"
-            fill
-         >
-            <template v-if="filterCount" #actions>
-               <KButton label="Clear filters" icon="x-mark" variant="soft" @click="filters = {}" />
-            </template>
-         </KEmptyState>
-
-         <KEmptyState
-            v-else
-            :icon="cmsIcon('sparkles')"
-            title="Nothing here yet"
-            description="Entries you create will show up here."
-            fill
-         >
-            <template v-if="canCreate" #actions>
-               <KButton label="New entry" icon="plus" variant="soft" @click="openCreate" />
-            </template>
-         </KEmptyState>
-
-         <KPagination
-            v-model:page="page"
-            :total="total"
-            :page-size="PAGE_SIZE"
-            :show-summary="false"
-         />
-
+      <template v-if="isCollectionKind(config)">
          <CmsEntryDrawer
             v-if="!isContent"
             v-model:open="drawerOpen"
@@ -295,15 +329,26 @@ import {
    definePageMeta,
    navigateTo,
    onMounted,
+   useRouter,
+   useState,
    ref,
    useFetch,
    useRoute,
    watch,
 } from '#imports'
-import type { MenuEntry, RowKey, TableColumn, TableSort } from '@xleddyl/443-components-vue'
+import type {
+   CommandItem,
+   MenuEntry,
+   PageSize,
+   RowKey,
+   TableColumn,
+   TableSort,
+} from '@xleddyl/443-components-vue'
 import {
+   Badge as KBadge,
    Button as KButton,
    Card as KCard,
+   CommandButton as KCommandButton,
    DropdownMenu as KDropdownMenu,
    EmptyState as KEmptyState,
    Icon as KIcon,
@@ -311,17 +356,20 @@ import {
    PageHeader as KPageHeader,
    Pagination as KPagination,
    SelectionBar as KSelectionBar,
-   Spinner as KSpinner,
+   SkeletonList as KSkeletonList,
    Table as KTable,
    routeHashValue,
    toast,
    useLeaveGuard,
+   usePageCommands,
    useRouteRecord,
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import type { CmsListFilters } from '../../shared/list-filters'
 import {
+   LIST_FILTER_PREFIX,
+   LIST_SEARCH_PARAM as CMS_LIST_SEARCH_PARAM,
    entryListFilterKeys,
    listFilterQuery,
    parseListFilters,
@@ -341,7 +389,7 @@ import {
 } from '../../shared/translations'
 import { canTransferCsv, exportFileName } from '../../shared/transfer'
 import { useCmsPermissions } from '../composables/cms-permissions'
-import { CMS_NEW_RECORD, useCmsRouteFlag } from '../composables/cms-route'
+import { CMS_NEW_RECORD, useCmsPageQuery, useCmsRouteFlag } from '../composables/cms-route'
 import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
@@ -353,7 +401,11 @@ definePageMeta({
    layout: 'cms-admin',
    middleware: 'cms-auth',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
-   key: (route) => `${route.path}${JSON.stringify(withoutListFilterQuery(route.query))}`,
+   content: 'fill',
+   key: (route) => {
+      const { [CMS_LIST_SEARCH_PARAM]: _search, ...query } = withoutListFilterQuery(route.query)
+      return `${route.path}${JSON.stringify(query)}`
+   },
 })
 
 const FORM_ID = 'cms-single-form'
@@ -392,17 +444,38 @@ type Row = Record<string, unknown>
 
 const endpoint: string = `/api/cms/admin/${name}`
 
-const PAGE_SIZE = 25
+const PAGE_SIZES: PageSize[] = [25, 50, 100]
 const page = ref(1)
-const search = ref('')
-const searchTerm = ref('')
+const pageSize = ref<PageSize>(25)
+const limit = computed(() => (typeof pageSize.value === 'number' ? pageSize.value : 100))
+const routeSearch = useCmsPageQuery(CMS_LIST_SEARCH_PARAM)
+const search = ref(routeSearch.value)
+const searchTerm = ref(search.value.trim())
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 watch(search, (value) => {
    clearTimeout(searchTimer)
    searchTimer = setTimeout(() => {
+      if (searchTerm.value === value.trim()) return
       searchTerm.value = value.trim()
+      routeSearch.value = searchTerm.value
       page.value = 1
    }, 300)
+})
+const router = useRouter()
+const listPath = route.path
+
+function onListPage() {
+   return router.currentRoute.value.path === listPath
+}
+
+watch(routeSearch, (value) => {
+   if (value === searchTerm.value || !onListPage()) return
+   search.value = value
+   searchTerm.value = value
+   page.value = 1
+})
+watch(pageSize, () => {
+   page.value = 1
 })
 
 interface ListResponse {
@@ -421,7 +494,10 @@ const filters = computed<CmsListFilters>({
    get: () => (isCollectionKind(config) ? parseListFilters(config, route.query).filters : {}),
    set: (value) => {
       void navigateTo(
-         { query: { ...withoutListFilterQuery(route.query), ...listFilterQuery(value) } },
+         {
+            query: { ...withoutListFilterQuery(route.query), ...listFilterQuery(value) },
+            hash: route.hash,
+         },
          { replace: true }
       )
    },
@@ -430,6 +506,35 @@ const filters = computed<CmsListFilters>({
 const filterQuery = computed(() => listFilterQuery(filters.value))
 const filterCount = computed(() => Object.keys(filterQuery.value).length)
 const narrowed = computed(() => !!searchTerm.value || filterCount.value > 0)
+
+const rememberedQuery = useState<Record<string, string>>(`cms-list-query-${name}`, () => ({}))
+
+watch([filterQuery, searchTerm], () => {
+   if (!onListPage()) return
+   rememberedQuery.value = {
+      ...filterQuery.value,
+      ...(searchTerm.value ? { [CMS_LIST_SEARCH_PARAM]: searchTerm.value } : {}),
+   }
+})
+
+onMounted(() => {
+   const remembered = rememberedQuery.value
+   const hasListQuery = Object.keys(route.query).some(
+      (key) => key === CMS_LIST_SEARCH_PARAM || key.startsWith(LIST_FILTER_PREFIX)
+   )
+   if (hasListQuery || !Object.keys(remembered).length || !isCollectionKind(config)) return
+   void navigateTo(
+      { query: { ...route.query, ...remembered }, hash: route.hash },
+      { replace: true }
+   )
+})
+
+function clearNarrowing() {
+   search.value = ''
+   searchTerm.value = ''
+   routeSearch.value = ''
+   filters.value = {}
+}
 
 watch(
    () => JSON.stringify(filterQuery.value),
@@ -443,8 +548,8 @@ const sortQuery = computed(() =>
 )
 
 const listQuery = computed(() => ({
-   limit: PAGE_SIZE,
-   offset: (page.value - 1) * PAGE_SIZE,
+   limit: limit.value,
+   offset: (page.value - 1) * limit.value,
    ...(searchTerm.value ? { search: searchTerm.value } : {}),
    ...sortQuery.value,
    ...filterQuery.value,
@@ -493,6 +598,10 @@ const pageTree = computed(() => {
 })
 const total = computed(() => (isList(data.value) ? data.value.total : 0))
 const relations = computed(() => (isList(data.value) ? data.value.relations ?? {} : {}))
+const pending = computed(() => status.value === 'pending')
+const firstRun = computed(
+   () => config.kind !== 'single' && !pending.value && !narrowed.value && total.value === 0
+)
 
 const reload = async () => {
    await refresh()
@@ -731,6 +840,20 @@ function openCreate() {
    }
    void openRecord(CMS_NEW_RECORD)
 }
+
+const newCommand = computed<CommandItem | null>(() =>
+   isCollectionKind(config) && canCreate.value
+      ? {
+           id: 'new-entry',
+           label: 'New entry',
+           icon: 'plus',
+           keywords: [config.label],
+           onSelect: openCreate,
+        }
+      : null
+)
+
+usePageCommands(() => (newCommand.value ? [newCommand.value] : []))
 
 function onCreated(id: string) {
    void refresh()
