@@ -4,6 +4,7 @@
       class="cms-locale-control"
       :options="options"
       size="sm"
+      :disabled="false"
       required
       aria-label="Content language"
    />
