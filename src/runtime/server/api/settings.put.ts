@@ -2,11 +2,11 @@ import { defineEventHandler, readValidatedBody } from 'h3'
 import { useDb } from '#cms-db'
 import { cms_settings } from '#cms-tables'
 import type { CmsEntrySettings } from '../../shared/index'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 import { entrySettingsSchema, requireSettingsKey } from '../utils/settings'
 
 export default defineEventHandler(async (event): Promise<CmsEntrySettings> => {
-   await requireAdmin(event)
+   await requireCmsPermission(event, 'settings.manage')
    const key = requireSettingsKey(event)
    const body = await readValidatedBody(event, entrySettingsSchema.parse)
    const value = JSON.stringify(body)

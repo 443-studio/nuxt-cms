@@ -6,9 +6,9 @@
          </template>
          <template #actions>
             <KButton label="Back" icon="arrow-left" variant="soft" @click="goBack" />
-            <KButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
+            <KButton v-if="!lock" type="submit" :form="FORM_ID" label="Save" :loading="saving" />
             <KButton
-               v-if="drafts"
+               v-if="drafts && !lock && canPublish"
                type="submit"
                :form="FORM_ID"
                :label="published ? 'Make draft' : 'Publish'"
@@ -29,6 +29,8 @@
             :loading="saving"
             :focus="focus"
             :path="pageRoute?.path"
+            :lock="lock"
+            :can-publish="canPublish"
             @submit="save"
             @error="revertStatus"
          />
@@ -60,6 +62,7 @@ import {
 import cmsConfig from '#cms-config'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
+import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
 import { errorMessage } from '../utils/ui'
@@ -141,7 +144,17 @@ if (!isNew) {
 const saving = ref(false)
 
 const snapshot = ref(JSON.stringify(formState.value))
-const dirty = computed(() => JSON.stringify(formState.value) !== snapshot.value)
+
+const { can, entryLock } = useCmsPermissions()
+const canPublish = computed(() => can(`${name}.publish`))
+const lock = computed(() =>
+   entryLock(name, config, {
+      isNew,
+      status: (JSON.parse(snapshot.value) as Record<string, unknown>).status,
+   })
+)
+
+const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
 function onBeforeUnload(event: BeforeUnloadEvent) {
    event.preventDefault()

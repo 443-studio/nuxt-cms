@@ -23,14 +23,17 @@
          :form-id="FORM_ID"
          :loading="saving"
          :footer="false"
+         :lock="lock"
+         :can-publish="canPublish"
          @submit="save"
          @error="revertStatus"
       />
 
       <template #footer>
          <KStack direction="row" justify="between" gap="sm" wrap class="cms-drawer-actions">
-            <KStack v-if="!isNew" direction="row" gap="sm">
+            <KStack v-if="!isNew && (canDelete || canCreate)" direction="row" gap="sm">
                <KButton
+                  v-if="canDelete"
                   label="Delete"
                   icon="trash"
                   variant="ghost"
@@ -39,6 +42,7 @@
                   @click="remove"
                />
                <KButton
+                  v-if="canCreate"
                   label="Duplicate"
                   :icon="cmsIcon('document-duplicate')"
                   variant="ghost"
@@ -48,9 +52,9 @@
                />
             </KStack>
             <span v-else />
-            <KStack direction="row" gap="sm">
+            <KStack v-if="!lock" direction="row" gap="sm">
                <KButton
-                  v-if="drafts"
+                  v-if="drafts && canPublish"
                   type="submit"
                   :form="FORM_ID"
                   :label="published ? 'Make draft' : 'Publish'"
@@ -85,6 +89,7 @@ import {
 import { computed, ref, watch } from '#imports'
 import { duplicateEntryValues } from '../../../shared/duplicate'
 import { useCmsConfirm } from '../../composables/cms-confirm'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
@@ -155,7 +160,22 @@ function setState(state: Record<string, unknown>) {
    snapshot.value = JSON.stringify(state)
 }
 
-const dirty = computed(() => JSON.stringify(formState.value) !== snapshot.value)
+const { can, entryLock } = useCmsPermissions()
+const canPublish = computed(() => can(`${props.collection}.publish`))
+const canCreate = computed(() => can(`${props.collection}.create`))
+const canDelete = computed(() => can(`${props.collection}.delete`))
+const lock = computed(() =>
+   loading.value
+      ? null
+      : entryLock(props.collection, props.config, {
+           isNew: isNew.value,
+           status: snapshot.value
+              ? (JSON.parse(snapshot.value) as Record<string, unknown>).status
+              : null,
+        })
+)
+
+const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
 const published = computed({
    get: () => formState.value.status === 'published',

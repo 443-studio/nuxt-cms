@@ -54,6 +54,8 @@ import { renderTypesFile } from './types-codegen'
 import { CMS_ENABLED_ENV, resolveCmsEnabled } from './enabled'
 import type { ModuleOptionsWebhook } from './webhooks-config'
 import { resolveWebhooks } from './webhooks-config'
+import type { CmsRolesInput } from './runtime/shared/roles'
+import { validateRoles } from './runtime/shared/roles'
 
 export type { CmsWebhookEventFilter, ModuleOptionsWebhook } from './webhooks-config'
 export type {
@@ -65,6 +67,7 @@ export type {
    CmsMediaAction,
    CmsMediaChange,
 } from './runtime/shared/hooks'
+export type { CmsRoleInput, CmsRolesInput } from './runtime/shared/roles'
 
 export type ModuleOptionsDatabase = { migrateOnBoot?: boolean } & (
    | { driver?: 'sqlite'; path?: string }
@@ -112,6 +115,7 @@ export interface ModuleOptions {
       component?: string
    }
    webhooks?: ModuleOptionsWebhook[]
+   roles?: CmsRolesInput
 }
 
 interface ResolvedModuleOptions {
@@ -611,6 +615,32 @@ export default defineNuxtModule<ModuleOptions>({
 
       addCmsTypeTemplates(nuxt, cmsConfig)
 
+      const roles = validateRoles(options.roles, cmsConfig)
+      if (roles.errors.length) {
+         for (const error of roles.errors) logger.error(error)
+         throw new Error(
+            `[nuxt-cms] Invalid cms.roles (${roles.errors.length} error${
+               roles.errors.length > 1 ? 's' : ''
+            })`
+         )
+      }
+      for (const warning of roles.warnings) logger.warn(`[nuxt-cms] ${warning}`)
+      const rolesTypes = resolver.resolve('./runtime/shared/roles').replace(/\\/g, '/')
+      const rolesTemplate = addTemplate({
+         filename: 'cms/roles.ts',
+         write: true,
+         getContents: () =>
+            [
+               `import type { CmsRoles } from '${rolesTypes}'`,
+               ``,
+               `const roles: CmsRoles = ${JSON.stringify(roles.roles, null, 3)}`,
+               ``,
+               `export default roles`,
+               ``,
+            ].join('\n'),
+      })
+      nuxt.options.alias['#cms-roles'] = rolesTemplate.dst
+
       const queryComposables = resolver.resolve('./runtime/app/composables/cms-query')
       const entryComposables = resolver.resolve('./runtime/app/composables/cms-entry')
       addImports([
@@ -896,7 +926,7 @@ export default defineNuxtModule<ModuleOptions>({
                   '    id?: string',
                   '    email: string',
                   '    name?: string | null',
-                  "    role?: 'superadmin' | 'admin'",
+                  '    role?: string',
                   '    firstLogin?: boolean',
                   '    passwordStamp?: string',
                   '  }',

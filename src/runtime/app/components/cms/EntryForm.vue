@@ -1,5 +1,13 @@
 <template>
-   <KForm :id="formId" ref="formRef" :form="form" :focus-on-error="false" class="cms-form">
+   <KForm
+      :id="formId"
+      ref="formRef"
+      :form="form"
+      :focus-on-error="false"
+      :disabled="lock ? true : undefined"
+      class="cms-form"
+   >
+      <KAlert v-if="lock" tone="neutral" :icon="cmsIcon('lock-closed')" :title="lock" />
       <component :is="tabbed ? KTabs : 'div'" v-bind="tabsBinding" class="cms-form-body">
          <template #[panelSlot]>
             <div class="cms-form-main">
@@ -57,10 +65,10 @@
             </div>
          </template>
       </component>
-      <KStack v-if="footer" direction="row" justify="end" gap="sm">
+      <KStack v-if="footer && !lock" direction="row" justify="end" gap="sm">
          <KButton type="submit" label="Save" :loading="loading" />
          <KButton
-            v-if="drafts"
+            v-if="drafts && canPublish"
             type="submit"
             :label="published ? 'Make draft' : 'Publish'"
             :loading="loading"
@@ -90,6 +98,7 @@ import {
 import type { FormErrors } from '@xleddyl/443-components-vue'
 import {
    Accordion as KAccordion,
+   Alert as KAlert,
    Button as KButton,
    Form as KForm,
    FormField as KFormField,
@@ -117,8 +126,10 @@ const props = withDefaults(
       footer?: boolean
       focus?: CmsSearchFocus | null
       path?: string
+      lock?: string | null
+      canPublish?: boolean
    }>(),
-   { footer: true }
+   { footer: true, lock: null, canPublish: true }
 )
 
 const state = defineModel<Record<string, unknown>>({ required: true })

@@ -45,6 +45,7 @@ export interface ImportContext {
    table: SQLiteTable
    mode: CmsImportMode
    media: MediaLookup | null
+   canPublish?: boolean
 }
 
 const META_KEYS = new Set(['id', 'createdAt', 'updatedAt'])
@@ -185,6 +186,35 @@ async function checkMedia(rows: PreparedImportRow[], context: ImportContext) {
    }
 }
 
+async function publishedIds(db: CmsDb, table: SQLiteTable, ids: string[]): Promise<Set<string>> {
+   const columns = table as unknown as Columns
+   const found = new Set<string>()
+   for (const chunk of chunks([...new Set(ids)], KEY_CHUNK)) {
+      const rows = (await db
+         .select({ id: columns.id!, status: columns.status! })
+         .from(table)
+         .where(inArray(columns.id!, chunk))) as { id: string; status: unknown }[]
+      for (const row of rows) if (row.status === 'published') found.add(String(row.id))
+   }
+   return found
+}
+
+async function checkPublish(rows: PreparedImportRow[], context: ImportContext) {
+   if (context.canPublish !== false || !context.entry.drafts) return
+   const permission = `${context.name}.publish`
+   for (const row of rows) {
+      if (row.values?.status === 'published')
+         addError(row, 'status', `Publishing needs the ${permission} permission`)
+   }
+   const updated = rows.flatMap((row) => (row.action === 'update' && row.id ? [row.id] : []))
+   if (!updated.length) return
+   const published = await publishedIds(context.db, context.table, updated)
+   for (const row of rows) {
+      if (row.action === 'update' && row.id && published.has(row.id))
+         addError(row, 'id', `Editing a published item needs the ${permission} permission`)
+   }
+}
+
 export async function checkImportRows(
    rows: PreparedImportRow[],
    context: ImportContext
@@ -193,6 +223,7 @@ export async function checkImportRows(
    await checkRelations(rows, context)
    await checkUnique(rows, context)
    await checkMedia(rows, context)
+   await checkPublish(rows, context)
    return rows
 }
 

@@ -29,6 +29,7 @@
          </KStack>
 
          <KFormField
+            v-if="canUpsert"
             label="Mode"
             :description="
                mode === 'create'
@@ -127,6 +128,7 @@ import type {
    CmsTransferFormat,
 } from '../../../shared/transfer'
 import { canTransferCsv, IMPORT_MAX_BYTES, IMPORT_MAX_ROWS } from '../../../shared/transfer'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsIcon, errorMessage } from '../../utils/ui'
 
@@ -152,6 +154,8 @@ const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ imported: [] }>()
 
 const toast = useCmsToast()
+const { can } = useCmsPermissions()
+const canUpsert = computed(() => can(`${props.collection}.update`))
 
 const csv = canTransferCsv(props.config)
 const maxSize = formatFileSize(IMPORT_MAX_BYTES)

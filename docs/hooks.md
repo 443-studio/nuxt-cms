@@ -32,7 +32,7 @@ interface CmsEntryChange {
    path: string | null                            // page path, for page entries
    status: 'draft' | 'published' | null           // status after the write, entries with drafts
    item: Record<string, unknown> | null           // saved row, admin API shape (private fields included)
-   user: { id: string | null; email: string; name: string | null; role: 'superadmin' | 'admin' }
+   user: { id: string | null; email: string; name: string | null; role: string }
    at: string                                     // ISO 8601 UTC
 }
 ```

@@ -7,18 +7,22 @@ import { MIN_PASSWORD_LENGTH } from '../../shared/index'
 import { customId } from '../utils/custom-id'
 import { mapConstraintErrors } from '../utils/db-errors'
 import { hashPassword } from '../utils/password'
-import { isSuperAdminEmail, requireSuperAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
+import { isSuperAdminEmail } from '../utils/require-admin'
+import { assertCanGrantRole } from '../utils/user-management'
 import { findUserByEmail, toAccount } from '../utils/users'
 
 const bodySchema = z.object({
    email: z.string().trim().toLowerCase().email().max(254),
    name: z.string().trim().max(120).nullish(),
    password: z.string().min(MIN_PASSWORD_LENGTH).max(256),
+   role: z.string().trim().min(1).max(64).default('admin'),
 })
 
 export default defineEventHandler(async (event): Promise<CmsAccount> => {
-   await requireSuperAdmin(event)
+   const { access } = await requireCmsPermission(event, 'users.manage')
    const body = await readValidatedBody(event, bodySchema.parse)
+   assertCanGrantRole(access, body.role)
    if (isSuperAdminEmail(event, body.email) || (await findUserByEmail(body.email))) {
       throw createError({ statusCode: 409, statusMessage: 'A user with this email already exists' })
    }
@@ -31,7 +35,7 @@ export default defineEventHandler(async (event): Promise<CmsAccount> => {
             id: customId('usr'),
             email: body.email,
             name: body.name || null,
-            role: 'admin',
+            role: body.role,
             passwordHash,
             createdAt: now,
             updatedAt: now,

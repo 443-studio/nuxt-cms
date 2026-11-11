@@ -1,7 +1,8 @@
 <template>
    <KAlert v-if="isSuperAdmin" tone="neutral" title="Environment account">
       This account signs in with the credentials of the environment variables (NUXT_CMS_ADMIN_EMAIL
-      and NUXT_CMS_ADMIN_PASSWORD). Change them there. Only this account can manage users.
+      and NUXT_CMS_ADMIN_PASSWORD). Change them there. It holds every permission and cannot be
+      removed or locked out from the panel.
    </KAlert>
 
    <template v-else>

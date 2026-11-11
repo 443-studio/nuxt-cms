@@ -19,22 +19,24 @@ import {
    manyToManyStatements,
    splitRelationValues,
 } from '../utils/relations'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, assertPublishAllowed, requireCmsAccess } from '../utils/permissions'
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({ statusCode: 405, statusMessage: 'Single objects are updated with PUT' })
    }
+   assertCmsPermission(access, `${name}.create`)
 
    const body = (await readValidatedBody(event, buildValidator(entry).parse)) as Record<
       string,
       unknown
    >
    const { values, lists } = splitRelationValues(entry, encodeColumnValues(entry, body))
-   await assertRelationTargets(entry, lists)
    if (entry.drafts) values.status ??= 'draft'
+   assertPublishAllowed(access, name, entry, null, values.status)
+   await assertRelationTargets(entry, lists)
    withContentDefaults(entry, values)
    const id = customId(entry.id)
    values.id = id

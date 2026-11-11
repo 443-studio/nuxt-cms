@@ -8,7 +8,7 @@ import { objectKeySchema } from '../../shared/validation'
 import { useMediaStorage } from '../utils/media'
 import { keyChunks } from '../utils/media-folders'
 import { emitMediaChange } from '../utils/hooks'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const bodySchema = z.object({
    keys: z.array(objectKeySchema).min(1).max(1000),
@@ -16,7 +16,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.write')
    useMediaStorage(event)
    const { keys, folder } = await readValidatedBody(event, bodySchema.parse)
    const target = normalizeMediaFolder(folder)

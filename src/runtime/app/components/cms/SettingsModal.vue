@@ -34,12 +34,12 @@
          <CmsSettingsUsers v-model:creating="usersCreating" />
       </template>
 
-      <template v-for="item in entries" :key="item.key" #[`actions-${item.key}`]>
+      <template v-for="item in visibleEntries" :key="item.key" #[`actions-${item.key}`]>
          <span class="cms-settings-status" :class="`is-${entryStatus}`" aria-live="polite">
             {{ STATUS_LABELS[entryStatus] }}
          </span>
       </template>
-      <template v-for="item in entries" :key="item.key" #[`section-${item.key}`]>
+      <template v-for="item in visibleEntries" :key="item.key" #[`section-${item.key}`]>
          <CmsSettingsEntry v-model:status="entryStatus" :name="item.name" />
       </template>
    </KSettingsModal>
@@ -56,6 +56,7 @@ import {
 import { computed, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { useCmsAccount } from '../../composables/cms-account'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { cmsIcon } from '../../utils/ui'
 
 type EntryStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -83,7 +84,8 @@ const STATUS_LABELS: Record<EntryStatus, string> = {
 
 const ENTRY_PREFIX = 'entry:'
 
-const { isSuperAdmin, displayName, email } = useCmsAccount()
+const { displayName, email } = useCmsAccount()
+const { can, role, roleLabel } = useCmsPermissions()
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -100,8 +102,12 @@ const entries = Object.entries(cmsConfig as Record<string, CmsEntry>).map(([name
 const account = computed(() => ({
    name: displayName.value,
    email: email.value,
-   role: isSuperAdmin.value ? 'Super admin' : 'Admin',
+   role: roleLabel(role.value),
 }))
+
+const visibleEntries = computed(() =>
+   can('settings.manage') ? entries.filter((item) => can(`${item.name}.read`)) : []
+)
 
 const sections = computed<SettingsModalSection[]>(() => [
    {
@@ -111,17 +117,17 @@ const sections = computed<SettingsModalSection[]>(() => [
       description: 'Your profile and your password.',
    },
    { id: 'appearance', label: 'Appearance', icon: cmsIcon('swatch') },
-   ...(isSuperAdmin.value
+   ...(can('users.manage')
       ? [
            {
               id: 'users',
               label: 'Users',
               icon: cmsIcon('users'),
-              description: 'Users can do everything in the panel, except manage users.',
+              description: 'Accounts that can sign in to the panel, and what their role allows.',
            },
         ]
       : []),
-   ...entries.map((item) => ({
+   ...visibleEntries.value.map((item) => ({
       id: item.key,
       label: item.label,
       icon: cmsIcon(item.icon),

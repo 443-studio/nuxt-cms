@@ -24,10 +24,16 @@
       <template #status>
          <CmsStatusBadge :published="published" :scheduled="scheduled" :at="scheduledAt" />
          <span v-if="dirty" class="cms-editor-dirty">Unsaved changes</span>
+         <KBadge v-if="lock" size="sm" variant="outline" label="Read only" :title="lock" />
       </template>
 
       <template #actions>
-         <KPopover v-model:open="scheduleOpen" placement="bottom-end" label="Schedule">
+         <KPopover
+            v-if="!lock && canPublish"
+            v-model:open="scheduleOpen"
+            placement="bottom-end"
+            label="Schedule"
+         >
             <KButton
                :icon="cmsIcon('clock')"
                size="sm"
@@ -64,6 +70,7 @@
             </template>
          </KPopover>
          <KButton
+            v-if="!lock"
             label="Save"
             size="sm"
             variant="soft"
@@ -72,6 +79,7 @@
             @click="save()"
          />
          <KButton
+            v-if="!lock && canPublish"
             :label="published ? 'Unpublish' : 'Publish'"
             size="sm"
             :variant="published ? 'soft' : 'solid'"
@@ -79,14 +87,7 @@
             :loading="saving"
             @click="save(published ? 'draft' : 'published')"
          />
-         <KDropdownMenu
-            v-if="!isNew"
-            :items="[
-               { label: 'Duplicate', onSelect: duplicate },
-               { label: 'Delete', onSelect: remove },
-            ]"
-            placement="bottom-end"
-         >
+         <KDropdownMenu v-if="!isNew && moreItems.length" :items="moreItems" placement="bottom-end">
             <KButton
                :icon="cmsIcon('ellipsis-horizontal')"
                size="sm"
@@ -122,7 +123,9 @@ import {
    useRoute,
    watch,
 } from '#imports'
+import type { MenuEntry } from '@xleddyl/443-components-vue'
 import {
+   Badge as KBadge,
    Button as KButton,
    DropdownMenu as KDropdownMenu,
    FormField as KFormField,
@@ -133,6 +136,7 @@ import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
+import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
@@ -196,7 +200,21 @@ if (sourceId) {
 }
 
 const snapshot = ref(JSON.stringify(duplicateOf ? blankState : formState.value))
-const dirty = computed(() => JSON.stringify(formState.value) !== snapshot.value)
+
+const { can, entryLock } = useCmsPermissions()
+const canPublish = computed(() => can(`${name}.publish`))
+const lock = computed(() =>
+   entryLock(name, config, {
+      isNew,
+      status: (JSON.parse(snapshot.value) as Record<string, unknown>).status,
+   })
+)
+const moreItems = computed<MenuEntry[]>(() => [
+   ...(can(`${name}.create`) ? [{ label: 'Duplicate', onSelect: duplicate }] : []),
+   ...(can(`${name}.delete`) ? [{ label: 'Delete', onSelect: remove }] : []),
+])
+
+const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
 const titleText = computed(() => {
    const value = formState.value[CONTENT_TITLE_FIELD]

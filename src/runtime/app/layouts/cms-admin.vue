@@ -94,11 +94,13 @@ import type { CmsSearchHit, CmsSearchKind, CmsSearchResponse } from '../../share
 import { CMS_SEARCH_MIN_LENGTH, normalizeSearchQuery } from '../../shared/search'
 import { useCmsTheme } from '../composables/cms-theme'
 import { useCmsAccount } from '../composables/cms-account'
+import { useCmsPermissions } from '../composables/cms-permissions'
 import { loadCmsSettings } from '../composables/cms-settings'
 import { cmsIcon } from '../utils/ui'
 
 const route = useRoute()
 const { email, displayName } = useCmsAccount()
+const { can } = useCmsPermissions()
 const theme = useCmsTheme()
 provideTheme(theme)
 const navOpen = ref(false)
@@ -115,22 +117,26 @@ const GROUPS: { kind: CmsEntryKind; title: string; icon: string }[] = [
 
 const entries = Object.entries(cmsConfig as CmsConfig)
 
-const navigation: NavSection[] = [
-   ...GROUPS.map((group) => ({
-      label: group.title,
-      items: entries
-         .filter(([, entry]) => entry.kind === group.kind)
-         .map(([name, entry]) => ({
-            label: entry.label,
-            to: `/cms/${name}`,
-            icon: cmsIcon(entry.icon ?? group.icon),
-         })),
-   })),
-   {
-      label: 'Library',
-      items: [{ label: 'Media', to: '/cms/media', icon: cmsIcon('photo') }],
-   },
-].filter((section) => section.items.length)
+const navigation = computed<NavSection[]>(() =>
+   [
+      ...GROUPS.map((group) => ({
+         label: group.title,
+         items: entries
+            .filter(([name, entry]) => entry.kind === group.kind && can(`${name}.read`))
+            .map(([name, entry]) => ({
+               label: entry.label,
+               to: `/cms/${name}`,
+               icon: cmsIcon(entry.icon ?? group.icon),
+            })),
+      })),
+      {
+         label: 'Library',
+         items: can('media.read')
+            ? [{ label: 'Media', to: '/cms/media', icon: cmsIcon('photo') }]
+            : [],
+      },
+   ].filter((section) => section.items.length)
+)
 
 const SEARCH_DEBOUNCE_MS = 180
 

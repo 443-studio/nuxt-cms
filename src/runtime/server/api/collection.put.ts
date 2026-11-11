@@ -20,14 +20,15 @@ import {
    manyToManyStatements,
    splitRelationValues,
 } from '../utils/relations'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (entry.kind !== 'single') {
       throw createError({ statusCode: 405, statusMessage: 'Collections are updated with PUT /:id' })
    }
+   assertCmsPermission(access, `${name}.update`)
 
    const body = await readValidatedBody(event, buildValidator(entry).parse)
    const { values, lists } = splitRelationValues(

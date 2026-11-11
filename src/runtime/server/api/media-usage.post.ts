@@ -4,13 +4,13 @@ import type { MediaUsage } from '../../shared/index'
 import { objectKeySchema } from '../../shared/validation'
 import { useMediaConfig } from '../utils/media'
 import { loadMediaUsage } from '../utils/media-usage'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const bodySchema = z.object({ keys: z.array(objectKeySchema).min(1).max(1000) })
 
 export default defineEventHandler(
    async (event): Promise<{ usage: Record<string, MediaUsage[]> }> => {
-      await requireAdmin(event)
+      await requireCmsPermission(event, 'media.read')
       useMediaConfig(event)
       const { keys } = await readValidatedBody(event, bodySchema.parse)
       return { usage: await loadMediaUsage([...new Set(keys)]) }

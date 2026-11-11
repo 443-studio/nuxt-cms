@@ -10,7 +10,7 @@ import { objectKeySchema } from '../../shared/validation'
 import { useMediaIndex } from '../utils/media-index'
 import { assertMediaWritable, toMediaItem, useMediaConfig } from '../utils/media'
 import { emitMediaChange } from '../utils/hooks'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const bodySchema = z.object({
    key: objectKeySchema,
@@ -19,7 +19,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event): Promise<MediaItem> => {
-   const user = await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.write')
    const { media, publicUrl } = useMediaConfig(event)
    const body = await readValidatedBody(event, bodySchema.parse)
 

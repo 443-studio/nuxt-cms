@@ -4,7 +4,7 @@ import { isMediaFolderMarker, normalizeMediaFolder } from '../../shared/index'
 import { useMediaStorage } from '../utils/media'
 import { deleteMediaRows, mediaRowsInFolder } from '../utils/media-folders'
 import { emitMediaChange } from '../utils/hooks'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const querySchema = z.object({
    name: z.string().min(1).max(255),
@@ -12,7 +12,7 @@ const querySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.delete')
    const { store } = useMediaStorage(event)
    const { name, recursive } = await getValidatedQuery(event, querySchema.parse)
 

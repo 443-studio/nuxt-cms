@@ -4,12 +4,12 @@ import { normalizeMediaFolder } from '../../shared/index'
 import { useMediaStorage } from '../utils/media'
 import { writeMediaFolderMarker } from '../utils/media-folders'
 import { emitMediaChange } from '../utils/hooks'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const bodySchema = z.object({ name: z.string().min(1).max(255) })
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.write')
    const { store } = useMediaStorage(event)
    const { name } = await readValidatedBody(event, bodySchema.parse)
 

@@ -49,6 +49,14 @@
                <KInput v-model="draft.values.name" placeholder="Optional" autocomplete="off" />
             </KFormField>
          </KGrid>
+         <KFormField
+            label="Role"
+            name="role"
+            required
+            :description="roleDescription(String(draft.values.role ?? ''))"
+         >
+            <KSelect v-model="draft.values.role" :options="grantableOptions" />
+         </KFormField>
          <KFormField label="Password" name="password" required>
             <KPasswordInput
                v-model="draft.values.password"
@@ -65,7 +73,9 @@
                label="Create user"
                size="sm"
                :disabled="
-                  !draft.values.email || (draft.values.password ?? '').length < MIN_PASSWORD_LENGTH
+                  !draft.values.email ||
+                  !draft.values.role ||
+                  (draft.values.password ?? '').length < MIN_PASSWORD_LENGTH
                "
             />
          </KStack>
@@ -84,7 +94,23 @@
                   {{ account.name ? `${account.email} · ` : '' }}{{ lastLogin(account) }}
                </span>
             </div>
-            <KStack direction="row" gap="none">
+            <KSelect
+               v-if="canManage(account.role) && account.id !== user?.id"
+               :model-value="account.role"
+               :options="roleOptionsFor(account)"
+               size="sm"
+               :invalid="!isKnownRole(account.role)"
+               :aria-label="`Role of ${account.email}`"
+               class="cms-user-role"
+               @update:model-value="(role) => role && changeRole(account, String(role))"
+            />
+            <KBadge
+               v-else
+               :tone="isKnownRole(account.role) ? 'neutral' : 'warning'"
+               :label="roleText(account.role)"
+               :title="isKnownRole(account.role) ? undefined : UNKNOWN_ROLE_HINT"
+            />
+            <KStack v-if="canManage(account.role)" direction="row" gap="none">
                <KButton
                   :icon="cmsIcon('key')"
                   variant="ghost"
@@ -95,6 +121,7 @@
                   @click="startReset(account)"
                />
                <KButton
+                  v-if="account.id !== user?.id"
                   :icon="cmsIcon('trash')"
                   variant="ghost"
                   tone="danger"
@@ -148,6 +175,7 @@ import { MIN_PASSWORD_LENGTH } from '#nuxt-cms'
 import {
    Alert as KAlert,
    Avatar as KAvatar,
+   Badge as KBadge,
    Button as KButton,
    Card as KCard,
    CopyButton as KCopyButton,
@@ -158,12 +186,14 @@ import {
    Grid as KGrid,
    Input as KInput,
    PasswordInput as KPasswordInput,
+   Select as KSelect,
    Spinner as KSpinner,
    Stack as KStack,
    useForm,
 } from '@xleddyl/443-components-vue'
-import { onMounted, ref, watch } from '#imports'
-import { generatePassword } from '../../composables/cms-account'
+import { computed, onMounted, ref, watch } from '#imports'
+import { generatePassword, useCmsAccount } from '../../composables/cms-account'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
@@ -173,6 +203,50 @@ const toast = useCmsToast()
 const confirmAction = useCmsConfirm()
 
 const creating = defineModel<boolean>('creating', { default: false })
+
+const UNKNOWN_ROLE_HINT =
+   'This role is not in cms.roles anymore, so the account has no access. Pick a new role.'
+
+const { user } = useCmsAccount()
+const { roleOptions, roleLabel, canGrant, canManage } = useCmsPermissions()
+
+const grantableOptions = computed(() =>
+   roleOptions
+      .filter((option) => canGrant(option.key))
+      .map((option) => ({ value: option.key, label: option.label }))
+)
+
+function isKnownRole(role: string) {
+   return roleOptions.some((option) => option.key === role)
+}
+
+function roleText(role: string) {
+   return isKnownRole(role) ? roleLabel(role) : `Unknown role: ${role}`
+}
+
+function roleDescription(role: string) {
+   return roleOptions.find((option) => option.key === role)?.description ?? undefined
+}
+
+function roleOptionsFor(account: CmsAccount) {
+   const options = grantableOptions.value
+   if (options.some((option) => option.value === account.role)) return options
+   return [{ value: account.role, label: `${account.role} (removed)`, disabled: true }, ...options]
+}
+
+async function changeRole(account: CmsAccount, role: string) {
+   if (role === account.role) return
+   try {
+      const updated = await cmsApi<CmsAccount>(`/api/cms/users/${account.id}`, {
+         method: 'PUT',
+         body: { role },
+      })
+      users.value = users.value.map((u) => (u.id === updated.id ? updated : u))
+      toast.add({ title: `${updated.email} is now ${roleLabel(updated.role)}`, color: 'success' })
+   } catch (error) {
+      toast.add({ title: 'Role not changed', description: errorMessage(error), color: 'error' })
+   }
+}
 
 const users = ref<CmsAccount[]>([])
 const loading = ref(true)
@@ -203,6 +277,7 @@ const draft = useForm({
    schema: {
       email: { initial: (): string | number | null | undefined => '' },
       name: { initial: (): string | number | null | undefined => '' },
+      role: { initial: (): string | number | null | undefined => '' },
       password: { initial: (): string | null | undefined => '' },
    },
    onSubmit: create,
@@ -213,7 +288,12 @@ watch(
    (value) => {
       if (!value) return
       created.value = null
-      draft.reset({ email: '', name: '', password: generatePassword() })
+      draft.reset({
+         email: '',
+         name: '',
+         role: grantableOptions.value[0]?.value ?? '',
+         password: generatePassword(),
+      })
    },
    { immediate: true }
 )
@@ -230,6 +310,7 @@ async function create() {
          body: {
             email: String(draft.values.email ?? ''),
             name: draft.values.name ? String(draft.values.name) : null,
+            role: String(draft.values.role ?? ''),
             password,
          },
       })

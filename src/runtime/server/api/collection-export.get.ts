@@ -13,7 +13,7 @@ import {
 import { listOrderBy, listWhere, readListFilters } from '../utils/list-query'
 import { decodeRows, getContentI18n, getRegistryEntry } from '../utils/registry'
 import { attachManyToMany } from '../utils/relations'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
 import { chunks, KEY_CHUNK } from '../utils/write-statements'
 
 const querySchema = z.object({
@@ -24,11 +24,12 @@ const querySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const { access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({ statusCode: 405, statusMessage: 'Only collections can be exported' })
    }
+   assertCmsPermission(access, `${name}.export`)
    const { format, search, sort, order } = await getValidatedQuery(event, querySchema.parse)
    if (format === 'csv' && !canTransferCsv(entry)) {
       throw createError({

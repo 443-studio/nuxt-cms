@@ -35,6 +35,7 @@ cms: {
       component: '',                // default wrapper component for content previews
    },
    webhooks: [],                    // [{ name, url?, secret?, events?, timeout? }], see Hooks & webhooks
+   roles: {},                       // { editor: { label?, description?, can: [...] } }, see Roles
 }
 ```
 
@@ -215,6 +216,48 @@ URLs called with a signed JSON `POST` after each admin write: `name` (camelCase,
 and `timeout` (ms, default 5000). The URL and the secret can be set at runtime with
 `NUXT_CMS_WEBHOOKS_<NAME>_URL` / `NUXT_CMS_WEBHOOKS_<NAME>_SECRET`. The build validates every
 webhook. See [Hooks & webhooks](hooks.md).
+
+### `roles`
+
+Roles for the admin accounts, declared in code. Each key is a role (a lowercase letter first, then
+letters, digits, `-` or `_`) with an optional `label` (defaults to the key in sentence case), an
+optional `description` (shown in the role picker) and `can`, the list of permissions:
+
+```ts
+cms: {
+   roles: {
+      editor: {
+         label: 'Editor',
+         description: 'Writes the news, drafts events.',
+         can: ['news.*', 'events.read', 'events.create', 'events.update', '*.read', 'media.write'],
+      },
+   },
+}
+```
+
+A permission is `<scope>.<action>`:
+
+| Scope | Actions |
+| --- | --- |
+| an entry key (collection, content) | `read`, `create`, `update`, `delete`, `publish` (only with drafts), `import`, `export` |
+| an entry key (single, page) | `read`, `update` |
+| `media` | `read`, `write` (upload, alt text, folders, move), `delete` |
+| `users` | `manage` (Settings → Users) |
+| `settings` | `manage` (column and layout overrides in Settings) |
+
+`*` replaces a whole segment: `news.*` is every action on `news`, `*.read` reads everything, and
+`*` alone is every permission. Every action implies `read` on the same scope (`news.update` lets
+the role open `news`, `media.write` lets it browse the library). Roles live in the code, the
+database only stores the role key of each account in `cms_users.role`.
+
+Two roles are built in and cannot be redefined: `admin` (every permission except `users.manage`,
+the role of the accounts created before roles existed and the default of a new account) and
+`superadmin` (the env account, every permission). An account whose role is removed from the config
+keeps its row but gets no access, and the panel says so. The build fails on an unknown entry,
+scope or action (`categories.publish` on an entry without drafts, `home.delete` on a single), on a
+reserved or malformed role key and on unknown keys. It warns when a role edits an entry with media
+fields without `media.read`, or with a relation without `read` on the target, because the pickers
+of the form need them. See [Roles and permissions](admin.md#roles-and-permissions).
 
 ## Environment variables
 

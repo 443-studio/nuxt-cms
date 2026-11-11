@@ -1211,3 +1211,11 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
 
 export * from './layout'
 export * from './users'
+export type {
+   CmsAccess,
+   CmsRole,
+   CmsRoleInput,
+   CmsRoleOption,
+   CmsRoles,
+   CmsRolesInput,
+} from './roles'

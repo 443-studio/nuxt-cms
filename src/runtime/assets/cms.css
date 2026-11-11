@@ -816,6 +816,11 @@ body:has(.cms-scope) {
    color: var(--k-text-dimmed);
 }
 
+.cms-user-role {
+   flex: none;
+   width: 10rem;
+}
+
 .cms-user-reset {
    padding: 0 0.75rem 0.875rem;
 }

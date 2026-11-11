@@ -27,20 +27,15 @@ export async function requireAdmin(event: H3Event): Promise<CmsSessionUser> {
    if (!row || user.passwordStamp !== passwordStamp(row.passwordHash)) {
       throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
    }
+   if (row.role === 'superadmin') {
+      throw createError({ statusCode: 403, statusMessage: 'Not authorized' })
+   }
    return {
       id: row.id,
       email: row.email,
       name: row.name ?? null,
-      role: 'admin',
+      role: row.role,
       firstLogin: !!row.mustChangePassword,
       passwordStamp: user.passwordStamp,
    }
-}
-
-export async function requireSuperAdmin(event: H3Event): Promise<CmsSessionUser> {
-   const user = await requireAdmin(event)
-   if (user.role !== 'superadmin') {
-      throw createError({ statusCode: 403, statusMessage: 'Only the super admin can manage users' })
-   }
-   return user
 }

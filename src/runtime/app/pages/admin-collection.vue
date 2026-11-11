@@ -8,7 +8,7 @@
          <template v-if="config.kind !== 'single' && total" #badge>
             <span :key="total" class="cms-count">{{ total }}</span>
          </template>
-         <template v-if="config.kind === 'single'" #actions>
+         <template v-if="config.kind === 'single' && !singleLock" #actions>
             <KButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
          </template>
       </KPageHeader>
@@ -38,6 +38,7 @@
             :form-id="FORM_ID"
             :loading="saving"
             :focus="focus"
+            :lock="singleLock"
             @submit="saveSingle"
          />
       </KCard>
@@ -122,7 +123,7 @@
                   :on-clear="clearSelection"
                >
                   <template #actions>
-                     <template v-if="drafts">
+                     <template v-if="canBulkStatus">
                         <KButton
                            label="Draft"
                            :icon="cmsIcon('pencil-square')"
@@ -139,7 +140,7 @@
                         />
                      </template>
                      <KButton
-                        v-if="selected.length === 1"
+                        v-if="selected.length === 1 && canCreate"
                         label="Duplicate"
                         :icon="cmsIcon('document-duplicate')"
                         variant="soft"
@@ -147,6 +148,7 @@
                         @click="duplicateSelected"
                      />
                      <KButton
+                        v-if="canDelete"
                         label="Delete"
                         :icon="cmsIcon('trash')"
                         tone="danger"
@@ -156,7 +158,11 @@
                   </template>
                </KSelectionBar>
                <template v-if="!selected.length">
-                  <KDropdownMenu :items="transferItems" placement="bottom-end">
+                  <KDropdownMenu
+                     v-if="transferItems.length"
+                     :items="transferItems"
+                     placement="bottom-end"
+                  >
                      <KButton
                         :icon="cmsIcon('arrows-up-down')"
                         variant="soft"
@@ -166,7 +172,7 @@
                         title="Import and export"
                      />
                   </KDropdownMenu>
-                  <KButton label="New entry" icon="plus" @click="openCreate" />
+                  <KButton v-if="canCreate" label="New entry" icon="plus" @click="openCreate" />
                </template>
             </div>
          </div>
@@ -183,7 +189,7 @@
             v-if="rows.length"
             v-model:selected="selected"
             v-model:sort="sort"
-            selectable
+            :selectable="selectable"
             :rows="rows"
             :columns="columns"
             :row-key="rowKey"
@@ -221,7 +227,7 @@
             description="Entries you create will show up here."
             fill
          >
-            <template #actions>
+            <template v-if="canCreate" #actions>
                <KButton label="New entry" icon="plus" variant="soft" @click="openCreate" />
             </template>
          </KEmptyState>
@@ -304,6 +310,7 @@ import { readSearchFocus } from '../../shared/search'
 import type { CmsTransferFormat } from '../../shared/transfer'
 import { canTransferCsv, exportFileName } from '../../shared/transfer'
 import { useCmsConfirm } from '../composables/cms-confirm'
+import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
 import { useCmsToast } from '../composables/cms-toast'
@@ -340,6 +347,15 @@ const mediaKeys = fieldKeys.filter((key) => config.fields[key]!.type === 'media'
 const isContent = config.kind === 'content'
 const drafts = isCollectionKind(config) && !!config.drafts
 const formKeys = drafts ? [...fieldKeys, 'status'] : fieldKeys
+
+const { can, entryLock } = useCmsPermissions()
+const canCreate = computed(() => can(`${name}.create`))
+const canDelete = computed(() => can(`${name}.delete`))
+const canBulkStatus = computed(() => drafts && can(`${name}.update`) && can(`${name}.publish`))
+const selectable = computed(() => canCreate.value || canDelete.value || canBulkStatus.value)
+const singleLock = computed(() =>
+   config.kind === 'single' ? entryLock(name, config, { isNew: false }) : null
+)
 
 type Row = Record<string, unknown>
 
@@ -691,14 +707,19 @@ const transferItems = computed<MenuEntry[]>(() => {
          onSelect: () => void exportEntries(format, narrow),
       }))
    return [
-      ...(narrowed.value ? exports(true) : []),
-      ...exports(false),
-      {
-         label: 'Import from file…',
-         onSelect: () => {
-            importOpen.value = true
-         },
-      },
+      ...(can(`${name}.export`)
+         ? [...(narrowed.value ? exports(true) : []), ...exports(false)]
+         : []),
+      ...(can(`${name}.import`) && canCreate.value
+         ? [
+              {
+                 label: 'Import from file…',
+                 onSelect: () => {
+                    importOpen.value = true
+                 },
+              },
+           ]
+         : []),
    ]
 })
 

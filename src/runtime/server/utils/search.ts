@@ -46,6 +46,7 @@ export interface CmsSearchOptions {
    tables: Record<string, unknown>
    i18n: CmsI18n
    query: string
+   media?: boolean
 }
 
 type Row = Record<string, unknown>
@@ -297,6 +298,7 @@ function entryHits(
 }
 
 async function mediaHits(context: SearchContext): Promise<CmsSearchHit[]> {
+   if (context.media === false) return []
    const table = context.tables.cms_media as SQLiteTable | undefined
    const columns = table ? columnsOf(table) : undefined
    if (!table || !columns?.alt || !columns.key || !columns.folder) return []

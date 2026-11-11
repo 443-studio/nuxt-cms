@@ -71,11 +71,12 @@
             <KFormField label="Alt text">
                <KInput
                   v-model="alt"
+                  :disabled="!canEdit"
                   placeholder="Describe the image for screen readers"
                   @keydown.enter.prevent="save"
                />
             </KFormField>
-            <KFormField v-if="!readOnly" label="Folder">
+            <KFormField v-if="!readOnly && canEdit" label="Folder">
                <CmsMediaFolderPicker v-model="folder" :folders="folders" />
             </KFormField>
          </KStack>
@@ -106,7 +107,7 @@
 
       <template #footer>
          <KButton
-            v-if="!readOnly"
+            v-if="!readOnly && canDelete"
             label="Delete"
             :icon="cmsIcon('trash')"
             variant="ghost"
@@ -116,7 +117,13 @@
          <span v-else />
          <KStack direction="row" gap="sm" align="center">
             <KButton label="Close" variant="ghost" tone="neutral" @click="emit('close')" />
-            <KButton label="Save" :loading="saving" :disabled="!dirty" @click="save" />
+            <KButton
+               v-if="canEdit"
+               label="Save"
+               :loading="saving"
+               :disabled="!dirty"
+               @click="save"
+            />
          </KStack>
       </template>
    </KDrawer>
@@ -141,11 +148,16 @@ import type { CmsMediaLibrary } from '../../composables/cms-media-library'
 import { usageLink } from '../../composables/cms-media-library'
 import { cmsIcon } from '../../utils/ui'
 
-const props = defineProps<{
-   item: MediaItem | null
-   library: CmsMediaLibrary
-   readOnly: boolean
-}>()
+const props = withDefaults(
+   defineProps<{
+      item: MediaItem | null
+      library: CmsMediaLibrary
+      readOnly: boolean
+      canEdit?: boolean
+      canDelete?: boolean
+   }>(),
+   { canEdit: true, canDelete: true }
+)
 
 const emit = defineEmits<{ close: []; delete: [item: MediaItem] }>()
 

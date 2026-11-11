@@ -16,7 +16,7 @@ const state = vi.hoisted(() => ({
    db: null as unknown,
    schema: {} as Record<string, unknown>,
    config: {} as Record<string, unknown>,
-   user: null as { email: string } | null,
+   user: null as { email: string; id?: string; passwordStamp?: string } | null,
 }))
 
 vi.mock('#imports', () => ({
@@ -75,6 +75,16 @@ vi.mock('#cms-tables', () => ({
 vi.mock('#cms-config', () => ({
    get default() {
       return state.config
+   },
+}))
+
+vi.mock('#cms-roles', () => ({
+   default: {
+      writer: {
+         label: 'Writer',
+         description: null,
+         can: ['events.read', 'events.create', 'events.update', 'events.import'],
+      },
    },
 }))
 
@@ -430,6 +440,37 @@ describe('import endpoint', () => {
          poster: 'library/autumn.webp',
          category: 'cat_lake',
       })
+   })
+
+   it('refuses published rows to a role without publish', async () => {
+      await insert('cms_users', {
+         id: 'usr_writer',
+         email: 'writer@example.com',
+         role: 'writer',
+         passwordHash: 'hash-0123456789abcdef',
+         mustChangePassword: false,
+      })
+      state.user = {
+         id: 'usr_writer',
+         email: 'writer@example.com',
+         passwordStamp: '0123456789abcdef',
+      }
+      const result = await preview(
+         '/api/cms/import/events?format=json&mode=upsert',
+         JSON.stringify([
+            { title: 'Draft row', slug: 'draft-row' },
+            { title: 'Live row', slug: 'live-row', status: 'published' },
+            { id: 'ev_1', title: 'Spring fair', slug: 'spring-fair' },
+            { id: 'ev_2', title: 'Night fishing', slug: 'night-fishing' },
+         ])
+      )
+      expect(result.rows.map((row) => row.errors.map((issue) => issue.message))).toEqual([
+         [],
+         ['Publishing needs the events.publish permission'],
+         ['Editing a published item needs the events.publish permission'],
+         [],
+      ])
+      expect((await post('/api/cms/import/tags?format=json', '[]')).status).toBe(403)
    })
 
    it('updates by id in upsert mode and keeps ids', async () => {

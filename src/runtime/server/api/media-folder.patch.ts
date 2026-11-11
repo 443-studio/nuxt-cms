@@ -15,7 +15,7 @@ import {
 import { useMediaStorage } from '../utils/media'
 import { mediaRowsInFolder } from '../utils/media-folders'
 import { emitMediaChange } from '../utils/hooks'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 import type { WriteDb } from '../utils/write-statements'
 import { mediaFolderRenameStatements, planMediaFolderRename } from '../utils/write-statements'
 
@@ -32,7 +32,7 @@ function tooDeep() {
 }
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.write')
    const { store } = useMediaStorage(event)
    const body = await readValidatedBody(event, bodySchema.parse)
 

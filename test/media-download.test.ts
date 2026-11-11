@@ -28,8 +28,8 @@ vi.mock('#cms-db', () => ({
 
 vi.mock('drizzle-orm', () => ({ eq: (_column: unknown, key: string) => key }))
 
-vi.mock('../src/runtime/server/utils/require-admin', () => ({
-   requireAdmin: async () => {
+vi.mock('../src/runtime/server/utils/permissions', () => ({
+   requireCmsPermission: async () => {
       if (!state.admin)
          throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
    },

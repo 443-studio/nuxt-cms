@@ -26,7 +26,8 @@ import {
 } from '../utils/import'
 import { mediaLookup } from '../utils/media-check'
 import { getContentI18n, getRegistryEntry } from '../utils/registry'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
+import { can } from '../../shared/roles'
 
 const querySchema = z.object({
    format: z.enum(TRANSFER_FORMATS),
@@ -42,12 +43,15 @@ function tooLarge(): never {
 }
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({ statusCode: 405, statusMessage: 'Only collections can be imported' })
    }
+   assertCmsPermission(access, `${name}.import`)
    const { format, mode, dryRun } = await getValidatedQuery(event, querySchema.parse)
+   assertCmsPermission(access, `${name}.create`)
+   if (mode === 'upsert') assertCmsPermission(access, `${name}.update`)
    if (format === 'csv' && !canTransferCsv(entry)) {
       throw createError({
          statusCode: 400,
@@ -69,6 +73,7 @@ export default defineEventHandler(async (event) => {
       table,
       mode,
       media: source.errors.length ? null : await mediaLookup(),
+      canPublish: can(access, `${name}.publish`),
    })
    const preview = importPreview(entry, rows, {
       format,

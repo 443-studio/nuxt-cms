@@ -64,6 +64,7 @@
          <KBreadcrumbs :items="crumbs" :separator="cmsIcon('chevron-right')" label="Folder" />
          <KStack v-if="folder && canManage" direction="row" gap="xs" align="center">
             <KButton
+               v-if="canMove"
                label="Rename"
                :icon="cmsIcon('pencil-square')"
                variant="ghost"
@@ -72,6 +73,7 @@
                @click="openRename"
             />
             <KButton
+               v-if="canDeleteMedia"
                label="Delete folder"
                :icon="cmsIcon('trash')"
                variant="ghost"
@@ -99,6 +101,7 @@
       >
          <template #actions>
             <KButton
+               v-if="canMove"
                label="Move to…"
                :icon="cmsIcon('folder-arrow-down')"
                variant="soft"
@@ -106,6 +109,7 @@
                @click="openMove"
             />
             <KButton
+               v-if="canDeleteMedia"
                label="Delete"
                :icon="cmsIcon('trash')"
                variant="soft"
@@ -203,7 +207,7 @@
                   type="button"
                   class="cms-media-folder-tile"
                   :class="{ 'is-drop': dropTarget === targetId(child) }"
-                  :draggable="canManage"
+                  :draggable="canMove"
                   :title="child"
                   @click="openFolder(child)"
                   @dragstart="onFolderDragStart($event, child)"
@@ -255,7 +259,7 @@
                   tabindex="0"
                   class="cms-media-tile is-selectable"
                   :class="{ 'is-dragging': draggingKeys.includes(item.key) }"
-                  :draggable="canManage"
+                  :draggable="canMove"
                   :aria-pressed="canManage ? isSelected(item.key) : undefined"
                   @click="onItemClick(item, $event)"
                   @keydown.enter.prevent="onItemClick(item, $event)"
@@ -330,7 +334,7 @@
                      'is-checked': isSelected(item.key),
                      'is-dragging': draggingKeys.includes(item.key),
                   }"
-                  :draggable="canManage"
+                  :draggable="canMove"
                   @click="onItemClick(item, $event)"
                   @keydown.enter.prevent="onItemClick(item, $event)"
                   @keydown.space.prevent="
@@ -515,6 +519,8 @@
          :item="detail"
          :library="library"
          :read-only="readOnly"
+         :can-edit="canWrite"
+         :can-delete="canDeleteMedia"
          @close="detailKey = null"
          @delete="(item) => removeItems([item])"
       />
@@ -562,6 +568,7 @@ import {
    slugify,
 } from '#nuxt-cms'
 import { useCmsConfirm } from '../../composables/cms-confirm'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsMediaLibrary, usageLink } from '../../composables/cms-media-library'
 import type { UploadTree } from '../../composables/cms-media-uploader'
 import {
@@ -623,9 +630,15 @@ const runtime = useCmsRuntime()
 const library = useCmsMediaLibrary()
 const uploader = useCmsMediaUploader()
 
+const { can } = useCmsPermissions()
 const readOnly = computed(() => runtime.mediaStorage === 'local')
-const canUpload = computed(() => !readOnly.value)
-const canManage = computed(() => !readOnly.value && !props.selectable)
+const canWrite = computed(() => can('media.write'))
+const canDeleteMedia = computed(() => can('media.delete'))
+const canUpload = computed(() => !readOnly.value && canWrite.value)
+const canManage = computed(
+   () => !readOnly.value && !props.selectable && (canWrite.value || canDeleteMedia.value)
+)
+const canMove = computed(() => canManage.value && canWrite.value)
 const canNest = computed(() => mediaFolderDepth(folder.value) < MEDIA_FOLDER_MAX_DEPTH)
 
 onMounted(() => library.reload())
@@ -1222,7 +1235,7 @@ function hasFiles(event: DragEvent) {
 }
 
 function onItemDragStart(event: DragEvent, item: MediaItem) {
-   if (!canManage.value || !event.dataTransfer) return
+   if (!canMove.value || !event.dataTransfer) return
    const keys = isSelected(item.key) ? [...selection.value] : [item.key]
    draggingKeys.value = keys
    event.dataTransfer.effectAllowed = 'move'
@@ -1230,7 +1243,7 @@ function onItemDragStart(event: DragEvent, item: MediaItem) {
 }
 
 function onFolderDragStart(event: DragEvent, path: string) {
-   if (!canManage.value || !event.dataTransfer) return
+   if (!canMove.value || !event.dataTransfer) return
    draggingFolder.value = path
    event.dataTransfer.effectAllowed = 'move'
    event.dataTransfer.setData(FOLDER_DRAG, path)

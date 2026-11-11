@@ -1,7 +1,8 @@
 # Admin panel & security
 
 The admin panel is served by the same Nitro server, under `/cms`. The super admin signs in with
-the credentials from the environment variables. The super admin can add more admin accounts.
+the credentials from the environment variables. The super admin can add more accounts, each with
+a [role](#roles-and-permissions) declared in code.
 
 The brand shown in the sidebar, the mobile bar and the login page (logo, title, subtitle) is set
 with `cms.admin.logo`, `cms.admin.title` and `cms.admin.subtitle`, see
@@ -248,8 +249,9 @@ The account button at the bottom of the sidebar opens **Settings**:
   variables, so it has no form here.
 - **Appearance**: the theme (light, dark or system). The choice is kept in the `cms-theme` cookie
   of the browser.
-- **Users** (super admin only): add accounts, set a new password, delete accounts.
-- **Content**: one item for each entry.
+- **Users** (super admin and roles with `users.manage`): add accounts, pick their role, set a new
+  password, delete accounts.
+- **Content** (roles with `settings.manage`): one item for each entry the role can read.
   - **Table columns** (collections only): show, hide and drag the columns of the table.
   - **Form layout**: drag a field up or down, or next to another field to put them in the same row.
     Sections come from the config and fields cannot be added.
@@ -268,10 +270,11 @@ route middleware).
 - The credentials of `NUXT_CMS_ADMIN_EMAIL` / `NUXT_CMS_ADMIN_PASSWORD` (or `cms.admin.*`) sign
   in as the **super admin**. This account is not stored in the database and does not show in any
   list.
-- The super admin creates more accounts in **Settings → Users**: an email, an optional name and a
-  password (generate it and copy it with the buttons of the field). No email is sent. These
-  accounts have the **admin** role: they can do everything in the panel, except manage users. They
-  are stored in the `cms_users` table, with the password hashed by scrypt.
+- The super admin creates more accounts in **Settings → Users**: an email, an optional name, a
+  role and a password (generate it and copy it with the buttons of the field). No email is sent.
+  The built-in **admin** role can do everything in the panel except manage users; other roles come
+  from [`cms.roles`](configuration.md#roles). Accounts are stored in the `cms_users` table, with
+  the password hashed by scrypt.
 - On the first sign-in of a new account, a dialog offers to set a new password. The user can keep
   the shared one. Later, **Settings → Account** changes the name and the password. When the super
   admin sets a new password for a user, the next sign-in shows the dialog again.
@@ -289,6 +292,38 @@ route middleware).
 - The count of failed attempts also resets 5 minutes after the first failure. A successful login
   clears the counters.
 
+## Roles and permissions
+
+Every account has one role. The super admin (env) holds every permission, the built-in `admin` role
+every permission except `users.manage`, and the roles of [`cms.roles`](configuration.md#roles)
+what their `can` list grants.
+
+- **Server.** Every admin endpoint checks one permission through `requireCmsPermission(event,
+  '<scope>.<action>')` (list and item reads, create, update, delete, import, export, tags,
+  settings, media, users) and answers `403` with `Missing permission: <permission>`. The role is
+  read from `cms_users` on every request, so a role change applies at once. Search only returns
+  the entries the role can read, and media hits only with `media.read`.
+- **Publishing.** On an entry with drafts, a role with `update` but without `publish` saves drafts
+  only: it cannot create an item as published, publish a draft, unpublish, schedule, or edit an
+  item that is already published (the live content would change). The form of a published item
+  shows a notice and is read only. The import dry run reports the same rule per row. `delete` is
+  its own permission and also removes published items.
+- **Import** needs `import` and `create` (plus `update` in upsert mode). **Duplicate** needs
+  `create`.
+- **Admin UI.** The sidebar only lists what the role can read, and buttons the role cannot use are
+  hidden (New entry, Delete, Duplicate, Publish, Schedule, Import, Export, Upload, folder actions,
+  Settings sections). A direct URL to a section the role cannot read goes back to `/cms`. The
+  panel computes the same permissions as the server with the same shared function, from the role
+  in the session (refreshed on every session fetch).
+- **Users.** The super admin and roles with `users.manage` manage accounts, with the grant rule: a
+  user can assign a role only when they hold every permission of that role, and can edit or delete
+  an account only when they could assign its role. Nobody can change their own role or delete
+  their own account, and nobody can grant `superadmin`. The super admin lives in the environment,
+  so no account can remove or lock it out.
+- **Removed roles.** An account whose role is not in the config anymore gets no access: the panel
+  shows "Your role no longer exists" and the users list marks the account, so an admin can pick a
+  new role.
+
 ## Sessions
 
 Sessions are encrypted cookies. In **production** the module refuses to boot unless
@@ -304,8 +339,8 @@ is internal to the panel: your frontend reads content through the public
 
 ## Security summary
 
-- A super admin from env, plus admin accounts in `cms_users` (scrypt hashes). The credential check
-  is timing-safe.
+- A super admin from env, plus accounts in `cms_users` (scrypt hashes) with code-first roles,
+  checked by every admin endpoint. The credential check is timing-safe.
 - Encrypted session cookies; production requires `NUXT_SESSION_PASSWORD` (≥ 32 chars).
 - Login rate limiting: per IP and per email, 5 failures lock the login for 5 minutes.
 - Admin mutations require a same-origin request.

@@ -6,7 +6,7 @@ import type { MediaItem, MediaSourceInfo } from '../../shared/index'
 import { isMediaFolderMarker } from '../../shared/index'
 import { useMediaIndex } from '../utils/media-index'
 import { toMediaItem, useMediaConfig } from '../utils/media'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 function foldersOf(items: MediaItem[]) {
    const folders = new Set<string>()
@@ -17,7 +17,7 @@ function foldersOf(items: MediaItem[]) {
 }
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   await requireCmsPermission(event, 'media.read')
    const { media, publicUrl } = useMediaConfig(event)
 
    if (media.storage === 'local') {

@@ -5,10 +5,10 @@ import { mapConstraintErrors } from '../utils/db-errors'
 import { emitEntryChange } from '../utils/hooks'
 import { getRegistryEntry, idColumn, parseId } from '../utils/registry'
 import { isCollectionKind } from '../../shared/index'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({
@@ -16,6 +16,7 @@ export default defineEventHandler(async (event) => {
          statusMessage: 'Only collection entries can be deleted',
       })
    }
+   assertCmsPermission(access, `${name}.delete`)
 
    const id = parseId(event)
    const result = await mapConstraintErrors(async () => {

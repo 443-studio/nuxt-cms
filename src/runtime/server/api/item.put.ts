@@ -22,13 +22,13 @@ import {
    manyToManyStatements,
    splitRelationValues,
 } from '../utils/relations'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, assertPublishAllowed, requireCmsAccess } from '../utils/permissions'
 import { mapConstraintErrors } from '../utils/db-errors'
 import { emitEntryChange } from '../utils/hooks'
 import { entryStatus, entryWriteAction } from '../../shared/hooks'
 
 export default defineEventHandler(async (event) => {
-   const user = await requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (entry.kind === 'single') {
       throw createError({
@@ -36,6 +36,7 @@ export default defineEventHandler(async (event) => {
          statusMessage: 'Single objects are updated with PUT without id',
       })
    }
+   assertCmsPermission(access, `${name}.update`)
 
    const id = parseId(event)
 
@@ -74,6 +75,7 @@ export default defineEventHandler(async (event) => {
       .where(eq(idColumn(table), id))
       .limit(1)
    if (!existing) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
+   assertPublishAllowed(access, name, entry, existing.status, values.status ?? existing.status)
 
    const item = await mapConstraintErrors(async () => {
       const [updated] = await runBatch((db) => [
