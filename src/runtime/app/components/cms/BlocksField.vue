@@ -198,23 +198,29 @@
          />
       </KModal>
 
-      <KModal v-model:open="editorOpen" :title="editorTitle">
-         <KStack gap="md">
-            <KFormField
-               v-for="(blockField, blockKey) in editorFields"
-               :key="blockKey"
-               :label="blockField.label"
-               :icon="cmsIcon(fieldIcon(blockField))"
-               :required="blockField.required"
-            >
-               <CmsFieldInput
-                  :model-value="editorItem?.[blockKey]"
-                  :field="blockField"
-                  :locale="locale"
-                  @update:model-value="(value: unknown) => updateEditorField(blockKey, value)"
-               />
-            </KFormField>
-         </KStack>
+      <KModal v-model:open="editorOpen" :title="editorTitle" :size="editorWide ? 'lg' : 'md'">
+         <CmsFormSections
+            v-if="editorBlock"
+            :key="editorIndex ?? ''"
+            :layout="editorLayout"
+            :shown="isEditorFieldShown"
+         >
+            <template #field="{ fieldKey: blockKey }">
+               <KFormField
+                  :label="editorBlock.fields[blockKey]!.label"
+                  :description="editorBlock.fields[blockKey]!.description"
+                  :icon="cmsIcon(fieldIcon(editorBlock.fields[blockKey]!))"
+                  :required="editorBlock.fields[blockKey]!.required"
+               >
+                  <CmsFieldInput
+                     :model-value="editorItem?.[blockKey]"
+                     :field="editorBlock.fields[blockKey]!"
+                     :locale="locale"
+                     @update:model-value="(value: unknown) => updateEditorField(blockKey, value)"
+                  />
+               </KFormField>
+            </template>
+         </CmsFormSections>
 
          <template #footer>
             <KStack v-if="disabled" direction="row" justify="end">
@@ -281,6 +287,7 @@
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
 import {
+   blockFormLayout,
    canAddBlock,
    declaresHiddenField,
    isFieldVisible,
@@ -592,13 +599,21 @@ const editorItem = computed(() =>
    editorIndex.value === null ? undefined : items.value[editorIndex.value]
 )
 
-const editorFields = computed(() => {
-   const item = editorItem.value
-   const fields = item ? blockOf(item)?.fields ?? {} : {}
-   return Object.fromEntries(
-      Object.entries(fields).filter(([, field]) => isFieldVisible(field, item, fields))
-   )
-})
+const editorBlock = computed(() => (editorItem.value ? blockOf(editorItem.value) : undefined))
+
+const editorLayout = computed(() =>
+   editorBlock.value ? blockFormLayout(editorBlock.value) : { main: [] }
+)
+
+const editorWide = computed(() =>
+   editorLayout.value.main.some((section) => section.rows.some((row) => row.length > 1))
+)
+
+function isEditorFieldShown(key: string) {
+   const fields = editorBlock.value?.fields ?? {}
+   const field = fields[key]
+   return !!field && isFieldVisible(field, editorItem.value, fields)
+}
 
 const editorTitle = computed(() => (editorItem.value ? labelOf(editorItem.value) : ''))
 

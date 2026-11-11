@@ -234,7 +234,7 @@ export default defineCmsConfig({
 - `fields` (optional) adds extra fields to every item, with the same options as a collection.
 - `labels` (optional) renames system fields in the admin, keyed by system field name.
 - `tabs`, `layout` and `list` work as on a collection. The default list columns are title, status
-  and publish date. In the visual editor, `layout` orders the fields of the Content tab.
+  and publish date. In the visual editor, `layout` arranges the Content tab.
 - `preview` (optional) sets the component that wraps the body in the visual editor, see
   [Preview component](#preview-component).
 - `route` (optional) is the public address of the items on the site, see [Routes](#routes).
@@ -786,6 +786,32 @@ Admins can change the table columns and the form layout in **Settings** (see
 [Admin panel](admin.md#settings)). The config is the default, and **Reset to default** goes back
 to it.
 
+### Block layout
+
+A block takes `layout` too, in the same format, to arrange its form in the tile grid modal and in
+the inspector of the visual editor:
+
+```ts
+blocks: {
+   session: {
+      label: 'Session',
+      fields: { title, day, startsAt, minutes, fee, indoor, level, host, notes, handout, extra },
+      layout: [
+         'title',
+         ['day', 'startsAt', 'minutes'],
+         ['fee', 'level', 'indoor'],
+         'notes',
+         { title: 'Extras', collapsed: true, rows: [['host', 'handout'], 'extra'] },
+      ],
+   },
+}
+```
+
+The rules are the ones above, checked against the fields of the block: unknown or repeated keys,
+rows over 4 fields and untitled sections fail the build, and unnamed fields go at the end. The
+fields of a row stay side by side only where the form is wide enough (32rem), so in a narrow
+inspector they stack. Block layouts come from the config only: Settings does not override them.
+
 ## Conditional fields
 
 `showIf` hides a field in the admin editor until a condition on the other fields of the same entry
@@ -1060,7 +1086,8 @@ export default defineCmsConfig({
 - A content entry needs a non-empty `blocks` map and cannot declare a system field, `titleField`,
   `columns`, `routes`, `overrides` or a custom table; `labels` may only name system fields.
 - A block `component` must be a non-empty string naming a registered Nuxt component; `icon` and
-  `group` must be non-empty strings; `tags` must be an array of non-empty strings.
+  `group` must be non-empty strings; `tags` must be an array of non-empty strings; `layout`
+  follows the [form layout](#form-layout) rules against the fields of the block.
 - `titleField` is required on collections, must reference a declared field, and that field must be a
   `text`, `slug`, `email`, `number`, `date`, `datetime` or single `select`.
 - `select` needs a non-empty array of `options`: non-empty strings or `{ value, label }` objects

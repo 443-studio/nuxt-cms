@@ -250,28 +250,34 @@
                         tone="warning"
                         :message="form.warnings[`${fieldKey}.${selected}`]"
                      />
-                     <KStack gap="md" class="cms-editor-fields">
-                        <KFormField
-                           v-for="(blockField, blockKey) in selectedFields"
-                           :key="`${selected}-${blockKey}`"
-                           :name="`${fieldKey}.${selected}.${blockKey}`"
-                           :label="blockField.label"
-                           :description="blockField.description"
-                           :icon="cmsIcon(fieldIcon(blockField))"
-                           :required="blockField.required"
-                           :data-cms-field="blockKey"
-                           :class="{ 'cms-search-focus': highlighted === blockKey }"
-                        >
-                           <CmsFieldInput
-                              :model-value="selectedItem[blockKey]"
-                              :field="blockField"
-                              :locale="locale"
-                              @update:model-value="
-                                 (value: unknown) => updateBlockField(String(blockKey), value)
-                              "
-                           />
-                        </KFormField>
-                     </KStack>
+                     <CmsFormSections
+                        v-if="selectedBlock"
+                        ref="sectionsRef"
+                        :key="selectedKey"
+                        :layout="selectedLayout"
+                        :shown="isBlockFieldShown"
+                     >
+                        <template #field="{ fieldKey: blockKey }">
+                           <KFormField
+                              :name="`${fieldKey}.${selected}.${blockKey}`"
+                              :label="selectedBlock.fields[blockKey]!.label"
+                              :description="selectedBlock.fields[blockKey]!.description"
+                              :icon="cmsIcon(fieldIcon(selectedBlock.fields[blockKey]!))"
+                              :required="selectedBlock.fields[blockKey]!.required"
+                              :data-cms-field="blockKey"
+                              :class="{ 'cms-search-focus': highlighted === blockKey }"
+                           >
+                              <CmsFieldInput
+                                 :model-value="selectedItem[blockKey]"
+                                 :field="selectedBlock.fields[blockKey]!"
+                                 :locale="locale"
+                                 @update:model-value="
+                                    (value: unknown) => updateBlockField(blockKey, value)
+                                 "
+                              />
+                           </KFormField>
+                        </template>
+                     </CmsFormSections>
                   </div>
                </template>
 
@@ -284,22 +290,19 @@
                   <template #[panelSlot]>
                      <div ref="panelBody" class="cms-editor-panel-body">
                         <KFormAlerts />
-                        <KStack gap="md" class="cms-editor-fields">
-                           <slot
-                              v-if="activeTab === 'content'"
-                              name="content-start"
-                              :locale="locale"
-                           />
-                           <template v-for="section in sections" :key="section.id">
-                              <div v-if="section.title" class="cms-editor-section-title">
-                                 <span class="k-label">{{ section.title }}</span>
-                                 <span v-if="section.description" class="cms-field-hint">
-                                    {{ section.description }}
-                                 </span>
-                              </div>
+                        <slot
+                           v-if="activeTab === 'content'"
+                           name="content-start"
+                           :locale="locale"
+                        />
+                        <CmsFormSections
+                           ref="sectionsRef"
+                           :key="activeTab"
+                           :layout="tabLayout"
+                           :shown="isShown"
+                        >
+                           <template #field="{ fieldKey: key }">
                               <KFormField
-                                 v-for="key in section.keys"
-                                 :key="key"
                                  :name="key"
                                  :label="fields[key]!.label"
                                  :description="fields[key]!.description"
@@ -322,7 +325,7 @@
                                  />
                               </KFormField>
                            </template>
-                        </KStack>
+                        </CmsFormSections>
                      </div>
                   </template>
                </component>
@@ -354,8 +357,9 @@
 </template>
 
 <script setup lang="ts">
-import type { CmsConfig, FieldConfig, MediaItem } from '#nuxt-cms'
+import type { CmsConfig, CmsFormLayout, FieldConfig, MediaItem } from '#nuxt-cms'
 import {
+   blockFormLayout,
    canAddBlock,
    isFieldVisible,
    isHiddenBlock,
@@ -379,7 +383,6 @@ import {
    FormField as KFormField,
    Icon as KIcon,
    SegmentedControl as KSegmentedControl,
-   Stack as KStack,
    Tabs as KTabs,
    Tooltip as KTooltip,
    useForm,
@@ -529,14 +532,6 @@ const selectedBlock = computed(() =>
    selectedItem.value ? blocksField.value.blocks?.[String(selectedItem.value.type)] : undefined
 )
 
-const selectedFields = computed(() => {
-   const fields = selectedBlock.value?.fields ?? {}
-   const item = selectedItem.value
-   return Object.fromEntries(
-      Object.entries(fields).filter(([, field]) => isFieldVisible(field, item, fields))
-   )
-})
-
 const selectedSummary = computed(() =>
    selectedItem.value
       ? blockSummary(selectedBlock.value, selectedItem.value, locale.value, i18n.defaultLocale)
@@ -608,22 +603,43 @@ const contentFields = computed(() =>
    )
 )
 
-const sections = computed(() => {
-   if (activeTab.value === 'seo')
-      return [{ id: 'seo', title: undefined, description: undefined, keys: seoKeys.value }]
-   const layout = entryFormLayout(props.entryName, settings.value, contentFields.value)
-   return layout.main
-      .map((section, index) => ({
-         id: `${index}-${section.title ?? ''}`,
-         title: section.title,
-         description: section.description,
-         keys: section.rows.flat().filter((key) => {
-            const field = props.fields[key]
-            return !!field && isFieldVisible(field, state.value, props.fields)
-         }),
-      }))
-      .filter((section) => section.keys.length)
-})
+const tabLayout = computed<CmsFormLayout>(() =>
+   activeTab.value === 'seo'
+      ? { main: [{ rows: seoKeys.value.map((key) => [key]) }] }
+      : entryFormLayout(props.entryName, settings.value, contentFields.value)
+)
+
+function isShown(key: string) {
+   const field = props.fields[key]
+   return !!field && isFieldVisible(field, state.value, props.fields)
+}
+
+function isBlockFieldShown(key: string) {
+   const fields = selectedBlock.value?.fields ?? {}
+   const field = fields[key]
+   return !!field && isFieldVisible(field, selectedItem.value, fields)
+}
+
+const selectedKey = computed(() =>
+   selected.value === null ? '' : `${selected.value}-${String(selectedItem.value?.type)}`
+)
+
+const selectedLayout = computed<CmsFormLayout>(() =>
+   selectedBlock.value ? blockFormLayout(selectedBlock.value) : { main: [] }
+)
+
+const sectionsRef = ref<{ reveal: (key: string) => void } | null>(null)
+
+function expandSection(key: string) {
+   void nextTick(() => sectionsRef.value?.reveal(key))
+}
+
+function revealInPanel(key: string) {
+   void nextTick(() => {
+      sectionsRef.value?.reveal(key)
+      reveal(() => panelBody.value, key)
+   })
+}
 
 const translations = computed(() => translationProgress(props.fields, state.value, i18n))
 
@@ -1083,7 +1099,7 @@ function focusField(index: number | null, key: string) {
    select(index)
    if (index === null) activeTab.value = tabOfKey(key) === 'seo' ? 'seo' : 'content'
    if (!compact.value) layout.value.inspector.collapsed = false
-   reveal(() => panelBody.value, key)
+   revealInPanel(key)
 }
 
 function inlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-input' }>) {
@@ -1122,7 +1138,7 @@ function applyFocus(focus: CmsSearchFocus) {
       return
    }
    revealField(key)
-   reveal(() => panelBody.value, key)
+   revealInPanel(key)
 }
 
 let frameObserver: ResizeObserver | null = null
@@ -1224,7 +1240,11 @@ function firstError() {
       .filter((key) => key.startsWith(`${name}.`))
       .map((key) => Number(key.split('.')[1]))
       .filter(Number.isInteger)
-   return { name, index: indexes.length ? Math.min(...indexes) : null }
+   const index = indexes.length ? Math.min(...indexes) : null
+   const blockKey = keys
+      .find((key) => index !== null && key.startsWith(`${name}.${index}.`))
+      ?.split('.')[2]
+   return { name, index, blockKey }
 }
 
 function revealFirstError() {
@@ -1233,8 +1253,10 @@ function revealFirstError() {
    const field = props.fields[first.name]
    if (first.name === props.fieldKey) {
       revealBlock(first.index)
+      if (first.blockKey) expandSection(first.blockKey)
    } else if (field) {
       revealField(first.name)
+      expandSection(first.name)
       if (isTranslatableField(field)) locale.value = i18n.defaultLocale
    }
 }

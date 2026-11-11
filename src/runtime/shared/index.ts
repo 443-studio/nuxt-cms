@@ -259,6 +259,7 @@ export interface BlockConfig {
    group?: string
    tags?: readonly string[]
    fields: Record<string, FieldConfig>
+   layout?: CmsLayoutBlock[]
    validate?: CmsBlockValidate
 }
 
@@ -1161,6 +1162,7 @@ export interface BlockInput {
    group?: string
    tags?: readonly string[]
    fields: Record<string, BlockFieldInput>
+   layout?: CmsLayoutBlock[]
    validate?: CmsBlockValidate
 }
 

@@ -10,56 +10,39 @@
       <KAlert v-if="lock" tone="neutral" :icon="cmsIcon('lock-closed')" :title="lock" />
       <component :is="tabbed ? KTabs : 'div'" v-bind="tabsBinding" class="cms-form-body">
          <template #[panelSlot]>
-            <div class="cms-form-main">
-               <component
-                  :is="section.title ? KAccordion : 'div'"
-                  v-for="section in sections"
-                  :key="section.id"
-                  v-bind="sectionBinding(section)"
-                  class="cms-form-section"
-               >
-                  <div class="cms-form-rows" :class="{ 'cms-form-section-body': section.title }">
-                     <div
-                        v-for="row in section.rows"
-                        :key="row.join('|')"
-                        class="cms-form-row"
-                        :style="{ '--cms-row-cols': row.length }"
+            <CmsFormSections ref="sectionsRef" :layout="layout" :shown="isShown">
+               <template #field="{ fieldKey: key }">
+                  <KFormField
+                     :name="key"
+                     :label="fields[key]!.label"
+                     :description="fields[key]!.description"
+                     :icon="cmsIcon(fieldIcon(fields[key]!))"
+                     :required="fields[key]!.required"
+                     :disabled="locked.includes(key) || undefined"
+                     :data-cms-field="key"
+                     :class="{ 'cms-search-focus': highlighted === key }"
+                  >
+                     <template
+                        v-if="hasLocaleSwitch(fields[key]!) && i18n.locales.length > 1"
+                        #label-actions
                      >
-                        <KFormField
-                           v-for="key in row"
-                           :key="key"
-                           :name="key"
-                           :label="fields[key]!.label"
-                           :description="fields[key]!.description"
-                           :icon="cmsIcon(fieldIcon(fields[key]!))"
-                           :required="fields[key]!.required"
-                           :disabled="locked.includes(key) || undefined"
-                           :data-cms-field="key"
-                           :class="{ 'cms-search-focus': highlighted === key }"
-                        >
-                           <template
-                              v-if="hasLocaleSwitch(fields[key]!) && i18n.locales.length > 1"
-                              #label-actions
-                           >
-                              <CmsLocaleSwitch
-                                 :model-value="localeFor(key)"
-                                 :progress="fieldProgress(key)"
-                                 @update:model-value="(locale: string) => setLocale(key, locale)"
-                              />
-                           </template>
-                           <CmsFieldInput
-                              v-model="state[key]"
-                              :field="fields[key]!"
-                              :locale="localeFor(key)"
-                              :slug-source="slugSource(fields[key]!)"
-                              :entry-name="entryName"
-                              :field-key="key"
-                           />
-                        </KFormField>
-                     </div>
-                  </div>
-               </component>
-            </div>
+                        <CmsLocaleSwitch
+                           :model-value="localeFor(key)"
+                           :progress="fieldProgress(key)"
+                           @update:model-value="(locale: string) => setLocale(key, locale)"
+                        />
+                     </template>
+                     <CmsFieldInput
+                        v-model="state[key]"
+                        :field="fields[key]!"
+                        :locale="localeFor(key)"
+                        :slug-source="slugSource(fields[key]!)"
+                        :entry-name="entryName"
+                        :field-key="key"
+                     />
+                  </KFormField>
+               </template>
+            </CmsFormSections>
          </template>
       </component>
       <KStack v-if="footer && !lock" direction="row" justify="end" gap="sm">
@@ -76,14 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import type {
-   CmsConfig,
-   CmsEntry,
-   CmsFormLayout,
-   CmsLayoutSection,
-   CmsTab,
-   FieldConfig,
-} from '#nuxt-cms'
+import type { CmsConfig, CmsEntry, CmsFormLayout, CmsTab, FieldConfig } from '#nuxt-cms'
 import {
    fieldTab,
    hasTranslatableBlockFields,
@@ -95,7 +71,6 @@ import {
 } from '#nuxt-cms'
 import type { FormErrors } from '@xleddyl/443-components-vue'
 import {
-   Accordion as KAccordion,
    Alert as KAlert,
    Button as KButton,
    Form as KForm,
@@ -181,49 +156,10 @@ function isShown(key: string) {
    return fieldTab(field, tabList.value) === activeTab.value
 }
 
-type ShownSection = CmsLayoutSection & { id: string }
-
-const sections = computed<ShownSection[]>(() =>
-   layout.value.main
-      .map((section: CmsLayoutSection, index: number) => ({
-         ...section,
-         id: `${index}-${section.title ?? ''}`,
-         rows: section.rows
-            .map((row) => row.filter((key) => isShown(key)))
-            .filter((row) => row.length),
-      }))
-      .filter((section) => section.rows.length)
-)
-
-const toggled = ref<Record<string, boolean>>({})
-
-function isCollapsed(section: ShownSection) {
-   if (!section.title) return false
-   return toggled.value[section.id] ?? !!section.collapsed
-}
-
-function toggleSection(id: string) {
-   const section = sections.value.find((s) => s.id === id)
-   if (section) toggled.value = { ...toggled.value, [id]: !isCollapsed(section) }
-}
-
-function sectionBinding(section: ShownSection) {
-   if (!section.title) return {}
-   return {
-      items: [{ value: section.id, title: section.title, description: section.description }],
-      variant: 'outline' as const,
-      contentVariant: 'neutral' as const,
-      modelValue: isCollapsed(section) ? null : section.id,
-      'onUpdate:modelValue': () => toggleSection(section.id),
-   }
-}
+const sectionsRef = ref<{ reveal: (key: string) => void } | null>(null)
 
 function revealField(key: string) {
-   for (const section of sections.value) {
-      if (section.rows.some((row) => row.includes(key)) && isCollapsed(section)) {
-         toggled.value = { ...toggled.value, [section.id]: false }
-      }
-   }
+   sectionsRef.value?.reveal(key)
 }
 
 function firstErrorKey(errors: FormErrors) {

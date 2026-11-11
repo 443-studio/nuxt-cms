@@ -1812,6 +1812,10 @@ body:has(.cms-scope) {
    gap: 1.375rem;
 }
 
+.cms-form-main {
+   container-type: inline-size;
+}
+
 .cms-form-row {
    display: grid;
    grid-template-columns: minmax(0, 1fr);
@@ -2370,25 +2374,6 @@ body:has(.cms-scope) {
 
 .cms-editor-panel-body.is-empty {
    justify-content: center;
-}
-
-.cms-editor-fields {
-   display: flex;
-   flex-direction: column;
-   gap: 1.125rem;
-}
-
-.cms-editor-section-title {
-   display: flex;
-   flex-direction: column;
-   gap: 0.25rem;
-   padding-top: 0.75rem;
-   border-top: 1px solid var(--k-line);
-}
-
-.cms-editor-section-title:first-child {
-   padding-top: 0;
-   border-top: 0;
 }
 
 .cms-editor-block-head {

@@ -297,6 +297,7 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                if (!block.fields || !Object.keys(block.fields).length)
                   errors.push(`${bat}: fields must not be empty`)
                errors.push(...blockMetaErrors(bat, block))
+               errors.push(...layoutErrors(bat, block.fields ?? {}, block.layout))
                for (const [blockFieldKey, blockField] of Object.entries(block.fields ?? {})) {
                   const bfat = `${bat}, field '${blockFieldKey}'`
                   if (!IDENTIFIER.test(blockFieldKey))

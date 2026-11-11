@@ -253,14 +253,15 @@ bar and three panels:
   layout and CSS apply. Every change is shown at once, before saving. The bar above it shows or
   hides each side panel, sets the preview width (desktop, tablet 768 px or mobile 390 px), shows
   the current width in pixels and reloads the preview.
-- **Inspector** (right). With a block selected, the form of that block under a header with its
-  icon, label and summary, a `...` menu with the block actions and a close button that clears the
-  selection. With no block selected, two tabs: **Content** (the page address when the entry has a
+- **Inspector** (right). With a block selected, the form of that block (arranged by the
+  [block `layout`](schema.md#block-layout)) under a header with its icon, label and summary, a
+  `...` menu with the block actions and a close button that clears the selection. With no block
+  selected, two tabs: **Content** (the page address when the entry has a
   [`route`](schema.md#routes), in the active language, with **Open** to the live page once the
   saved item is published and not scheduled, then title, slug, publish date, excerpt, cover and the
-  extra fields, in the order of the form layout) and **SEO** (the SEO fields and **Hide from search
-  engines**). The language switch of
-  the top bar drives every translatable field.
+  extra fields, arranged by the form layout, sections included) and **SEO** (the SEO fields and
+  **Hide from search engines**). The language switch of the top bar drives every translatable
+  field.
 
 Click a row of the tree to select its block: the canvas scrolls to it. Hover a row to outline its
 block in the canvas, and hover a block in the canvas to mark its row in the tree.
@@ -424,7 +425,7 @@ The account button at the bottom of the sidebar opens **Settings**:
 Column and layout changes save automatically in the `cms_settings` table and apply to every admin.
 The [`layout` and `list` options](schema.md#form-layout) of the config are the default, and
 **Reset to default** deletes the saved version. A saved layout follows config changes: a new field
-goes at the end, and a removed field disappears.
+goes at the end, and a removed field disappears. Block layouts come from the config only.
 
 All pages except `/cms/login` require an authenticated admin session (enforced by the `cms-auth`
 route middleware).

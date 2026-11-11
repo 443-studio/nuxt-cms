@@ -37,6 +37,7 @@ const sections = defineCmsBlocks({
          text: { label: 'Text', type: 'text', textarea: true, translatable: true, required: true },
          author: { label: 'Author', type: 'text' },
       },
+      layout: ['text', { title: 'Attribution', description: 'Who said it.', rows: ['author'] }],
    },
    cta: {
       label: 'Call to action',
@@ -473,6 +474,18 @@ export default defineCmsConfig({
                      handout: { label: 'Handout', type: 'media', mediaType: 'file' },
                      extra: { label: 'Extra', type: 'json' },
                   },
+                  layout: [
+                     'title',
+                     ['day', 'startsAt', 'minutes'],
+                     ['fee', 'level', 'indoor'],
+                     'notes',
+                     {
+                        title: 'Extras',
+                        description: 'Who runs it and what to bring.',
+                        collapsed: true,
+                        rows: [['host', 'handout'], 'extra'],
+                     },
+                  ],
                   validate: (values) =>
                      typeof values.minutes === 'number' && values.minutes <= 0
                         ? [{ field: 'minutes', message: 'A session lasts at least one minute' }]
