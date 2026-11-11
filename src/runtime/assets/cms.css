@@ -47,22 +47,6 @@ body:has(.cms-scope) {
    }
 }
 
-.cms-brand-glyph {
-   width: 62%;
-   height: 62%;
-}
-
-.cms-powered-by-link {
-   color: var(--k-text);
-   font-weight: 500;
-   text-decoration: none;
-   transition: color var(--k-duration) var(--k-ease-out);
-}
-
-.cms-powered-by-link:hover {
-   color: var(--k-accent);
-}
-
 .cms-search-option-icon {
    margin-top: 0.125rem;
    --k-icon-size: 1rem;
