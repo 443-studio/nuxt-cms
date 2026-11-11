@@ -77,33 +77,29 @@
                   :highlighted="canvasHover"
                   :errors="blockErrors"
                   :can-add="canAdd"
-                  :paste-count="pasteCount"
                   :label="blocksField.label"
                   :menu="blockMenu"
                   @select="selectFromTree"
                   @move="move"
                   @hover="highlight"
-                  @pick="insert"
-                  @paste="(index: number) => paste(index, null)"
+                  @insert="openPalette"
                />
             </div>
             <div v-if="blocks.length" class="cms-editor-side-foot">
-               <CmsBlockPickerPopover
+               <KButton
                   v-if="canAdd"
-                  :blocks="blocksField.blocks ?? {}"
-                  :paste-count="pasteCount"
-                  @pick="(type: string) => insert(blocks.length, type)"
-                  @paste="paste(blocks.length, null)"
-               >
-                  <KButton
-                     :icon="cmsIcon('plus')"
-                     label="Add a block"
-                     size="sm"
-                     variant="soft"
-                     tone="neutral"
-                     block
-                  />
-               </CmsBlockPickerPopover>
+                  :icon="cmsIcon('plus')"
+                  label="Add a block"
+                  size="sm"
+                  variant="soft"
+                  tone="neutral"
+                  block
+                  aria-haspopup="dialog"
+                  @click="
+                     (event: MouseEvent) =>
+                        openPalette(blocks.length, event.currentTarget as HTMLElement)
+                  "
+               />
                <p v-else class="cms-field-hint">{{ maxReached }}</p>
             </div>
          </aside>
@@ -345,16 +341,15 @@
          </aside>
       </div>
 
-      <KModal v-model:open="paletteOpen" title="Insert a block">
-         <CmsBlockPicker
-            v-if="paletteOpen"
-            :blocks="blocksField.blocks ?? {}"
-            :disabled-reason="canAdd ? undefined : maxReached"
-            :paste-count="pasteCount"
-            @pick="insertFromPalette"
-            @paste="pasteFromPalette"
-         />
-      </KModal>
+      <CmsBlockPickerPopover
+         v-model:open="paletteOpen"
+         :anchor="paletteAnchor"
+         :blocks="blocksField.blocks ?? {}"
+         :disabled-reason="canAdd ? undefined : maxReached"
+         :paste-count="pasteCount"
+         @pick="insertFromPalette"
+         @paste="pasteFromPalette"
+      />
    </div>
 </template>
 
@@ -367,7 +362,12 @@ import {
    isTranslatableField,
    slugSourceValue,
 } from '#nuxt-cms'
-import type { FormIssuePath, MenuItems } from '@xleddyl/443-components-vue'
+import type {
+   FormIssuePath,
+   MenuItems,
+   OverlayAnchorTarget,
+   OverlayVirtualAnchor,
+} from '@xleddyl/443-components-vue'
 import {
    Badge as KBadge,
    Button as KButton,
@@ -378,7 +378,6 @@ import {
    FormAlerts as KFormAlerts,
    FormField as KFormField,
    Icon as KIcon,
-   Modal as KModal,
    SegmentedControl as KSegmentedControl,
    Stack as KStack,
    Tabs as KTabs,
@@ -494,6 +493,7 @@ const canvasHover = ref<number | null>(null)
 const canvasWidth = ref<number | null>(null)
 const paletteOpen = ref(false)
 const paletteIndex = ref(0)
+const paletteAnchor = shallowRef<OverlayAnchorTarget | null>(null)
 const frame = ref<HTMLIFrameElement | null>(null)
 const frameBox = ref<HTMLElement | null>(null)
 const panelBody = ref<HTMLElement | null>(null)
@@ -682,10 +682,49 @@ function pasteFromPalette() {
    void paste(paletteIndex.value, null)
 }
 
-function openPalette(index: number) {
+function openPalette(index: number, anchor: OverlayAnchorTarget | null = null) {
    if (!canAdd.value) return
    paletteIndex.value = index
+   paletteAnchor.value = anchor ?? canvasAnchor(index) ?? focusedElement() ?? frame.value
    paletteOpen.value = true
+}
+
+function insertButton(index: number) {
+   let element: HTMLElement | null = null
+   try {
+      element =
+         frame.value?.contentDocument?.querySelector<HTMLElement>(`[data-cms-insert="${index}"]`) ??
+         null
+   } catch {
+      return null
+   }
+   return element?.getClientRects().length ? element : null
+}
+
+function canvasAnchor(index: number): OverlayVirtualAnchor | null {
+   const element = insertButton(index)
+   const host = frame.value
+   if (!element || !host) return null
+   let last = new DOMRect()
+   return {
+      getBoundingClientRect() {
+         if (!element.isConnected || !host.isConnected) return last
+         const box = host.getBoundingClientRect()
+         const rect = element.getBoundingClientRect()
+         last = new DOMRect(
+            box.left + host.clientLeft + rect.left,
+            box.top + host.clientTop + rect.top,
+            rect.width,
+            rect.height
+         )
+         return last
+      },
+   }
+}
+
+function focusedElement() {
+   const element = document.activeElement
+   return element instanceof HTMLElement && element !== document.body ? element : null
 }
 
 function move(from: number, to: number) {
@@ -947,13 +986,14 @@ function onFrameMessage(message: CmsPreviewFrameMessage) {
          sendState()
          break
       case 'select':
+         paletteOpen.value = false
          select(message.index)
          break
       case 'hover':
          canvasHover.value = message.index
          break
       case 'insert':
-         openPalette(message.index)
+         openPalette(message.index, insertButton(message.index))
          break
       case 'move':
          move(message.from, message.to)

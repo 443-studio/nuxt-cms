@@ -2,11 +2,11 @@
    <KPopover
       v-if="!narrow"
       v-model:open="open"
+      :anchor="anchor"
       :label="label"
       placement="bottom-start"
-      class="cms-picker-popover"
    >
-      <slot />
+      <template v-if="$slots.default" #default><slot /></template>
       <template #content>
          <CmsBlockPicker
             v-if="open"
@@ -15,11 +15,12 @@
             :paste-count="pasteCount"
             @pick="pick"
             @paste="paste"
+            @close="open = false"
          />
       </template>
    </KPopover>
    <template v-else>
-      <span class="cms-picker-trigger" @click="open = true"><slot /></span>
+      <span v-if="$slots.default" class="cms-picker-trigger" @click="open = true"><slot /></span>
       <KModal v-model:open="open" :title="label">
          <CmsBlockPicker
             v-if="open"
@@ -35,6 +36,7 @@
 
 <script setup lang="ts">
 import type { BlockConfig } from '#nuxt-cms'
+import type { OverlayAnchorTarget } from '@xleddyl/443-components-vue'
 import { Modal as KModal, Popover as KPopover } from '@xleddyl/443-components-vue'
 import { onBeforeUnmount, onMounted, ref } from '#imports'
 import { CMS_BLOCK_PICKER_MODAL_QUERY } from '../../../shared/block-picker'
@@ -45,13 +47,14 @@ withDefaults(
       disabledReason?: string
       pasteCount?: number
       label?: string
+      anchor?: OverlayAnchorTarget | null
    }>(),
-   { disabledReason: undefined, pasteCount: 0, label: 'Insert a block' }
+   { disabledReason: undefined, pasteCount: 0, label: 'Insert a block', anchor: null }
 )
 
 const emit = defineEmits<{ pick: [type: string]; paste: [] }>()
 
-const open = ref(false)
+const open = defineModel<boolean>('open', { default: false })
 const narrow = ref(false)
 let query: MediaQueryList | null = null
 

@@ -110,6 +110,7 @@
          class="cms-preview-insert"
          :class="{ 'is-near': slot.near }"
          :style="{ top: `${slot.y}px`, left: `${slot.x}px` }"
+         :data-cms-insert="slot.index"
          :aria-label="`Insert a block at position ${slot.index + 1}`"
          title="Insert a block"
          @click="emit('message', { type: 'insert', index: slot.index })"

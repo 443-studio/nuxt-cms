@@ -18,6 +18,7 @@
                   type="button"
                   class="cms-preview-empty-button"
                   data-cms-preview-keep
+                  :data-cms-insert="state.blocks.length"
                   @click="post({ type: 'insert', index: state.blocks.length })"
                >
                   <KIcon name="plus" />
@@ -37,6 +38,7 @@
                   type="button"
                   class="cms-preview-empty-button"
                   data-cms-preview-keep
+                  :data-cms-insert="state.blocks.length"
                   @click="post({ type: 'insert', index: state.blocks.length })"
                >
                   <KIcon name="plus" />

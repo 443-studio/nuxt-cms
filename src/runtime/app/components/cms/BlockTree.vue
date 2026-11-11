@@ -1,8 +1,9 @@
 <template>
-   <div ref="root" class="cms-tree" @pointerover="onPointerOver" @pointerleave="setHover(null)">
+   <div ref="root" class="cms-block-tree">
       <KTree
          :nodes="nodes"
          :selected="selectedId"
+         :highlighted="highlightedId"
          :label="label"
          size="sm"
          :bordered="false"
@@ -14,75 +15,57 @@
          :empty-description="canAdd ? 'Add the first block to start the page.' : undefined"
          @select="onSelect"
          @move="onMove"
+         @hover="onHover"
       >
          <template #label="{ node }">
             <span
-               class="cms-tree-text"
-               :class="{
-                  'is-hidden': rowOf(node)?.hidden,
-                  'is-highlighted': rowOf(node)?.index === highlighted,
-               }"
-               :data-cms-tree-index="rowOf(node)?.index"
+               class="cms-block-tree-text"
+               :class="{ 'is-hidden': rowOf(node)?.hidden, 'is-invalid': node.invalid }"
             >
-               <span class="cms-tree-label">{{ node.label }}</span>
-               <span v-if="node.description" class="cms-tree-summary">{{ node.description }}</span>
+               <span class="cms-block-tree-label">{{ node.label }}</span>
+               <span v-if="node.description" class="cms-block-tree-summary">
+                  {{ node.description }}
+               </span>
             </span>
          </template>
          <template #meta="{ node }">
-            <span class="cms-tree-meta" @click.stop>
-               <span class="cms-tree-actions">
-                  <CmsBlockPickerPopover
-                     v-if="canAdd"
-                     :blocks="field.blocks ?? {}"
-                     :paste-count="pasteCount"
-                     @pick="(type: string) => emit('pick', (rowOf(node)?.index ?? 0) + 1, type)"
-                     @paste="emit('paste', (rowOf(node)?.index ?? 0) + 1)"
-                  >
-                     <KButton
-                        :icon="cmsIcon('plus')"
-                        size="xs"
-                        variant="ghost"
-                        tone="neutral"
-                        tabindex="-1"
-                        :aria-label="`Add a block after ${node.label}`"
-                     />
-                  </CmsBlockPickerPopover>
-                  <KDropdownMenu :items="menu(rowOf(node)?.index ?? 0)" placement="bottom-end">
-                     <KButton
-                        :icon="cmsIcon('ellipsis-horizontal')"
-                        size="xs"
-                        variant="ghost"
-                        tone="neutral"
-                        tabindex="-1"
-                        :aria-label="`${node.label} actions`"
-                     />
-                  </KDropdownMenu>
-               </span>
-               <template v-if="rowOf(node)?.invalid">
-                  <span class="cms-tree-error" aria-hidden="true" />
-                  <KVisuallyHidden>Has errors</KVisuallyHidden>
-               </template>
-               <template v-if="rowOf(node)?.hidden">
-                  <KIcon :name="cmsIcon('eye-slash')" class="cms-tree-hidden" />
-                  <KVisuallyHidden>Hidden</KVisuallyHidden>
-               </template>
-            </span>
+            <template v-if="rowOf(node)?.hidden">
+               <KIcon :name="cmsIcon('eye-slash')" class="cms-block-tree-hidden" />
+               <KVisuallyHidden>Hidden</KVisuallyHidden>
+            </template>
+         </template>
+         <template #actions="{ node, selected: active }">
+            <KButton
+               v-if="canAdd"
+               :icon="cmsIcon('plus')"
+               size="xs"
+               variant="ghost"
+               tone="neutral"
+               aria-haspopup="dialog"
+               :aria-label="`Add a block after ${node.label}`"
+               @click="(event: MouseEvent) => insertAt((rowOf(node)?.index ?? 0) + 1, event)"
+            />
+            <KDropdownMenu :items="menu(rowOf(node)?.index ?? 0)" placement="bottom-end">
+               <KButton
+                  :icon="cmsIcon('ellipsis-horizontal')"
+                  size="xs"
+                  variant="ghost"
+                  tone="neutral"
+                  :aria-label="`${node.label} actions`"
+                  @click="active || onSelect(node)"
+               />
+            </KDropdownMenu>
          </template>
          <template v-if="canAdd" #empty-actions>
-            <CmsBlockPickerPopover
-               :blocks="field.blocks ?? {}"
-               :paste-count="pasteCount"
-               @pick="(type: string) => emit('pick', 0, type)"
-               @paste="emit('paste', 0)"
-            >
-               <KButton
-                  :icon="cmsIcon('plus')"
-                  label="Add a block"
-                  size="sm"
-                  variant="soft"
-                  tone="neutral"
-               />
-            </CmsBlockPickerPopover>
+            <KButton
+               :icon="cmsIcon('plus')"
+               label="Add a block"
+               size="sm"
+               variant="soft"
+               tone="neutral"
+               aria-haspopup="dialog"
+               @click="(event: MouseEvent) => insertAt(0, event)"
+            />
          </template>
       </KTree>
    </div>
@@ -108,7 +91,6 @@ import { cmsIcon } from '../../utils/ui'
 interface Row {
    index: number
    hidden: boolean
-   invalid: boolean
 }
 
 const props = defineProps<{
@@ -119,7 +101,6 @@ const props = defineProps<{
    highlighted: number | null
    errors: ReadonlySet<number>
    canAdd: boolean
-   pasteCount: number
    label: string
    menu: (index: number) => MenuItems
 }>()
@@ -128,8 +109,7 @@ const emit = defineEmits<{
    select: [index: number]
    move: [from: number, to: number]
    hover: [index: number | null]
-   pick: [index: number, type: string]
-   paste: [index: number]
+   insert: [index: number, anchor: HTMLElement]
 }>()
 
 const { i18n } = useCmsRuntime()
@@ -152,7 +132,7 @@ const rows = computed(
       new Map<TreeNode['id'], Row>(
          props.items.map((item, index) => [
             ids.value[index]!,
-            { index, hidden: isHiddenBlock(item), invalid: props.errors.has(index) },
+            { index, hidden: isHiddenBlock(item) },
          ])
       )
 )
@@ -169,13 +149,18 @@ const nodes = computed<TreeNode[]>(() =>
          label: block?.label ?? String(item.type),
          description: blockSummary(block, item, props.locale, i18n.defaultLocale, 60) || undefined,
          icon: cmsIcon(block?.icon ?? 'rectangle-stack'),
+         invalid: props.errors.has(index),
       }
    })
 )
 
-const selectedId = computed(() =>
-   props.selected === null ? null : ids.value[props.selected] ?? null
-)
+function idAt(index: number | null) {
+   return index === null ? null : ids.value[index] ?? null
+}
+
+const selectedId = computed(() => idAt(props.selected))
+
+const highlightedId = computed(() => idAt(props.highlighted))
 
 function onSelect(node: TreeNode) {
    const row = rowOf(node)
@@ -186,20 +171,12 @@ function onMove(move: TreeMove) {
    emit('move', move.from.index, move.to.index)
 }
 
-let hovered: number | null = null
-
-function setHover(index: number | null) {
-   if (index === hovered) return
-   hovered = index
-   emit('hover', index)
+function insertAt(index: number, event: MouseEvent) {
+   emit('insert', index, event.currentTarget as HTMLElement)
 }
 
-function onPointerOver(event: PointerEvent) {
-   const row = event.target instanceof Element ? event.target.closest('[role="treeitem"]') : null
-   const index = Number(
-      row?.querySelector<HTMLElement>('[data-cms-tree-index]')?.dataset.cmsTreeIndex
-   )
-   setHover(Number.isInteger(index) ? index : null)
+function onHover(node: TreeNode | null) {
+   emit('hover', node ? rowOf(node)?.index ?? null : null)
 }
 
 watch(
@@ -208,8 +185,7 @@ watch(
       if (index === null) return
       await nextTick()
       root.value
-         ?.querySelector(`[data-cms-tree-index="${index}"]`)
-         ?.closest('[role="treeitem"]')
+         ?.querySelector('[role="treeitem"][aria-selected="true"]')
          ?.scrollIntoView({ block: 'nearest' })
    }
 )

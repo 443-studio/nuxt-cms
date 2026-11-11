@@ -244,9 +244,10 @@ bar and three panels:
 - **Block tree** (left): every block of the body, in order. A row shows the block icon and label
   and a short summary (the first text, rich text or email value in the current language, or the
   name of its media file) so that similar blocks are easy to tell apart. A hidden block is dimmed
-  with an eye icon, and a red dot marks a block with a validation error. Drag a row by its handle
-  to move it, or focus it and press Alt with the up or down arrow. On hover, a row shows **+**
-  (add a block after it) and a `...` menu: add before or after, move up or down, **Duplicate**,
+  with an eye icon, and a red dot and a red label mark a block with a validation error. Drag a row
+  by its handle to move it, or focus it and press Alt with the up or down arrow. On hover, on focus
+  (Tab from the row) and on the selected row, the row shows **+** (add a block after it) and a `...`
+  menu (opening it selects the block): add before or after, move up or down, **Duplicate**,
   **Hide** or **Show**, and **Delete**. **Add a block** at the bottom adds one at the end.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
   layout and CSS apply. Every change is shown at once, before saving. The bar above it shows or
@@ -335,9 +336,10 @@ block. Leaving with unsaved changes asks for a confirmation.
 
 ### Block picker
 
-The **+** of a row in the block tree, **Add a block** and the add tile of a `blocks` field open the
-block picker under the button; the **+** of the canvas, the menus and Enter open it as a dialog, and
-so does every button on a screen narrower than 640 px. The search box has the focus: type to filter
+The block picker opens in a popover next to what opened it: under the **+** of a tree row, **Add a
+block** or the add tile of a `blocks` field, under the **+** of the canvas, and for the menus and
+Enter or ⇧ Enter at the edge of the selected block in the canvas (after or before it). On a screen
+narrower than 640 px it opens as a dialog. The search box has the focus: type to filter
 by label, description, [group and tags](schema.md#block-components) (case and accents do not
 matter), move with ↑ and ↓, pick with Enter or a click, close with Escape. Blocks with a `group`
 are listed under its heading. Each block shows its icon, label and description. When the field is
