@@ -1,20 +1,32 @@
 <template>
-   <div class="cms-page">
-      <KPageHeader :title="headerTitle" :breadcrumbs="breadcrumb" breadcrumbs-ancestors>
+   <div class="k-page cms-page">
+      <KPageHeader :title="headerTitle" :icon="cmsIcon(config.icon ?? 'window')">
+         <template #title>
+            <KBreadcrumbs :items="trail" size="lg" label="Page" />
+         </template>
          <template v-if="drafts" #badge>
             <CmsStatusBadge :published="published" />
          </template>
          <template #actions>
-            <CmsTranslationMenu v-model="formState" :fields="fields" :disabled="!!lock" />
-            <KButton label="Back" icon="arrow-left" variant="soft" @click="goBack" />
-            <KButton v-if="!lock" type="submit" :form="FORM_ID" label="Save" :loading="saving" />
+            <CmsTranslationMenu v-model="formState" :fields="fields" :disabled="!!lock" size="sm" />
             <KButton
                v-if="drafts && !lock && canPublish"
                type="submit"
                :form="FORM_ID"
                :label="published ? 'Make draft' : 'Publish'"
+               variant="soft"
+               tone="neutral"
+               size="sm"
                :loading="saving"
                @click="togglePublished"
+            />
+            <KButton
+               v-if="!lock"
+               type="submit"
+               :form="FORM_ID"
+               label="Save"
+               size="sm"
+               :loading="saving"
             />
          </template>
       </KPageHeader>
@@ -28,6 +40,7 @@
             :entry-name="name"
             :drafts="drafts"
             :form-id="FORM_ID"
+            :footer="false"
             :loading="saving"
             :focus="focus"
             :path="pageRoute?.path"
@@ -56,6 +69,7 @@ import {
 } from '#imports'
 import type { BreadcrumbItem } from '@xleddyl/443-components-vue'
 import {
+   Breadcrumbs as KBreadcrumbs,
    Button as KButton,
    Card as KCard,
    PageHeader as KPageHeader,
@@ -72,7 +86,7 @@ import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
 import { cmsApi } from '../utils/api'
 import type { CmsResponseIssue } from '../utils/ui'
-import { errorIssues, errorMessage } from '../utils/ui'
+import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
 
 const FORM_ID = 'cms-entry-form'
 
@@ -131,6 +145,8 @@ const breadcrumb = ((): BreadcrumbItem[] => {
    }
    return links
 })()
+
+const trail: BreadcrumbItem[] = [...breadcrumb, { label: pageRoute?.label ?? config.label }]
 
 const isNew = !isPage && id === undefined
 const drafts = !isPage && !!config.drafts
