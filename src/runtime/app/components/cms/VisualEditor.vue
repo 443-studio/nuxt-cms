@@ -286,7 +286,7 @@ import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-sett
 import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
-const SEO_KEYS = ['seoTitle', 'seoDescription', 'seoImage']
+const SEO_KEYS = ['seoTitle', 'seoDescription', 'seoImage', 'seoNoindex']
 
 const deviceOptions = [
    { value: 'desktop', label: 'Desktop width', icon: cmsIcon('computer-desktop') },

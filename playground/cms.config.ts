@@ -71,16 +71,23 @@ export default defineCmsConfig({
             tab: 'images',
             description: 'The mobile version is optional. Without it, the site uses the cover.',
          },
-         metaTitle: { label: 'Meta title', type: 'text', translatable: true, tab: 'seo' },
-         metaDescription: {
-            label: 'Meta description',
+         seoTitle: { label: 'SEO title', type: 'text', translatable: true, tab: 'seo' },
+         seoDescription: {
+            label: 'SEO description',
             type: 'text',
             textarea: true,
             translatable: true,
             tab: 'seo',
             description: 'About 155 characters. Search engines show it under the link.',
          },
-         noIndex: { label: 'Hide from search engines', type: 'boolean', tab: 'seo' },
+         seoImage: {
+            label: 'Share image',
+            type: 'media',
+            mediaType: 'image',
+            tab: 'seo',
+            description: 'Shown when the page is shared. Without it, the cover or the site image.',
+         },
+         seoNoindex: { label: 'Hide from search engines', type: 'boolean', tab: 'seo' },
       },
       overrides: {
          '/about': {
@@ -103,7 +110,7 @@ export default defineCmsConfig({
          {
             title: 'Search engines',
             description: 'How the page shows up in search results.',
-            rows: [['metaTitle', 'noIndex'], 'metaDescription'],
+            rows: [['seoTitle', 'seoNoindex'], 'seoDescription', 'seoImage'],
          },
       ],
    },

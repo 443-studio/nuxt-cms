@@ -36,6 +36,7 @@ import {
    isPrivateField,
    isRoutedContent,
    isTranslatableMediaField,
+   localeText,
    localizeBlocks,
    mediaPublicUrl,
    mediaTypeFor,
@@ -44,6 +45,7 @@ import {
    translatableFieldKeys,
 } from '../../shared/index'
 import {
+   SITE_QUERY_FIELD,
    blockTypeName,
    blocksFieldTypeName,
    renderGraphqlSdl,
@@ -53,6 +55,7 @@ import { normalizeTimestampFields } from '../../shared/timestamps'
 import { findContentByPath } from './content-routes'
 import { useMediaIndex } from './media-index'
 import { readPages } from './page-storage'
+import { readSiteSettings } from './site'
 import type { JoinTable } from './list-filter'
 import {
    isListFilterOperator,
@@ -489,6 +492,19 @@ export function buildCmsSchema() {
 
    const queryResolvers: Record<string, unknown> = {}
    const typeResolvers: Record<string, Record<string, unknown>> = {}
+
+   queryResolvers[SITE_QUERY_FIELD] = async (_: unknown, args: { locale?: string }, ctx: Ctx) => {
+      const locale = resolveLocaleArg(args.locale)
+      const { defaultLocale } = getContentI18n()
+      const settings = await readSiteSettings()
+      return {
+         name: localeText(settings.name, locale, defaultLocale),
+         titleTemplate: settings.titleTemplate,
+         description: localeText(settings.description, locale, defaultLocale),
+         image: await resolveMedia(ctx, settings.image),
+         hidden: settings.hidden,
+      }
+   }
 
    for (const [name, entry] of entries) {
       const gqlType = typeName(name)

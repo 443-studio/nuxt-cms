@@ -113,7 +113,7 @@ pages: {
    id: 'pages',
    label: 'Pages',
    kind: 'page',
-   columns: ['metaTitle', 'metaDescription', 'ogImage'],
+   columns: ['seoTitle', 'seoDescription', 'seoImage'],
    fields: { ... },
    overrides: { ... },
 }
@@ -254,8 +254,10 @@ System fields, injected for you (declaring one of them in `fields` is a config e
 | `seoTitle`       | `text`, translatable                 |                                                    |
 | `seoDescription` | `text` textarea, translatable        |                                                    |
 | `seoImage`       | `media` image                        |                                                    |
+| `seoNoindex`     | `boolean`                            | hides the item from search engines and the sitemap |
 
-The text system fields are translatable when `cms.i18n.locales` is set, plain text otherwise.
+The text system fields are translatable when `cms.i18n.locales` is set, plain text otherwise. The
+SEO fields feed [`useCmsSeo`](seo.md#usecmsseo) and the [sitemap](seo.md#sitemapxml).
 
 Every item has a draft or published `status` and `createdAt`/`updatedAt`. **The public API returns
 an item only when it is published and its `publishedAt` is not in the future**: a published item
@@ -659,7 +661,7 @@ pages: {
    fields: {
       title: { label: 'Title', type: 'text' },
       hero: { label: 'Hero', type: 'media', tab: 'images' },
-      metaTitle: { label: 'Meta title', type: 'text', tab: 'seo' },
+      seoTitle: { label: 'SEO title', type: 'text', tab: 'seo' },
    },
 }
 ```

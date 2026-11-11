@@ -129,6 +129,18 @@ or `null` when no published item has that path. The path is matched against the 
 hash and trailing slash are ignored. When two patterns could match the same path, the one with
 more fixed segments wins. It sends one request (`<entry>ByPath` per routed entry).
 
+### SEO tags
+
+`useCmsSeo(item, { locale })` writes the title, description, canonical, Open Graph, Twitter,
+`robots` and hreflang tags of a page from a content item or a page row, with the site settings as
+fallback; `useCmsSite({ locale })` reads those settings (`cmsSite` in GraphQL). See
+[SEO](seo.md).
+
+```ts
+const { data: match } = await useCmsRoute(route.path, { locale })
+useCmsSeo(() => match.value?.item, { locale })
+```
+
 Write a query with `useCms` when you need a count, a relation two levels deep, several entries in
 one request, or a narrower selection.
 

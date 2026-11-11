@@ -47,5 +47,9 @@ export default defineNuxtConfig({
             ],
          },
       },
+      seo: {
+         sitemap: true,
+         robots: true,
+      },
    },
 })

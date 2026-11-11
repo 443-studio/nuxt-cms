@@ -34,6 +34,10 @@
          <CmsSettingsUsers v-model:creating="usersCreating" />
       </template>
 
+      <template #section-site>
+         <CmsSettingsSite />
+      </template>
+
       <template v-for="item in visibleEntries" :key="item.key" #[`actions-${item.key}`]>
          <span class="cms-settings-status" :class="`is-${entryStatus}`" aria-live="polite">
             {{ STATUS_LABELS[entryStatus] }}
@@ -127,6 +131,12 @@ const sections = computed<SettingsModalSection[]>(() => [
            },
         ]
       : []),
+   {
+      id: 'site',
+      label: 'Site',
+      icon: cmsIcon('globe-alt'),
+      description: 'Site name, search engines and sharing.',
+   },
    ...visibleEntries.value.map((item) => ({
       id: item.key,
       label: item.label,

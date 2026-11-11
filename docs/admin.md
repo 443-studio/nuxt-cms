@@ -241,7 +241,8 @@ The visual editor edits a body of blocks on top of the real site. It fills the w
   saved item is published and not scheduled), then title, slug, publish date, excerpt, cover and
   the extra fields, in the order of the form layout. **Block**: the fields of the selected block,
   or, when no block is selected, the list of blocks and the palette to add one. **SEO**: the SEO
-  fields. The language switch of the top bar drives every translatable field.
+  fields and **Hide from search engines**. The language switch of the top bar drives every
+  translatable field.
 
 In the canvas, hover a block to outline it with its label; click it to select it and open its
 fields. The toolbar of a block has a drag handle, move up and down, **Duplicate**, **Hide** and
@@ -289,6 +290,8 @@ The account button at the bottom of the sidebar opens **Settings**:
   of the browser.
 - **Users** (super admin and roles with `users.manage`): add accounts, pick their role, set a new
   password, delete accounts.
+- **Site**: site name, title template, default description, share image and the switch that hides
+  the whole site from search engines. See [SEO](seo.md#site-settings).
 - **Content** (roles with `settings.manage`): one item for each entry the role can read.
   - **Table columns** (collections only): show, hide and drag the columns of the table, including
     **Status** and **Translations**.

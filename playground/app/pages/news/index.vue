@@ -19,4 +19,8 @@
 
 <script setup lang="ts">
 const { data: items } = await useCmsContents('news', { limit: 20 })
+
+const { data: page } = await useCmsPage('/news')
+
+useCmsSeo(page)
 </script>

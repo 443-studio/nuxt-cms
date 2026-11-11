@@ -75,6 +75,7 @@ const RESERVED_TYPE_NAMES = [
    'Subscription',
    'CmsMedia',
    'CmsLocalePath',
+   'CmsSite',
    'JSON',
    'SortDirection',
    'IntFilter',

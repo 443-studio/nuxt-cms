@@ -152,10 +152,13 @@ const COMMON_SDL = [
    `input ${LIST_FILTER} {\n  hasAny: [String!]\n  hasAll: [String!]\n  isEmpty: Boolean\n}`,
    'enum CmsMediaType {\n  image\n  video\n  file\n}',
    'type CmsMedia {\n  key: String!\n  url: String\n  type: CmsMediaType!\n  alt: String\n  folder: String\n  mime: String\n  size: Int\n  width: Int\n  height: Int\n  focalX: Float\n  focalY: Float\n}',
+   'type CmsSite {\n  name: String\n  titleTemplate: String\n  description: String\n  image: CmsMedia\n  hidden: Boolean!\n}',
 ]
 
+export const SITE_QUERY_FIELD = 'cmsSite'
+
 export function renderGraphqlSdl(config: CmsConfig): string {
-   const queryLines: string[] = []
+   const queryLines: string[] = [`  ${SITE_QUERY_FIELD}(locale: String): CmsSite!`]
    const types: string[] = []
    if (Object.values(config).some(isRoutedContent))
       types.push('type CmsLocalePath {\n  locale: String!\n  path: String!\n}')
@@ -191,9 +194,5 @@ export function renderGraphqlSdl(config: CmsConfig): string {
          queryLines.push(`  ${name}ByPath(path: String!, locale: String): ${gqlType}`)
    }
 
-   return [
-      ...COMMON_SDL,
-      ...types,
-      `type Query {\n${queryLines.length ? queryLines.join('\n') : '  _empty: Boolean'}\n}`,
-   ].join('\n\n')
+   return [...COMMON_SDL, ...types, `type Query {\n${queryLines.join('\n')}\n}`].join('\n\n')
 }

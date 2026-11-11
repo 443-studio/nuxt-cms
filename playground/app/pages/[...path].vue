@@ -36,6 +36,8 @@ if (!match.value) {
    throw createError({ statusCode: 404, statusMessage: 'Page not found', fatal: true })
 }
 
+useCmsSeo(() => match.value?.item, { locale })
+
 const alternates = computed(() =>
    (match.value?.item.paths ?? []).filter((alternate) => alternate.locale !== locale)
 )

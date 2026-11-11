@@ -16,4 +16,6 @@
 
 <script setup lang="ts">
 const { data: page } = await useCmsPage('/about')
+
+useCmsSeo(page)
 </script>

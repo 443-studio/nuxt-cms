@@ -38,6 +38,16 @@ import {
    renderBlocksFile,
 } from './blocks-codegen'
 import { DEFAULT_CMS_PREVIEW_PATH, previewPathErrors } from './runtime/shared/preview'
+import type { CmsSeoModuleOptions, CmsSiteModuleOptions } from './runtime/shared/seo'
+import {
+   ROBOTS_CONFLICT_MODULES,
+   ROBOTS_PATH,
+   SITEMAP_CONFLICT_MODULES,
+   SITEMAP_PATH,
+   normalizeSiteUrl,
+   resolveSeoSwitches,
+   seoOptionErrors,
+} from './runtime/shared/seo'
 import {
    collectMediaManifest,
    renderMediaManifestFile,
@@ -118,6 +128,8 @@ export interface ModuleOptions {
    }
    webhooks?: ModuleOptionsWebhook[]
    roles?: CmsRolesInput
+   site?: CmsSiteModuleOptions
+   seo?: CmsSeoModuleOptions
 }
 
 interface ResolvedModuleOptions {
@@ -269,6 +281,75 @@ function resolveModuleOptions(options: ModuleOptions): ResolvedModuleOptions {
 }
 
 const moduleRequire = createRequire(import.meta.url)
+
+function resolveSiteUrlOption(nuxt: Nuxt, options: ModuleOptions): string {
+   const existing = nuxt.options.runtimeConfig.public.siteUrl
+   const nuxtSite = (nuxt.options as unknown as { site?: { url?: unknown } }).site?.url
+   const candidates = [
+      options.site?.url,
+      typeof existing === 'string' ? existing : undefined,
+      typeof nuxtSite === 'string' ? nuxtSite : undefined,
+      process.env.NUXT_PUBLIC_SITE_URL,
+   ]
+   return normalizeSiteUrl(candidates.find((candidate) => candidate?.trim()))
+}
+
+function setupSiteUrl(nuxt: Nuxt, options: ModuleOptions, logger: ReturnType<typeof useLogger>) {
+   const errors = seoOptionErrors(options.seo, options.site)
+   if (errors.length) throw new Error(`[nuxt-cms] ${errors.join('\n')}`)
+   const existing = nuxt.options.runtimeConfig.public.siteUrl
+   const siteUrl = resolveSiteUrlOption(nuxt, options)
+   if (
+      options.site?.url &&
+      typeof existing === 'string' &&
+      existing.trim() &&
+      normalizeSiteUrl(existing) !== siteUrl
+   ) {
+      logger.warn(
+         `[nuxt-cms] cms.site.url (${siteUrl}) replaces runtimeConfig.public.siteUrl (${existing}).`
+      )
+   }
+   nuxt.options.runtimeConfig.public.siteUrl = siteUrl
+}
+
+function setupSeoRoutes(
+   nuxt: Nuxt,
+   resolver: ReturnType<typeof createResolver>,
+   seo: CmsSeoModuleOptions | undefined,
+   publicDir: string,
+   logger: ReturnType<typeof useLogger>
+) {
+   nuxt.hook('modules:done', () => {
+      const installed = (names: string[]) => names.filter((name) => hasNuxtModule(name, nuxt))
+      const publicFile = (file: string) =>
+         existsSync(join(publicDir, file)) ? [`public/${file}`] : []
+      const sitemapConflicts = [
+         ...installed(SITEMAP_CONFLICT_MODULES),
+         ...publicFile(SITEMAP_PATH.slice(1)),
+      ]
+      const switches = resolveSeoSwitches(seo, {
+         sitemap: sitemapConflicts,
+         robots: [...installed(ROBOTS_CONFLICT_MODULES), ...publicFile(ROBOTS_PATH.slice(1))],
+      })
+      for (const warning of switches.warnings) logger.warn(warning)
+      const runtime = nuxt.options.runtimeConfig.cms as Record<string, unknown>
+      runtime.seo = {
+         sitemap: switches.sitemap,
+         robots: switches.robots,
+         robotsSitemap: switches.sitemap || sitemapConflicts.length > 0,
+      }
+      if (switches.sitemap)
+         addServerHandler({
+            route: SITEMAP_PATH,
+            handler: resolver.resolve('./runtime/server/routes/sitemap'),
+         })
+      if (switches.robots)
+         addServerHandler({
+            route: ROBOTS_PATH,
+            handler: resolver.resolve('./runtime/server/routes/robots'),
+         })
+   })
+}
 
 function resolveImport(specifier: string) {
    try {
@@ -546,6 +627,7 @@ export default defineNuxtModule<ModuleOptions>({
          throw new Error(`[nuxt-cms] Invalid webhooks:\n${webhooks.errors.join('\n')}`)
       }
       for (const warning of webhooks.warnings) logger.warn(`[nuxt-cms] ${warning}`)
+      setupSiteUrl(nuxt, options, logger)
 
       if (!resolveCmsEnabled(options.enabled, process.env[CMS_ENABLED_ENV])) {
          const queryStub = resolver.resolve('./runtime/app/composables/cms-query-disabled')
@@ -559,6 +641,11 @@ export default defineNuxtModule<ModuleOptions>({
             { name: 'useCmsContents', from: entryStub },
             { name: 'useCmsContent', from: entryStub },
             { name: 'useCmsRoute', from: entryStub },
+            {
+               name: 'useCmsSite',
+               from: resolver.resolve('./runtime/app/composables/cms-site-disabled'),
+            },
+            { name: 'useCmsSeo', from: resolver.resolve('./runtime/app/composables/cms-seo') },
          ])
          const disabledConfig = await loadCmsConfig(
             nuxt,
@@ -667,6 +754,8 @@ export default defineNuxtModule<ModuleOptions>({
       const queryComposables = resolver.resolve('./runtime/app/composables/cms-query')
       const entryComposables = resolver.resolve('./runtime/app/composables/cms-entry')
       addImports([
+         { name: 'useCmsSite', from: resolver.resolve('./runtime/app/composables/cms-site') },
+         { name: 'useCmsSeo', from: resolver.resolve('./runtime/app/composables/cms-seo') },
          { name: 'useCms', from: queryComposables },
          { name: '$cmsQuery', from: queryComposables },
          { name: 'useCmsSingle', from: entryComposables },
@@ -930,6 +1019,7 @@ export default defineNuxtModule<ModuleOptions>({
             ...webhooks.webhooks,
             ...((existingConfig.webhooks as Record<string, unknown>) ?? {}),
          } as never,
+         seo: { sitemap: false, robots: false, robotsSitemap: false },
       }
       nuxt.options.runtimeConfig.public.cms = {
          mediaBaseUrl: resolved.media.publicBaseUrl,
@@ -1230,6 +1320,17 @@ export default defineNuxtModule<ModuleOptions>({
          method: 'post',
          handler: resolver.resolve('./runtime/server/api/account-welcome.post'),
       })
+      addServerHandler({
+         route: '/api/cms/site',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/site.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/site',
+         method: 'put',
+         handler: resolver.resolve('./runtime/server/api/site.put'),
+      })
+      setupSeoRoutes(nuxt, resolver, options.seo, publicDir, logger)
       addServerHandler({
          route: '/api/cms/admin/settings',
          method: 'get',

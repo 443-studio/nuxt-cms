@@ -36,6 +36,13 @@ cms: {
    },
    webhooks: [],                    // [{ name, url?, secret?, events?, timeout? }], see Hooks & webhooks
    roles: {},                       // { editor: { label?, description?, can: [...] } }, see Roles
+   site: {
+      url: '',                      // absolute site URL; or NUXT_PUBLIC_SITE_URL
+   },
+   seo: {
+      sitemap: true,                // serve /sitemap.xml (off when another provider is found)
+      robots: true,                 // serve /robots.txt (off when another provider is found)
+   },
 }
 ```
 
@@ -259,6 +266,16 @@ reserved or malformed role key and on unknown keys. It warns when a role edits a
 fields without `media.read`, or with a relation without `read` on the target, because the pickers
 of the form need them. See [Roles and permissions](admin.md#roles-and-permissions).
 
+### `site` and `seo`
+
+`site.url` is the absolute URL of the site, used for canonical links, share images, the sitemap
+and `robots.txt`. It becomes `runtimeConfig.public.siteUrl` (so `NUXT_PUBLIC_SITE_URL` overrides it
+at runtime); without it, the module falls back to an existing `runtimeConfig.public.siteUrl`, to
+`site.url` of `nuxt-site-config`, then to the request origin. `seo.sitemap` and `seo.robots` turn
+the `/sitemap.xml` and `/robots.txt` routes on or off. Left unset, each is on unless the build finds
+`@nuxtjs/sitemap` / `@nuxtjs/robots` or a `public/sitemap.xml` / `public/robots.txt`. A bad URL,
+an unknown key or a non-boolean switch fails the build. See [SEO](seo.md).
+
 ## Environment variables
 
 Secrets should be provided as env vars rather than committed to `nuxt.config.ts`.
@@ -287,6 +304,7 @@ Secrets should be provided as env vars rather than committed to `nuxt.config.ts`
 | `NUXT_PUBLIC_CMS_MEDIA_BASE_URL` | for media | public base URL for uploaded files |
 | `NUXT_CMS_WEBHOOKS_<NAME>_URL` | no | URL of the webhook named `<name>` (upper snake case) |
 | `NUXT_CMS_WEBHOOKS_<NAME>_SECRET` | no | signing secret of that webhook |
+| `NUXT_PUBLIC_SITE_URL` | recommended | absolute site URL for canonical links, the sitemap and `robots.txt` |
 
 Env vars follow Nuxt's runtime-config convention: `cms.admin.email` ← `NUXT_CMS_ADMIN_EMAIL`,
 `cms.database.url` ← `NUXT_CMS_DATABASE_URL`, and so on. Values set via env override the ones in

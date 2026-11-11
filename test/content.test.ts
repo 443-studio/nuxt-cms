@@ -41,6 +41,7 @@ describe('content normalization', () => {
          'seoTitle',
          'seoDescription',
          'seoImage',
+         'seoNoindex',
       ])
       expect(news.titleField).toBe('title')
       expect(news.drafts).toBe(true)

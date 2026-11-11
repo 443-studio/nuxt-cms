@@ -142,6 +142,10 @@ const { data } = await useCms(`{
 
 const { data: home } = await useCmsSingle('homepage')
 
+const { data: page } = await useCmsPage('/')
+
+useCmsSeo(page)
+
 const { data: events } = await useCmsCollection('events', { sort: [{ field: 'date' }] })
 
 const blocks = computed(() =>

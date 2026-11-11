@@ -729,7 +729,10 @@ export const CONTENT_SYSTEM_FIELDS = [
    'seoTitle',
    'seoDescription',
    'seoImage',
+   'seoNoindex',
 ] as const
+
+export const CONTENT_NOINDEX_FIELD = 'seoNoindex'
 
 export type CmsContentSystemField = (typeof CONTENT_SYSTEM_FIELDS)[number]
 
@@ -780,6 +783,11 @@ function contentSystemFields(
          ...localized,
       },
       seoImage: { label: label('seoImage', 'SEO image'), type: 'media', mediaType: 'image' },
+      seoNoindex: {
+         label: label('seoNoindex', 'Hide from search engines'),
+         type: 'boolean',
+         description: 'Adds noindex to the page and leaves it out of the sitemap.',
+      },
    }
 }
 
@@ -790,7 +798,7 @@ function normalizeContentEntry(entry: CmsEntry, translatable: boolean): CmsEntry
    const extra = Object.fromEntries(
       Object.entries(declared).filter(([key]) => !Object.hasOwn(system, key))
    )
-   const { body, seoTitle, seoDescription, seoImage, ...head } = system
+   const { body, seoTitle, seoDescription, seoImage, seoNoindex, ...head } = system
    return Object.assign(entry, {
       declared: {
          fields: Object.keys(declared),
@@ -799,7 +807,7 @@ function normalizeContentEntry(entry: CmsEntry, translatable: boolean): CmsEntry
       },
       titleField: CONTENT_TITLE_FIELD,
       drafts: true,
-      fields: { ...head, ...extra, body, seoTitle, seoDescription, seoImage },
+      fields: { ...head, ...extra, body, seoTitle, seoDescription, seoImage, seoNoindex },
       list: entry.list ?? { columns: [...CONTENT_LIST_COLUMNS] },
    })
 }
@@ -1218,6 +1226,7 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
 
 export * from './conditions'
 export * from './content-routes'
+export * from './seo'
 export * from './layout'
 export * from './media-focal'
 export * from './users'
