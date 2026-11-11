@@ -152,11 +152,15 @@ describe('validateConfig', () => {
       )
    })
 
-   it('rejects min and max on a field that is not blocks', () => {
+   it('rejects min and max on a field without bounds', () => {
       const config = sampleConfig()
-      config.events!.fields.seats!.max = 3
+      config.events!.fields.featured!.max = 3
       const errors = validateConfig(config, I18N)
-      expect(errors.some((e) => e.includes('min and max are only supported on blocks'))).toBe(true)
+      expect(
+         errors.some((e) =>
+            e.includes('min and max are only supported on number, text, blocks and tags fields')
+         )
+      ).toBe(true)
    })
 
    it('accepts validate functions on entries and blocks', () => {

@@ -20,8 +20,17 @@ import {
    pageFieldsTableName,
    pageMediaTableName,
    pageRoutes,
+   normalizeTags,
    selectOptionValues,
 } from './runtime/shared/index'
+import {
+   DEFAULT_FIELD_TYPES,
+   DEFAULT_NOW,
+   DEFAULT_TODAY,
+   IMMUTABLE_FIELD_TYPES,
+   UNIQUE_FIELD_TYPES,
+   isUniqueValueField,
+} from './runtime/shared/field-options'
 
 export type Dialect = 'sqlite' | 'postgres'
 export type Driver = Dialect | 'libsql' | 'd1'
@@ -257,12 +266,8 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
          } else if (field.suggestions !== undefined) {
             errors.push(`${fat}: suggestions is only supported on tags fields`)
          }
-         if (
-            field.type !== 'blocks' &&
-            field.type !== 'tags' &&
-            (field.min !== undefined || field.max !== undefined)
-         )
-            errors.push(`${fat}: min and max are only supported on blocks and tags fields`)
+         errors.push(...valueBoundsErrors(fat, field))
+         errors.push(...fieldOptionErrors(fat, field, entry, null))
          if (field.type === 'blocks') {
             if (field.translatable) errors.push(`${fat}: blocks fields cannot be translatable`)
             errors.push(...blocksCountErrors(fat, field))
@@ -311,6 +316,8 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                      )
                   if ((blockField as FieldConfig).mobile)
                      errors.push(`${bfat}: mobile is not supported inside blocks`)
+                  errors.push(...valueBoundsErrors(bfat, blockField))
+                  errors.push(...fieldOptionErrors(bfat, blockField, entry, 'blocks'))
                   if (blockField.type === 'select')
                      errors.push(...selectOptionErrors(bfat, blockField))
                   if (blockField.type === 'select' && blockField.multiple) {
@@ -649,6 +656,153 @@ function showIfErrors(
    return errors
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function valueBoundsErrors(at: string, field: FieldConfig): string[] {
+   if (field.type === 'blocks' || field.type === 'tags') return []
+   const errors: string[] = []
+   const raw = field as unknown as Record<string, unknown>
+   for (const name of ['minLength', 'maxLength'])
+      if (raw[name] !== undefined)
+         errors.push(
+            `${at}: ${name} is not an option, use ${name.slice(0, 3)} (characters on text fields)`
+         )
+   if (field.min === undefined && field.max === undefined) return errors
+   if (field.type === 'number') {
+      const isBound = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
+      if (field.min !== undefined && !isBound(field.min)) errors.push(`${at}: min must be a number`)
+      if (field.max !== undefined && !isBound(field.max)) errors.push(`${at}: max must be a number`)
+      if (isBound(field.min) && isBound(field.max) && field.min! > field.max!)
+         errors.push(`${at}: min (${field.min}) cannot be greater than max (${field.max})`)
+      return errors
+   }
+   if (field.type === 'text') {
+      const isLength = (value: unknown, least: number) =>
+         typeof value === 'number' && Number.isInteger(value) && value >= least
+      if (field.min !== undefined && !isLength(field.min, 0))
+         errors.push(`${at}: min must be an integer of 0 or more (characters)`)
+      if (field.max !== undefined && !isLength(field.max, 1))
+         errors.push(`${at}: max must be an integer of 1 or more (characters)`)
+      if (isLength(field.min, 0) && isLength(field.max, 1) && field.min! > field.max!)
+         errors.push(`${at}: min (${field.min}) cannot be greater than max (${field.max})`)
+      return errors
+   }
+   errors.push(`${at}: min and max are only supported on number, text, blocks and tags fields`)
+   return errors
+}
+
+function defaultValueError(field: FieldConfig): string | null {
+   const value = field.default
+   switch (field.type) {
+      case 'text':
+      case 'richtext': {
+         if (typeof value !== 'string') return 'default must be a string'
+         if (field.type === 'text' && value.trim()) {
+            if (field.min !== undefined && value.length < field.min)
+               return `default is shorter than min (${field.min})`
+            if (field.max !== undefined && value.length > field.max)
+               return `default is longer than max (${field.max})`
+         }
+         return null
+      }
+      case 'number':
+         if (typeof value !== 'number' || !Number.isFinite(value)) return 'default must be a number'
+         if (field.integer && !Number.isInteger(value)) return 'default must be an integer'
+         if (field.min !== undefined && value < field.min)
+            return `default is lower than min (${field.min})`
+         if (field.max !== undefined && value > field.max)
+            return `default is greater than max (${field.max})`
+         return null
+      case 'boolean':
+         return typeof value === 'boolean' ? null : 'default must be true or false'
+      case 'date':
+         return value === DEFAULT_TODAY || isDateValue(value)
+            ? null
+            : `default must be '${DEFAULT_TODAY}' or a yyyy-mm-dd date`
+      case 'datetime':
+         return value === DEFAULT_NOW || isDateTimeValue(value)
+            ? null
+            : `default must be '${DEFAULT_NOW}' or an ISO 8601 date and time with a time zone`
+      case 'email':
+         return typeof value === 'string' && EMAIL_PATTERN.test(value)
+            ? null
+            : 'default must be a valid email'
+      case 'select': {
+         const options = selectOptionValues(field)
+         if (!field.multiple)
+            return typeof value === 'string' && options.includes(value)
+               ? null
+               : `default must be one of the options (${options.join(', ')})`
+         if (!Array.isArray(value)) return 'default of a multiple select must be a list of options'
+         const unknown = value.filter((item) => typeof item !== 'string' || !options.includes(item))
+         if (unknown.length)
+            return `default holds values that are not options: ${unknown
+               .map((item) => JSON.stringify(item))
+               .join(', ')}`
+         return new Set(value).size === value.length ? null : 'default repeats an option'
+      }
+      case 'tags': {
+         if (
+            !Array.isArray(value) ||
+            value.some((item) => typeof item !== 'string' || !item.trim())
+         )
+            return 'default must be a list of non-empty strings'
+         const count = normalizeTags(value).length
+         return field.max !== undefined && count > field.max
+            ? `default holds more than max (${field.max}) tags`
+            : null
+      }
+      default:
+         return `default is only supported on ${DEFAULT_FIELD_TYPES.join(', ')} fields`
+   }
+}
+
+function fieldOptionErrors(
+   at: string,
+   field: FieldConfig,
+   entry: CmsEntry,
+   scope: 'blocks' | null
+): string[] {
+   const errors: string[] = []
+   const place = scope === 'blocks' ? 'inside blocks' : entry.kind === 'page' ? 'on pages' : null
+   if (field.default !== undefined) {
+      if (place) errors.push(`${at}: default is not supported ${place}`)
+      else {
+         const problem = defaultValueError(field)
+         if (problem) errors.push(`${at}: ${problem}`)
+      }
+   }
+   if (field.unique !== undefined && typeof field.unique !== 'boolean')
+      errors.push(`${at}: unique must be a boolean`)
+   if (field.unique === true) {
+      if (!UNIQUE_FIELD_TYPES.includes(field.type))
+         errors.push(
+            `${at}: unique is only supported on ${UNIQUE_FIELD_TYPES.join(', ')} fields${
+               field.type === 'slug' ? ' (a slug is always unique)' : ''
+            }`
+         )
+      else if (place) errors.push(`${at}: unique is not supported ${place}`)
+      else if (entry.kind === 'single')
+         errors.push(`${at}: unique is not supported on singles, which hold one item`)
+      else if (field.translatable)
+         errors.push(`${at}: unique is not supported on translatable fields`)
+   }
+   if (field.immutable !== undefined && typeof field.immutable !== 'boolean')
+      errors.push(`${at}: immutable must be a boolean`)
+   if (field.immutable === true) {
+      if (!IMMUTABLE_FIELD_TYPES.includes(field.type) || isManyToMany(field))
+         errors.push(
+            `${at}: immutable is only supported on ${IMMUTABLE_FIELD_TYPES.join(
+               ', '
+            )} fields (not many-to-many)`
+         )
+      else if (place) errors.push(`${at}: immutable is not supported ${place}`)
+      else if (field.translatable)
+         errors.push(`${at}: immutable is not supported on translatable fields`)
+   }
+   return errors
+}
+
 function tagsOptionErrors(at: string, field: FieldConfig): string[] {
    const errors: string[] = []
    if (field.min !== undefined) errors.push(`${at}: min is not supported on tags fields`)
@@ -769,6 +923,7 @@ function columnExpr(key: string, field: FieldConfig, dialect: Dialect, table: st
       default:
          expr = `text('${col}')`
    }
+   if (isUniqueValueField(field)) expr += '.unique()'
    if (isRequiredField(field)) expr += '.notNull()'
    return `  ${key}: ${expr},`
 }

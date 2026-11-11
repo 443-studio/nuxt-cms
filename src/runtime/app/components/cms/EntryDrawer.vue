@@ -15,6 +15,7 @@
 
       <CmsEntryForm
          v-else
+         ref="formRef"
          v-model="formState"
          :fields="config.fields"
          :tabs="config.tabs"
@@ -25,6 +26,7 @@
          :footer="false"
          :lock="lock"
          :can-publish="canPublish"
+         :locked="locked"
          @submit="save"
          @error="revertStatus"
       />
@@ -88,12 +90,14 @@ import {
 } from '@xleddyl/443-components-vue'
 import { computed, ref, watch } from '#imports'
 import { duplicateEntryValues } from '../../../shared/duplicate'
+import { entryDefaults, lockedFieldKeys } from '../../../shared/field-options'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
-import { cmsIcon, errorMessage } from '../../utils/ui'
+import type { CmsResponseIssue } from '../../utils/ui'
+import { cmsIcon, errorIssues, errorMessage } from '../../utils/ui'
 
 const FORM_ID = 'cms-entry-drawer-form'
 
@@ -151,6 +155,10 @@ function emptyState() {
    return Object.fromEntries(formKeys.value.map((key) => [key, null]))
 }
 
+function newState() {
+   return { ...emptyState(), ...entryDefaults(props.config.fields, contentI18n, { local: true }) }
+}
+
 function pickFields(row: Record<string, unknown>) {
    return Object.fromEntries(formKeys.value.map((key) => [key, row[key] ?? null]))
 }
@@ -174,6 +182,14 @@ const lock = computed(() =>
               : null,
         })
 )
+
+const locked = computed(() =>
+   isNew.value || !snapshot.value
+      ? []
+      : lockedFieldKeys(props.config.fields, JSON.parse(snapshot.value) as Record<string, unknown>)
+)
+
+const formRef = ref<{ setIssues: (issues: CmsResponseIssue[]) => void } | null>(null)
 
 const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
@@ -200,7 +216,7 @@ async function load() {
    const id = props.entryId
    if (id === null) {
       loading.value = false
-      setState(emptyState())
+      setState(props.initial ? emptyState() : newState())
       if (props.initial) formState.value = { ...emptyState(), ...pickFields(props.initial) }
       return
    }
@@ -251,6 +267,7 @@ async function save() {
       open.value = false
    } catch (error) {
       revertStatus()
+      formRef.value?.setIssues(errorIssues(error))
       toast.add({
          title: 'Save failed',
          description: errorMessage(error),

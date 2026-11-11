@@ -230,7 +230,19 @@ export default defineCmsConfig({
             label: 'Title',
             type: 'text',
             required: true,
+            max: 80,
             placeholder: 'Spring cup',
+         },
+         code: {
+            label: 'Code',
+            type: 'text',
+            unique: true,
+            immutable: true,
+            min: 3,
+            max: 12,
+            placeholder: 'SPR-26',
+            description: 'Unique internal code, fixed once saved.',
+            tab: 'advanced',
          },
          slug: {
             label: 'Slug',
@@ -240,14 +252,22 @@ export default defineCmsConfig({
             description: 'Filled from the title. Change it only before you publish.',
          },
          description: { label: 'Description', type: 'richtext', translatable: true },
-         seats: { label: 'Seats', type: 'number', integer: true, placeholder: '24' },
+         seats: {
+            label: 'Seats',
+            type: 'number',
+            integer: true,
+            min: 1,
+            max: 500,
+            default: 24,
+         },
          price: {
             label: 'Price (EUR)',
             type: 'number',
+            min: 0,
             placeholder: '0.00',
             description: 'Leave it empty for free events.',
          },
-         date: { label: 'Date', type: 'date', required: true },
+         date: { label: 'Date', type: 'date', required: true, default: 'today' },
          doorsOpen: {
             label: 'Doors open',
             type: 'datetime',
@@ -257,6 +277,7 @@ export default defineCmsConfig({
          visibility: {
             label: 'Visibility',
             type: 'select',
+            default: 'public',
             options: [
                { value: 'public', label: 'Everyone' },
                { value: 'members', label: 'Club members' },
@@ -424,7 +445,7 @@ export default defineCmsConfig({
             title: 'Advanced',
             description: 'Data for integrations and the team.',
             collapsed: true,
-            rows: ['metadata', 'internalNotes'],
+            rows: ['code', 'metadata', 'internalNotes'],
          },
       ],
       list: { columns: ['title', 'date', 'category', 'featured', 'status'] },
@@ -498,7 +519,7 @@ export default defineCmsConfig({
       titleField: 'name',
       fields: {
          name: { label: 'Name', type: 'text', required: true },
-         email: { label: 'Email', type: 'email' },
+         email: { label: 'Email', type: 'email', unique: true },
          avatar: {
             label: 'Avatar',
             type: 'media',

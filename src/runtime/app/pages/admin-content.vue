@@ -7,6 +7,7 @@
       :fields="config.fields"
       :title="headerTitle"
       :focus="focus"
+      :locked="locked"
       content
    >
       <template #start>
@@ -134,13 +135,15 @@ import {
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
+import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
-import { cmsIcon, errorMessage } from '../utils/ui'
+import type { CmsResponseIssue } from '../utils/ui'
+import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
 
 definePageMeta({
    layout: 'cms-editor',
@@ -167,15 +170,19 @@ const isNew = id === undefined
 const endpoint: string = `/api/cms/admin/${name}`
 const formKeys = [...Object.keys(config.fields), 'status']
 
-const editor = ref<{ validate: () => boolean } | null>(null)
+const editor = ref<{
+   validate: () => boolean
+   setIssues: (issues: CmsResponseIssue[]) => void
+} | null>(null)
 
 function pickFields(row: Record<string, unknown>) {
    return Object.fromEntries(formKeys.map((key) => [key, row[key] ?? null]))
 }
 
-const blankState = Object.fromEntries(
-   formKeys.map((key) => [key, key === 'status' ? 'draft' : null])
-)
+const blankState = {
+   ...Object.fromEntries(formKeys.map((key) => [key, key === 'status' ? 'draft' : null])),
+   ...entryDefaults(config.fields, i18n, { local: true }),
+}
 
 const formState = ref<Record<string, unknown>>({ ...blankState })
 
@@ -213,6 +220,12 @@ const moreItems = computed<MenuEntry[]>(() => [
    ...(can(`${name}.create`) ? [{ label: 'Duplicate', onSelect: duplicate }] : []),
    ...(can(`${name}.delete`) ? [{ label: 'Delete', onSelect: remove }] : []),
 ])
+
+const locked = computed(() =>
+   isNew
+      ? []
+      : lockedFieldKeys(config.fields, JSON.parse(snapshot.value) as Record<string, unknown>)
+)
 
 const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
@@ -322,6 +335,7 @@ async function save(status?: Status, changes: Record<string, unknown> = {}, noti
          status: before.status,
          ...pickRevert(before, changes),
       }
+      editor.value?.setIssues(errorIssues(error))
       toast.add({ title: 'Save failed', description: errorMessage(error), color: 'error' })
       return false
    } finally {

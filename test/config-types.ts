@@ -12,7 +12,12 @@ export const valid = defineCmsConfig({
          slug: { label: 'Slug', type: 'slug', from: 'name' },
          kind: { label: 'Kind', type: 'select', options: ['a', 'b'] },
          tags: { label: 'Tags', type: 'select', options: ['a', 'b'], multiple: true },
-         keywords: { label: 'Keywords', type: 'tags', max: 5, suggestions: false },
+         keywords: { label: 'Keywords', type: 'tags', max: 5, suggestions: false, default: ['a'] },
+         code: { label: 'Code', type: 'text', unique: true, immutable: true, min: 2, max: 8 },
+         rank: { label: 'Rank', type: 'number', default: 1, min: 0, max: 10, unique: true },
+         opens: { label: 'Opens', type: 'datetime', default: 'now' },
+         day: { label: 'Day', type: 'date', default: 'today' },
+         region: { label: 'Region', type: 'select', options: ['a', 'b'], default: 'a' },
          parent: { label: 'Parent', type: 'relation', to: 'categories' },
          cover: { label: 'Cover', type: 'media', mediaType: 'image', translatable: true },
          body: {
@@ -141,7 +146,13 @@ export const invalidOptions = defineCmsConfig({
          // @ts-expect-error
          badOption: { label: 'Bad', type: 'select', options: [{ value: 'a' }] },
          // @ts-expect-error
-         badMin: { label: 'Bad', type: 'text', min: 1 },
+         badMin: { label: 'Bad', type: 'boolean', min: 1 },
+         // @ts-expect-error
+         badDefault: { label: 'Bad', type: 'number', default: '3' },
+         // @ts-expect-error
+         badUnique: { label: 'Bad', type: 'select', options: ['a'], unique: true },
+         // @ts-expect-error
+         badImmutable: { label: 'Bad', type: 'json', immutable: true },
       },
       // @ts-expect-error
       validate: 'nope',

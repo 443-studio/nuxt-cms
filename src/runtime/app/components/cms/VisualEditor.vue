@@ -196,6 +196,7 @@
                               :description="fields[key]!.description"
                               :icon="cmsIcon(fieldIcon(fields[key]!))"
                               :required="fields[key]!.required"
+                              :disabled="locked?.includes(key) || undefined"
                               :data-cms-field="key"
                               :class="{ 'cms-search-focus': highlighted === key }"
                            >
@@ -276,6 +277,7 @@ import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
+import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const SEO_KEYS = ['seoTitle', 'seoDescription', 'seoImage']
@@ -292,6 +294,7 @@ const props = defineProps<{
    title: string
    content?: boolean
    focus?: CmsSearchFocus | null
+   locked?: string[]
 }>()
 
 const state = defineModel<Record<string, unknown>>('state', { required: true })
@@ -645,11 +648,9 @@ function firstError() {
    return { name, index: indexes.length ? Math.min(...indexes) : null }
 }
 
-function validate(): boolean {
-   form.submitCount.value++
-   if (form.validateSync()) return true
+function revealFirstError() {
    const first = firstError()
-   if (!first) return false
+   if (!first) return
    const field = props.fields[first.name]
    if (first.name === props.fieldKey) {
       select(first.index)
@@ -658,7 +659,20 @@ function validate(): boolean {
       activeTab.value = tabOfKey(first.name)
       if (isTranslatableField(field)) locale.value = i18n.defaultLocale
    }
+}
+
+function validate(): boolean {
+   form.submitCount.value++
+   if (form.validateSync()) return true
+   revealFirstError()
    return false
+}
+
+function setIssues(issues: CmsResponseIssue[]) {
+   const fieldIssues = issues.filter((issue) => issue.path.length)
+   if (!fieldIssues.length) return
+   form.setIssues(fieldIssues)
+   revealFirstError()
 }
 
 watch(
@@ -668,5 +682,5 @@ watch(
    }
 )
 
-defineExpose({ validate, locale })
+defineExpose({ validate, setIssues, locale })
 </script>

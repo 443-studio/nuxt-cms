@@ -31,6 +31,7 @@
 
       <KCard v-else-if="config.kind === 'single'" variant="outline" padding="lg">
          <CmsEntryForm
+            ref="singleForm"
             v-model="formState"
             :fields="config.fields"
             :tabs="config.tabs"
@@ -39,6 +40,7 @@
             :loading="saving"
             :focus="focus"
             :lock="singleLock"
+            :locked="singleLocked"
             @submit="saveSingle"
          />
       </KCard>
@@ -299,6 +301,7 @@ import {
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
+import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import type { CmsListFilters } from '../../shared/list-filters'
 import {
    entryListFilterKeys,
@@ -315,7 +318,8 @@ import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
-import { cmsIcon, errorMessage } from '../utils/ui'
+import type { CmsResponseIssue } from '../utils/ui'
+import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
 
 definePageMeta({
    layout: 'cms-admin',
@@ -474,9 +478,22 @@ const reload = async () => {
 const saving = ref(false)
 const formState = ref<Record<string, unknown>>({})
 
+const { i18n: contentI18n } = useCmsRuntime()
+
 function emptyState() {
-   return Object.fromEntries(formKeys.map((k) => [k, null]))
+   return {
+      ...Object.fromEntries(formKeys.map((k) => [k, null])),
+      ...entryDefaults(config!.fields, contentI18n, { local: true }),
+   }
 }
+
+const singleForm = ref<{ setIssues: (issues: CmsResponseIssue[]) => void } | null>(null)
+
+const singleLocked = computed(() =>
+   config!.kind === 'single' && data.value && !isList(data.value)
+      ? lockedFieldKeys(config!.fields, data.value as Row)
+      : []
+)
 
 function pickFields(row: Record<string, unknown>) {
    return Object.fromEntries(formKeys.map((k) => [k, row[k] ?? null]))
@@ -490,6 +507,7 @@ async function submit(action: () => Promise<unknown>) {
       await refresh()
       return true
    } catch (error) {
+      singleForm.value?.setIssues(errorIssues(error))
       toast.add({
          title: 'Save failed',
          description: errorMessage(error),
@@ -510,8 +528,6 @@ async function saveSingle() {
    const ok = await submit(() => cmsApi(endpoint, { method: 'PUT', body: formState.value }))
    if (ok) toast.add({ title: 'Saved', color: 'success' })
 }
-
-const { i18n: contentI18n } = useCmsRuntime()
 
 function stripHtml(html: string) {
    return html

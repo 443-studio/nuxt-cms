@@ -350,6 +350,9 @@ export interface FieldConfig {
    tab?: string
    required?: boolean
    private?: boolean
+   default?: unknown
+   unique?: boolean
+   immutable?: boolean
    textarea?: boolean
    integer?: boolean
    translatable?: boolean
@@ -1011,49 +1014,73 @@ export interface TextFieldInput extends FieldInputBase {
    type: 'text'
    textarea?: boolean
    translatable?: boolean
+   default?: string
+   min?: number
+   max?: number
+   unique?: boolean
+   immutable?: boolean
 }
 
 export interface RichtextFieldInput extends FieldInputBase {
    type: 'richtext'
    translatable?: boolean
+   default?: string
 }
 
 export interface NumberFieldInput extends FieldInputBase {
    type: 'number'
    integer?: boolean
+   default?: number
+   min?: number
+   max?: number
+   unique?: boolean
+   immutable?: boolean
 }
 
 export interface BooleanFieldInput extends FieldInputBase {
    type: 'boolean'
+   default?: boolean
+   immutable?: boolean
 }
 
 export interface DateFieldInput extends FieldInputBase {
    type: 'date'
+   default?: 'today' | (string & {})
+   immutable?: boolean
 }
 
 export interface DateTimeFieldInput extends FieldInputBase {
    type: 'datetime'
+   default?: 'now' | (string & {})
+   immutable?: boolean
 }
 
 export interface EmailFieldInput extends FieldInputBase {
    type: 'email'
+   default?: string
+   unique?: boolean
+   immutable?: boolean
 }
 
 export interface SlugFieldInput extends FieldInputBase {
    type: 'slug'
    from: string
+   immutable?: boolean
 }
 
 export interface SelectFieldInput extends FieldInputBase {
    type: 'select'
    options: readonly SelectOptionInput[]
    multiple?: boolean
+   default?: string | readonly string[]
+   immutable?: boolean
 }
 
 export interface TagsFieldInput extends FieldInputBase {
    type: 'tags'
    max?: number
    suggestions?: boolean
+   default?: readonly string[]
 }
 
 export interface JsonFieldInput extends FieldInputBase {
@@ -1073,9 +1100,10 @@ export interface RelationFieldInput extends FieldInputBase {
    to: string
    cardinality?: 'many-to-one' | 'one-to-one' | 'many-to-many'
    onDelete?: 'set null' | 'cascade' | 'restrict'
+   immutable?: boolean
 }
 
-type BlockField<T> = Omit<T, 'private' | 'tab'>
+type BlockField<T> = Omit<T, 'private' | 'tab' | 'default' | 'unique' | 'immutable'>
 
 export type BlockFieldInput =
    | BlockField<TextFieldInput>

@@ -50,6 +50,12 @@ export interface ValidationMessages {
    minBlocks: (min: number) => string
    maxBlocks: (max: number) => string
    maxTags: (max: number) => string
+   minValue: (min: number) => string
+   maxValue: (max: number) => string
+   minLength: (min: number) => string
+   maxLength: (max: number) => string
+   unique: string
+   immutable: string
 }
 
 const DEFAULT_MESSAGES: ValidationMessages = {
@@ -63,6 +69,16 @@ const DEFAULT_MESSAGES: ValidationMessages = {
    minBlocks: (min) => `Add at least ${min} ${min === 1 ? 'block' : 'blocks'}`,
    maxBlocks: (max) => `Add at most ${max} ${max === 1 ? 'block' : 'blocks'}`,
    maxTags: (max) => `Add at most ${max} ${max === 1 ? 'tag' : 'tags'}`,
+   minValue: (min) => `Must be at least ${min}`,
+   maxValue: (max) => `Must be at most ${max}`,
+   minLength: (min) => `Use at least ${min} ${min === 1 ? 'character' : 'characters'}`,
+   maxLength: (max) => `Use at most ${max} ${max === 1 ? 'character' : 'characters'}`,
+   unique: 'This value is already used by another entry',
+   immutable: 'This value cannot be changed once saved',
+}
+
+export function validationMessages(messages?: Partial<ValidationMessages>): ValidationMessages {
+   return { ...DEFAULT_MESSAGES, ...messages }
 }
 
 const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -101,7 +117,10 @@ function scalarSchema(field: FieldConfig, m: ValidationMessages): z.ZodType {
       case 'json':
          return z.unknown()
       default:
-         return field.required ? z.string().trim().min(1, m.required) : z.string()
+         if (field.required) return z.string().trim().min(1, m.required)
+         return field.unique
+            ? z.string().transform((value) => (value.trim() ? value : null))
+            : z.string()
    }
 }
 
@@ -131,8 +150,8 @@ function blockFieldSchema(
    m: ValidationMessages
 ): z.ZodType {
    if (isTranslatableField(blockField) && i18n.locales.length)
-      return translatableSchema(blockField, i18n, m)
-   return optionalize(blockField, scalarSchema(blockField, m), m)
+      return withValueBounds(blockField, translatableSchema(blockField, i18n, m), m)
+   return withValueBounds(blockField, optionalize(blockField, scalarSchema(blockField, m), m), m)
 }
 
 function blockVariantSchema(
@@ -187,12 +206,54 @@ export function tagsCountMessage(
    return null
 }
 
+export function valueBoundsMessage(
+   field: Pick<FieldConfig, 'type' | 'min' | 'max'>,
+   value: unknown,
+   messages?: Partial<ValidationMessages>
+): string | null {
+   const m: ValidationMessages = { ...DEFAULT_MESSAGES, ...messages }
+   if (field.type === 'number' && typeof value === 'number') {
+      if (field.min !== undefined && value < field.min) return m.minValue(field.min)
+      if (field.max !== undefined && value > field.max) return m.maxValue(field.max)
+      return null
+   }
+   if (field.type !== 'text') return null
+   const texts =
+      typeof value === 'string'
+         ? [value]
+         : value && typeof value === 'object'
+           ? Object.values(value).filter((text): text is string => typeof text === 'string')
+           : []
+   for (const text of texts) {
+      const length = text.trim() ? text.length : 0
+      if (!length) continue
+      if (field.min !== undefined && length < field.min) return m.minLength(field.min)
+      if (field.max !== undefined && length > field.max) return m.maxLength(field.max)
+   }
+   return null
+}
+
 function boundsMessage(field: FieldConfig, value: unknown, m: ValidationMessages): string | null {
    if (field.type === 'tags')
       return Array.isArray(value) ? tagsCountMessage(field, value.length, m) : null
    if (field.type === 'blocks')
       return Array.isArray(value) ? blocksCountMessage(field, value.length, m) : null
-   return null
+   return valueBoundsMessage(field, value, m)
+}
+
+function hasValueBounds(field: FieldConfig): boolean {
+   return (
+      (field.type === 'number' || field.type === 'text') &&
+      (field.min !== undefined || field.max !== undefined)
+   )
+}
+
+function withValueBounds(field: FieldConfig, schema: z.ZodType, m: ValidationMessages): z.ZodType {
+   if (field.showIf || !hasValueBounds(field)) return schema
+   return schema.superRefine((value, ctx) => {
+      const message = valueBoundsMessage(field, value, m)
+      if (message) ctx.addIssue({ code: 'custom', message })
+   })
 }
 
 function unconditional(field: FieldConfig): FieldConfig {
@@ -376,7 +437,7 @@ export function buildEntrySchema(
          continue
       }
       if (isTranslatableField(field) && i18n.locales.length) {
-         shape[key] = translatableSchema(field, i18n, m)
+         shape[key] = withValueBounds(declared, translatableSchema(field, i18n, m), m)
          continue
       }
       if (field.type === 'json') {
@@ -386,7 +447,7 @@ export function buildEntrySchema(
             : json.nullish().transform((v) => v ?? null)
          continue
       }
-      shape[key] = optionalize(field, scalarSchema(field, m), m)
+      shape[key] = withValueBounds(declared, optionalize(field, scalarSchema(field, m), m), m)
    }
    if (entry.drafts) {
       shape.status = z

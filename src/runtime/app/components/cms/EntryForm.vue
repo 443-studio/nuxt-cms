@@ -33,6 +33,7 @@
                            :description="fields[key]!.description"
                            :icon="cmsIcon(fieldIcon(fields[key]!))"
                            :required="fields[key]!.required"
+                           :disabled="locked.includes(key) || undefined"
                            :data-cms-field="key"
                            :class="{ 'cms-search-focus': highlighted === key }"
                         >
@@ -113,6 +114,7 @@ import { buildEntrySchema, entryValidationWarnings } from '../../../shared/valid
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
+import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const props = withDefaults(
@@ -128,8 +130,9 @@ const props = withDefaults(
       path?: string
       lock?: string | null
       canPublish?: boolean
+      locked?: string[]
    }>(),
-   { footer: true, lock: null, canPublish: true }
+   { footer: true, lock: null, canPublish: true, locked: () => [] }
 )
 
 const state = defineModel<Record<string, unknown>>({ required: true })
@@ -320,4 +323,13 @@ function applyFocus(focus: CmsSearchFocus) {
 onMounted(() => {
    if (props.focus) applyFocus(props.focus)
 })
+
+function setIssues(issues: CmsResponseIssue[]) {
+   const fieldIssues = issues.filter((issue) => issue.path.length)
+   if (!fieldIssues.length) return
+   form.setIssues(fieldIssues)
+   onError(String(fieldIssues[0]!.path[0]))
+}
+
+defineExpose({ setIssues })
 </script>

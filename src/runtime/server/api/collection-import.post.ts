@@ -20,6 +20,7 @@ import { emitEntryChange } from '../utils/hooks'
 import {
    assignImportIds,
    checkImportRows,
+   existingImportIds,
    importPreview,
    importWriteStatements,
    validateImportRows,
@@ -66,7 +67,9 @@ export default defineEventHandler(async (event) => {
    const i18n = getContentI18n()
    const source = importSource(entry, format, text, i18n)
    const db = useDb()
-   const rows = await checkImportRows(validateImportRows(entry, source.rows, i18n), {
+   const existing = mode === 'upsert' ? await existingImportIds(db, table, source.rows) : null
+   const isCreate = (id: string | null) => !existing || !id || !existing.has(id)
+   const rows = await checkImportRows(validateImportRows(entry, source.rows, i18n, isCreate), {
       db,
       name,
       entry,

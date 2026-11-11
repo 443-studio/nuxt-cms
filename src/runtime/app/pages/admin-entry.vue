@@ -20,6 +20,7 @@
 
       <KCard variant="outline" padding="lg">
          <CmsEntryForm
+            ref="formRef"
             v-model="formState"
             :fields="fields"
             :tabs="config.tabs"
@@ -31,6 +32,7 @@
             :path="pageRoute?.path"
             :lock="lock"
             :can-publish="canPublish"
+            :locked="locked"
             @submit="save"
             @error="revertStatus"
          />
@@ -60,12 +62,15 @@ import {
    PageHeader as KPageHeader,
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
+import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
+import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
-import { errorMessage } from '../utils/ui'
+import type { CmsResponseIssue } from '../utils/ui'
+import { errorIssues, errorMessage } from '../utils/ui'
 
 const FORM_ID = 'cms-entry-form'
 
@@ -118,8 +123,13 @@ const formKeys = drafts ? [...fieldKeys, 'status'] : fieldKeys
 
 const endpoint: string = `/api/cms/admin/${name}`
 
+const { i18n } = useCmsRuntime()
+
 function emptyState() {
-   return Object.fromEntries(formKeys.map((k) => [k, null]))
+   return {
+      ...Object.fromEntries(formKeys.map((k) => [k, null])),
+      ...entryDefaults(fields, i18n, { local: true }),
+   }
 }
 
 function pickFields(row: Record<string, unknown>) {
@@ -153,6 +163,12 @@ const lock = computed(() =>
       status: (JSON.parse(snapshot.value) as Record<string, unknown>).status,
    })
 )
+
+const locked = computed(() =>
+   isNew ? [] : lockedFieldKeys(fields, JSON.parse(snapshot.value) as Record<string, unknown>)
+)
+
+const formRef = ref<{ setIssues: (issues: CmsResponseIssue[]) => void } | null>(null)
 
 const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
@@ -205,6 +221,7 @@ async function save() {
       goBack()
    } catch (error) {
       revertStatus()
+      formRef.value?.setIssues(errorIssues(error))
       toast.add({
          title: 'Save failed',
          description: errorMessage(error),

@@ -1,10 +1,10 @@
-import { createError, defineEventHandler, readValidatedBody } from 'h3'
+import { createError, defineEventHandler } from 'h3'
 import { runBatch, useDb } from '#cms-db'
 import { customId } from '../utils/custom-id'
 import { mapConstraintErrors } from '../utils/db-errors'
 import { emitEntryChange } from '../utils/hooks'
+import { assertUniqueValues, readEntryBody } from '../utils/field-rules'
 import {
-   buildValidator,
    decodeRows,
    encodeColumnValues,
    getRegistryEntry,
@@ -29,14 +29,12 @@ export default defineEventHandler(async (event) => {
    }
    assertCmsPermission(access, `${name}.create`)
 
-   const body = (await readValidatedBody(event, buildValidator(entry).parse)) as Record<
-      string,
-      unknown
-   >
+   const body = await readEntryBody(event, entry, { create: true })
    const { values, lists } = splitRelationValues(entry, encodeColumnValues(entry, body))
    if (entry.drafts) values.status ??= 'draft'
    assertPublishAllowed(access, name, entry, null, values.status)
    await assertRelationTargets(entry, lists)
+   await assertUniqueValues(entry, table, body, null)
    withContentDefaults(entry, values)
    const id = customId(entry.id)
    values.id = id

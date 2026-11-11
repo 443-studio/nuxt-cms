@@ -6,6 +6,23 @@ export function errorMessage(error: unknown): string | undefined {
    return err.data?.message ?? err.message
 }
 
+export interface CmsResponseIssue {
+   path: (string | number)[]
+   message: string
+}
+
+export function errorIssues(error: unknown): CmsResponseIssue[] {
+   const issues = (error as { data?: { data?: { issues?: unknown } } })?.data?.data?.issues
+   if (!Array.isArray(issues)) return []
+   return issues.filter(
+      (issue): issue is CmsResponseIssue =>
+         !!issue &&
+         typeof issue === 'object' &&
+         Array.isArray((issue as CmsResponseIssue).path) &&
+         typeof (issue as CmsResponseIssue).message === 'string'
+   )
+}
+
 const FIELD_ICONS: Record<FieldType, string> = {
    text: 'bars-3-bottom-left',
    richtext: 'document-text',

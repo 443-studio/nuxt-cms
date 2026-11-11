@@ -57,6 +57,8 @@
       v-else-if="field.type === 'number'"
       v-model="num"
       align="start"
+      :min="field.min"
+      :max="field.max"
       :placeholder="field.placeholder"
    />
    <KDateInput v-else-if="field.type === 'date'" v-model="plainText" />

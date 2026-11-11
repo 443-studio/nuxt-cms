@@ -91,7 +91,8 @@ uploaded again). Nothing is written until you save. So that the save does not hi
 
 - a `slug` gets the suffix `-copy-` plus four random characters (`spring-fair-copy-k3x9`; a copied
   slug that already ends with such a suffix gets a new one instead of a second one);
-- a `one-to-one` relation is cleared;
+- a `one-to-one` relation is cleared, and so is every field with
+  [`unique: true`](schema.md#field-options) (fill it before you save);
 - a `text` title field gets ` (copy)` in every language that has a value;
 - on an entry with `drafts` the copy starts as a draft, and a content item also loses its publish
   date.
@@ -146,9 +147,13 @@ and the [`validate` hook](schema.md#validation-hooks) all apply, plus:
 - relation ids that do not exist (an id of a row of the same file counts for a relation to the same
   collection);
 - media keys that are not in the media library: import references files, it never uploads them;
-- a value of a unique field (slug, one-to-one relation) used twice in the file or by another entry;
+- a value of a unique field (slug, one-to-one relation, a field with `unique: true`) used twice in
+  the file or by another entry;
+- a change of an [`immutable`](schema.md#field-options) field that already holds a value, on a row
+  that updates an entry;
 - ids: `create only` mode refuses an id that already exists, while `create or update by id` updates
-  that entry (a missing field becomes empty, `status` is kept when the row has none). A row without
+  that entry (a missing field becomes empty, `status` is kept when the row has none; a row that
+  creates an entry gets the `default` of a missing field instead). A row without
   an id becomes a new entry with a new id; a row with an unknown id is created with that id, so
   relations between exported files keep working.
 

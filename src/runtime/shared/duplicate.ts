@@ -1,4 +1,5 @@
 import type { CmsEntry, FieldConfig } from './index'
+import { isUniqueValueField } from './field-options'
 import { CONTENT_PUBLISHED_AT_FIELD, isCollectionKind, isTranslatableField } from './index'
 
 export const DUPLICATE_TITLE_SUFFIX = ' (copy)'
@@ -12,7 +13,11 @@ const COPIED_SLUG = new RegExp(`-copy-[a-z0-9]{${DUPLICATE_TOKEN_LENGTH}}$`)
 type DuplicatedEntry = Pick<CmsEntry, 'kind' | 'fields' | 'drafts' | 'titleField'>
 
 export function isUniqueField(field: FieldConfig): boolean {
-   return field.type === 'slug' || (field.type === 'relation' && field.cardinality === 'one-to-one')
+   return (
+      field.type === 'slug' ||
+      (field.type === 'relation' && field.cardinality === 'one-to-one') ||
+      isUniqueValueField(field)
+   )
 }
 
 export function uniqueFieldKeys(entry: Pick<CmsEntry, 'fields'>): string[] {

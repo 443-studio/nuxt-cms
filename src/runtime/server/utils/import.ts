@@ -3,6 +3,11 @@ import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { CmsDb } from '#cms-db'
 import type { CmsEntry, CmsI18n } from '../../shared/index'
 import { uniqueFieldKeys } from '../../shared/duplicate'
+import {
+   changedImmutableKeys,
+   immutableFieldKeys,
+   withEntryDefaults,
+} from '../../shared/field-options'
 import type {
    CmsImportAction,
    CmsImportIssue,
@@ -12,7 +17,7 @@ import type {
    CmsTransferFormat,
 } from '../../shared/transfer'
 import { IMPORT_ID_PATTERN, importIssuePath, importRowTitle } from '../../shared/transfer'
-import { buildEntrySchema } from '../../shared/validation'
+import { buildEntrySchema, validationMessages } from '../../shared/validation'
 import { customId } from './custom-id'
 import type { MediaLookup } from './media-references'
 import { mediaReferences } from './media-references'
@@ -50,10 +55,24 @@ export interface ImportContext {
 
 const META_KEYS = new Set(['id', 'createdAt', 'updatedAt'])
 
+export async function existingImportIds(
+   db: CmsDb,
+   table: SQLiteTable,
+   rows: CmsImportSourceRow[]
+): Promise<Set<string>> {
+   const ids = rows.flatMap((row) =>
+      typeof row.values.id === 'string' && IMPORT_ID_PATTERN.test(row.values.id)
+         ? [row.values.id]
+         : []
+   )
+   return ids.length ? existingIds(db, table, ids) : new Set()
+}
+
 export function validateImportRows(
    entry: CmsEntry,
    rows: CmsImportSourceRow[],
-   i18n: CmsI18n
+   i18n: CmsI18n,
+   isCreate: (id: string | null) => boolean = () => true
 ): PreparedImportRow[] {
    const schema = buildEntrySchema(entry, i18n)
    return rows.map((row) => {
@@ -68,9 +87,10 @@ export function validateImportRows(
                message: 'Invalid id: use letters, numbers, _ and -, up to 128 characters',
             })
       }
-      const input = Object.fromEntries(
+      const given = Object.fromEntries(
          Object.entries(row.values).filter(([key]) => !META_KEYS.has(key))
       )
+      const input = isCreate(id) ? withEntryDefaults(entry.fields, given, i18n) : given
       const result = schema.safeParse(input)
       if (!result.success) {
          const reported = new Set(errors.map((issue) => issue.path))
@@ -148,10 +168,10 @@ async function checkUnique(rows: PreparedImportRow[], context: ImportContext) {
    for (const key of uniqueFieldKeys(context.entry)) {
       const column = columns[key]
       if (!column) continue
-      const owners = new Map<string, PreparedImportRow>()
+      const owners = new Map<string | number, PreparedImportRow>()
       for (const row of rows) {
          const value = row.values?.[key]
-         if (typeof value !== 'string' || !value) continue
+         if (!((typeof value === 'string' && value) || typeof value === 'number')) continue
          const owner = owners.get(value)
          if (owner) addError(row, key, `Same value as row ${owner.index}`)
          else owners.set(value, row)
@@ -160,13 +180,34 @@ async function checkUnique(rows: PreparedImportRow[], context: ImportContext) {
          const found = (await context.db
             .select({ id: columns.id!, value: column })
             .from(context.table)
-            .where(inArray(column, chunk))) as { id: string; value: string }[]
+            .where(inArray(column, chunk))) as { id: string; value: string | number }[]
          for (const match of found) {
-            const row = owners.get(String(match.value))
+            const row = owners.get(match.value)
             if (row && row.id !== String(match.id))
                addError(row, key, 'This value is already used by another entry')
          }
       }
+   }
+}
+
+async function checkImmutable(rows: PreparedImportRow[], context: ImportContext) {
+   const columns = context.table as unknown as Columns
+   const keys = immutableFieldKeys(context.entry.fields).filter((key) => columns[key])
+   const updated = rows.filter((row) => row.action === 'update' && row.id && row.values)
+   if (!keys.length || !updated.length) return
+   const saved = new Map<string, Row>()
+   const selection = Object.fromEntries(keys.map((key) => [key, columns[key]!]))
+   for (const chunk of chunks([...new Set(updated.map((row) => row.id!))], KEY_CHUNK)) {
+      const found = (await context.db
+         .select({ ...selection, id: columns.id! })
+         .from(context.table)
+         .where(inArray(columns.id!, chunk))) as Row[]
+      for (const match of found) saved.set(String(match.id), match)
+   }
+   const message = validationMessages().immutable
+   for (const row of updated) {
+      for (const key of changedImmutableKeys(context.entry.fields, saved.get(row.id!), row.values!))
+         addError(row, key, message)
    }
 }
 
@@ -222,6 +263,7 @@ export async function checkImportRows(
    await checkIds(rows, context)
    await checkRelations(rows, context)
    await checkUnique(rows, context)
+   await checkImmutable(rows, context)
    await checkMedia(rows, context)
    await checkPublish(rows, context)
    return rows

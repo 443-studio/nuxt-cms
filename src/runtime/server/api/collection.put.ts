@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm'
-import { createError, defineEventHandler, readValidatedBody } from 'h3'
+import { createError, defineEventHandler } from 'h3'
 import { runBatch, useDb } from '#cms-db'
 import { mapConstraintErrors } from '../utils/db-errors'
 import { emitEntryChange } from '../utils/hooks'
 import { entryStatus, entryWriteAction } from '../../shared/hooks'
+import { assertImmutableValues, immutableSelection, readEntryBody } from '../utils/field-rules'
 import {
-   buildValidator,
    decodeRows,
    encodeColumnValues,
    getRegistryEntry,
@@ -30,19 +30,21 @@ export default defineEventHandler(async (event) => {
    }
    assertCmsPermission(access, `${name}.update`)
 
-   const body = await readValidatedBody(event, buildValidator(entry).parse)
-   const { values, lists } = splitRelationValues(
-      entry,
-      encodeColumnValues(entry, body as Record<string, unknown>)
-   )
-   await assertRelationTargets(entry, lists)
-   const set = withUpdatedAt(table, values)
    const statusColumn = entry.drafts ? tableColumns(table).status : undefined
    const [previous] = await useDb()
-      .select({ id: idColumn(table), ...(statusColumn ? { status: statusColumn } : {}) })
+      .select({
+         ...immutableSelection(entry, table),
+         id: idColumn(table),
+         ...(statusColumn ? { status: statusColumn } : {}),
+      })
       .from(table)
       .where(eq(idColumn(table), entry.id))
       .limit(1)
+   const body = await readEntryBody(event, entry, { create: !previous })
+   assertImmutableValues(entry, previous, body)
+   const { values, lists } = splitRelationValues(entry, encodeColumnValues(entry, body))
+   await assertRelationTargets(entry, lists)
+   const set = withUpdatedAt(table, values)
 
    const item = await mapConstraintErrors(async () => {
       const [upserted] = await runBatch((db) => [

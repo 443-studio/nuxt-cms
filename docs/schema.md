@@ -308,13 +308,14 @@ on an entry that is not `kind: 'content'` is a config error.
 ## Field types
 
 Every field has `label: string` and optional `required?: boolean` and `private?: boolean` (see
-[Private fields](#private-fields)). Type-specific options:
+[Private fields](#private-fields)), plus the [field options](#field-options) `default`, `unique`,
+`immutable`, `min` and `max` where they apply. Type-specific options:
 
 | type       | extra options                                                                      | stored / queried as |
 | ---------- | ---------------------------------------------------------------------------------- | ------------------- |
-| `text`     | `textarea?: boolean`, `translatable?: boolean`                                      | String              |
+| `text`     | `textarea?: boolean`, `translatable?: boolean`, `min?` / `max?` (characters)        | String              |
 | `richtext` | `translatable?: boolean`                                                            | String (HTML)       |
-| `number`   | `integer?: boolean`                                                                 | Float / Int         |
+| `number`   | `integer?: boolean`, `min?` / `max?` (value)                                        | Float / Int         |
 | `boolean`  | none                                                                               | Boolean             |
 | `date`     | none                                                                               | String `yyyy-mm-dd` |
 | `datetime` | none                                                                                | String, ISO 8601 UTC |
@@ -332,6 +333,59 @@ API accepts any ISO 8601 date and time with a time zone (`Z` or `+02:00`) and st
 value without a time zone is rejected. The admin shows a date and time picker in the browser's time
 zone. It filters and sorts as a `StringFilter`, and the fixed format keeps the string order equal to
 the time order.
+
+## Field options
+
+```ts
+code:  { label: 'Code', type: 'text', unique: true, immutable: true, min: 3, max: 12 },
+seats: { label: 'Seats', type: 'number', integer: true, min: 1, max: 500, default: 24 },
+date:  { label: 'Date', type: 'date', default: 'today' },
+level: { label: 'Level', type: 'select', options: ['basic', 'pro'], default: 'basic' },
+```
+
+**`default`** is the initial value of a new item: the create form, the first save of a single, an
+API create that leaves the key out, and an import row that creates an entry without that column
+(an explicit `null` stays `null`). Duplicate keeps the copied value instead.
+
+| type | `default` |
+| ---- | --------- |
+| `text`, `richtext` | a string; on a translatable field it fills the default locale only |
+| `number` | a number (an integer with `integer`, inside `min` / `max`) |
+| `boolean` | `true` or `false` |
+| `date` | `yyyy-mm-dd`, or `'today'` (the browser's date in the admin, the UTC date on the server) |
+| `datetime` | an ISO 8601 date and time with a time zone, or `'now'` |
+| `email` | a valid email |
+| `select` | one of the option values; a list of option values with `multiple` |
+| `tags` | a list of non-empty strings, at most `max` after deduplication |
+
+**`unique: true`** on `text`, `email` and `number` adds a unique index to the column (the
+generated migration holds it: an existing duplicate makes the migration fail, so clean the data
+first). Values match exactly, case included. A blank value is stored as `null`, and any number of
+items may be empty. The admin API checks the value before it writes and answers `409` with the
+issue on the field (`ValidationMessages.unique`, "This value is already used by another entry"),
+which the admin form shows under the field. Duplicate clears a unique field and the import reports a
+value already taken by another row or entry. Not supported on translatable fields (no per-locale
+uniqueness), inside `blocks`, on pages (their values are rows) and on singles. A `slug` is always
+unique and does not take the option.
+
+**`immutable: true`** makes a value fixed once it is saved: the admin shows the field disabled when
+it edits an item that holds a value, and the admin API refuses a different value with `400`
+(`ValidationMessages.immutable`, "This value cannot be changed once saved"), the import too. An item
+saved with the field empty can fill it once, so a field added to existing items, or left blank on
+create, is not stuck empty. Supported on `text`, `number`, `boolean`, `date`, `datetime`, `email`,
+`slug`, `select` and `relation` (not many-to-many), not on translatable fields, inside `blocks` or on
+pages. Like every admin rule, it does not protect the database from direct writes.
+
+**`min` / `max`** use one vocabulary for every type and measure what the field holds: the value of
+a `number`, the length in characters of a `text` (every locale of a translatable text), the number
+of blocks of a [`blocks`](#number-of-blocks) field and the number of tags of a
+[`tags`](#tags-fields) field (`max` only). An empty value skips them (add `required`). They are
+checked by the admin form and the admin API (`ValidationMessages.minValue` / `maxValue`, "Must be at
+least 1", and `minLength` / `maxLength`, "Use at most 12 characters"); the number input also stops
+at the bounds. With [`showIf`](#conditional-fields) they apply only while the field is visible.
+`minLength` and `maxLength` are not options: the build tells you to use `min` and `max`. Number
+bounds are any numbers with `min <= max`; text bounds are integers (`min >= 0`, `max >= 1`).
+They work on block fields too and never change the column.
 
 ## Select option labels
 
@@ -464,7 +518,8 @@ gallery: { label: 'Gallery', type: 'blocks', min: 2, max: 8, blocks: { ... } }
   `maxBlocks` messages of `ValidationMessages` ("Add at least 2 blocks", "Add at most 8 blocks").
   On a field with `showIf` they apply only while the field is visible.
 - `min` is an integer of 0 or more, `max` an integer of 1 or more, and `min` cannot exceed `max`.
-  They are only valid on `blocks` fields. The schema, the column and the query shape do not change.
+  The schema, the column and the query shape do not change. On `number` and `text` fields the same
+  options bound the value and the length (see [Field options](#field-options)).
 
 Block fields accept every field type **except** `slug`, `relation`, `blocks`, `tags` and
 multi-select (`select` with `multiple: true`). A block field can take a `showIf` that tests the other fields of
@@ -913,9 +968,16 @@ export default defineCmsConfig({
   `text`, `slug`, `email`, `number`, `date`, `datetime` or single `select`.
 - `select` needs a non-empty array of `options`: non-empty strings or `{ value, label }` objects
   with a non-empty `value` and `label`, and no value repeated.
-- `min` and `max` are only valid on `blocks` fields: `min` an integer of 0 or more, `max` an
-  integer of 1 or more, `min` not greater than `max`. A `tags` field takes `max` only (an integer of
-  1 or more), and `suggestions` (a boolean) is only valid on `tags` fields.
+- `min` and `max` are valid on `blocks` fields (`min` an integer of 0 or more, `max` an integer of
+  1 or more, `min` not greater than `max`), `number` fields (numbers, `min <= max`) and `text`
+  fields (characters, same integer rules as blocks). A `tags` field takes `max` only (an integer of
+  1 or more), and `suggestions` (a boolean) is only valid on `tags` fields. `minLength` and
+  `maxLength` are refused.
+- `default` must fit the field (see [Field options](#field-options)) and is not allowed on `slug`,
+  `json`, `media`, `relation` and `blocks` fields, inside `blocks` or on pages. `unique` is only
+  valid on `text`, `email` and `number` fields of collections and content entries, not translatable
+  and not inside `blocks`. `immutable` is not allowed on `richtext`, `json`, `media`, `tags`,
+  `blocks`, many-to-many and translatable fields, inside `blocks` or on pages.
 - `validate` on an entry or a block must be a function.
 - Multi-select (`select` with `multiple: true`) and `tags` are not allowed inside `blocks` and are excluded from sorting.
 - `translatable` is only valid on `text`, `richtext` and `media`, at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
