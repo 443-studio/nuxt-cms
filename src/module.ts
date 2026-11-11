@@ -1205,12 +1205,13 @@ export default defineNuxtModule<ModuleOptions>({
          )
       })
       nuxt.hook('modules:done', async () => {
-         const include = nuxt.options.vite.optimizeDeps?.include
-         if (!include) return
+         const optimizeDeps = (nuxt.options.vite.optimizeDeps ??= {})
+         const include = [...new Set([...(optimizeDeps.include ?? []), 'zod'])]
          const rootUrl = pathToFileURL(`${nuxt.options.rootDir}/`).href
-         nuxt.options.vite.optimizeDeps!.include = await Promise.all(
+         optimizeDeps.include = await Promise.all(
             include.map(async (entry) =>
-               entry.startsWith('@tiptap/') && !(await tryResolveModule(entry, rootUrl))
+               (entry.startsWith('@tiptap/') || entry === 'zod') &&
+               !(await tryResolveModule(entry, rootUrl))
                   ? `@xleddyl/nuxt-cms > ${entry}`
                   : entry
             )

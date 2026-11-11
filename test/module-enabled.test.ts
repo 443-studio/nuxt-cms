@@ -20,6 +20,7 @@ const kit = vi.hoisted(() => ({
    extendPages: vi.fn(),
    hasNuxtModule: vi.fn((_name: string) => false),
    resolvePath: vi.fn(async (path: string) => `/virtual/root/${path}.ts`),
+   tryResolveModule: vi.fn(async (_id: string) => undefined as string | undefined),
    useLogger: vi.fn(() => ({
       info: vi.fn(),
       warn: vi.fn(),
@@ -483,6 +484,15 @@ describe('module setup of the seo routes', () => {
       for (const [, hook] of done) await hook()
       return nuxt
    }
+
+   it('pre-bundles zod for the admin, through the module when the app cannot resolve it', async () => {
+      const nested = (await setupAndFinish()).options as AnyRecord
+      expect(nested.vite.optimizeDeps.include).toContain('@xleddyl/nuxt-cms > zod')
+      kit.tryResolveModule.mockResolvedValue('/virtual/root/node_modules/zod/index.js')
+      const direct = (await setupAndFinish()).options as AnyRecord
+      kit.tryResolveModule.mockResolvedValue(undefined)
+      expect(direct.vite.optimizeDeps.include).toContain('zod')
+   })
 
    it('rejects invalid options before anything else', async () => {
       await expect(
