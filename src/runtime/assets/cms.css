@@ -463,6 +463,12 @@ body:has(.cms-scope) {
    color: var(--k-text-dimmed);
 }
 
+.cms-confirm-note {
+   padding: 0.5rem 0.75rem;
+   font-size: 0.8125rem;
+   color: var(--k-text-muted);
+}
+
 .cms-import-file-name {
    min-width: 0;
    overflow: hidden;
@@ -1660,6 +1666,12 @@ body:has(.cms-scope) {
    font-family: var(--k-font-mono);
    font-size: 0.6875rem;
    color: var(--k-text-dimmed);
+}
+
+.cms-media-usage-note {
+   padding: 0.5rem 0.75rem;
+   font-size: 0.8125rem;
+   color: var(--k-text-muted);
 }
 
 .cms-media-single {

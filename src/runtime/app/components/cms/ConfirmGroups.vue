@@ -9,6 +9,7 @@
                   <span class="cms-confirm-link-meta">{{ link.meta }}</span>
                </NuxtLink>
             </li>
+            <li v-if="group.note" class="cms-confirm-note">{{ group.note }}</li>
          </ul>
       </section>
    </div>

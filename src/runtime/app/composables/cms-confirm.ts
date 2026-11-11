@@ -12,6 +12,7 @@ export interface CmsConfirmLink {
 export interface CmsConfirmGroup {
    title: string
    links: CmsConfirmLink[]
+   note?: string
 }
 
 export interface CmsConfirmOptions {

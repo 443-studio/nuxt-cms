@@ -1,4 +1,4 @@
-import type { MediaItem, MediaSourceInfo, MediaUsage } from '../../shared/index'
+import type { MediaItem, MediaSourceInfo, MediaUsage, MediaUsageReport } from '../../shared/index'
 import {
    expandMediaFolders,
    isWithinMediaFolder,
@@ -140,17 +140,18 @@ export function useCmsMediaLibrary() {
       })
    }
 
-   async function usage(keys: string[]): Promise<Record<string, MediaUsage[]> | null> {
+   async function usage(keys: string[]): Promise<MediaUsageReport | null> {
       const unique = [...new Set(keys)]
-      if (!unique.length) return {}
+      const merged: MediaUsageReport = { usage: {}, hidden: {} }
+      if (!unique.length) return merged
       try {
-         const merged: Record<string, MediaUsage[]> = {}
          for (let index = 0; index < unique.length; index += USAGE_CHUNK) {
-            const result = await $fetch<{ usage: Record<string, MediaUsage[]> }>(
-               `${endpoint}/usage`,
-               { method: 'POST', body: { keys: unique.slice(index, index + USAGE_CHUNK) } }
-            )
-            Object.assign(merged, result.usage)
+            const result = await $fetch<MediaUsageReport>(`${endpoint}/usage`, {
+               method: 'POST',
+               body: { keys: unique.slice(index, index + USAGE_CHUNK) },
+            })
+            Object.assign(merged.usage, result.usage)
+            Object.assign(merged.hidden, result.hidden)
          }
          return merged
       } catch {

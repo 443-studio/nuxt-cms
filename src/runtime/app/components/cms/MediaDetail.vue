@@ -131,7 +131,9 @@
             <p v-else-if="usageList === null" class="cms-media-hint">
                Could not check where this file is used.
             </p>
-            <p v-else-if="!usageList.length" class="cms-media-hint">Not used in any entry.</p>
+            <p v-else-if="!usageList.length && !hiddenUsage" class="cms-media-hint">
+               Not used in any entry.
+            </p>
             <ul v-else class="cms-media-usage-list">
                <li v-for="(entry, index) in usageList" :key="index">
                   <NuxtLink
@@ -142,6 +144,9 @@
                      <span class="cms-media-usage-title">{{ entry.title ?? entry.label }}</span>
                      <span class="cms-media-usage-meta">{{ entry.label }} · {{ entry.field }}</span>
                   </NuxtLink>
+               </li>
+               <li v-if="hiddenUsage" class="cms-media-usage-note">
+                  {{ otherEntriesLabel(hiddenUsage) }}
                </li>
             </ul>
          </section>
@@ -191,6 +196,7 @@ import {
    formatFileSize,
    mediaFilename,
    mediaIconFor,
+   otherEntriesLabel,
    roundFocalCoordinate,
 } from '#nuxt-cms'
 import type { CmsMediaLibrary } from '../../composables/cms-media-library'
@@ -216,6 +222,7 @@ const alt = ref('')
 const folder = ref<string | null>(null)
 const saving = ref(false)
 const usageList = ref<MediaUsage[] | null>([])
+const hiddenUsage = ref(0)
 const usageLoading = ref(false)
 const requestUrl = useRequestURL()
 const lastItem = ref<MediaItem | null>(props.item)
@@ -239,7 +246,8 @@ watch(
       usageLoading.value = true
       const usage = await props.library.usage([key])
       if (props.item?.key !== key) return
-      usageList.value = usage ? usage[key] ?? [] : null
+      usageList.value = usage ? usage.usage[key] ?? [] : null
+      hiddenUsage.value = usage?.hidden[key] ?? 0
       usageLoading.value = false
    },
    { immediate: true }

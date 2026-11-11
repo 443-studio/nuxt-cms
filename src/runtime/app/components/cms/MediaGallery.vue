@@ -528,7 +528,7 @@
 </template>
 
 <script setup lang="ts">
-import type { MediaItem, MediaType, MediaUsage } from '#nuxt-cms'
+import type { MediaItem, MediaType, MediaUsageReport } from '#nuxt-cms'
 import type { BreadcrumbItem, ChoiceOption, FilterPillOption } from '@xleddyl/443-components-vue'
 import { computed, onMounted, ref, useTemplateRef, watch } from '#imports'
 import {
@@ -562,6 +562,7 @@ import {
    mediaIconFor,
    groupMediaUsage,
    mediaUsageGroups,
+   otherEntriesLabel,
    mediaTypeAccept,
    mediaTypeFilter,
    rebaseMediaFolder,
@@ -792,7 +793,7 @@ const paged = computed(() =>
    visibleFiles.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE)
 )
 
-const usageByKey = ref<Record<string, MediaUsage[]>>({})
+const usageReport = ref<MediaUsageReport>({ usage: {}, hidden: {} })
 let usageRequest = 0
 
 watch(
@@ -802,7 +803,7 @@ watch(
       if (selectable || loading || !items.length) return
       const usage = await library.usage(items.map((item) => item.key))
       if (request !== usageRequest) return
-      usageByKey.value = usage ?? {}
+      usageReport.value = usage ?? { usage: {}, hidden: {} }
    },
    { immediate: true }
 )
@@ -810,7 +811,10 @@ watch(
 const usageCounts = computed(
    () =>
       new Map(
-         Object.entries(usageByKey.value).map(([key, list]) => [key, groupMediaUsage(list).length])
+         Object.entries(usageReport.value.usage).map(([key, list]) => [
+            key,
+            groupMediaUsage(list).length + (usageReport.value.hidden[key] ?? 0),
+         ])
       )
 )
 
@@ -1066,14 +1070,14 @@ async function renameFolder() {
 
 async function confirmDelete(keys: string[], question: string, title: string) {
    const usage = await library.usage(keys)
-   const groups = usage ? mediaUsageGroups(usage, keys) : []
+   const groups = usage ? mediaUsageGroups(usage.usage, keys, usage.hidden) : []
    if (!groups.length) {
       const warning = usage ? '' : ' Could not check where the files are used.'
       return confirmAction(`${question}${warning}`, { title, confirmLabel: 'Delete' })
    }
    const single = keys.length === 1
    const usedIn = single
-      ? `This file is used in ${entriesLabel(groups[0]!.entries.length)}.`
+      ? `This file is used in ${entriesLabel(groups[0]!.entries.length + groups[0]!.hidden)}.`
       : `${groups.length} of ${keys.length} files are used in your content.`
    return confirmAction(
       `${question} ${usedIn} Deleting ${single ? 'it' : 'them'} leaves broken links there.`,
@@ -1087,6 +1091,7 @@ async function confirmDelete(keys: string[], question: string, title: string) {
                meta: `${entry.label} · ${entry.fields.join(', ')}`,
                to: usageLink(entry),
             })),
+            note: group.hidden ? otherEntriesLabel(group.hidden) : undefined,
          })),
       }
    )

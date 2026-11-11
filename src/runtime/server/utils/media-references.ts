@@ -1,7 +1,13 @@
 import { inArray } from 'drizzle-orm'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
-import type { CmsEntry, CmsSiteSettings, FieldConfig, MediaUsage } from '../../shared/index'
+import type {
+   CmsEntry,
+   CmsSiteSettings,
+   FieldConfig,
+   MediaUsage,
+   MediaUsageReport,
+} from '../../shared/index'
 import {
    CMS_SITE_SETTINGS_KEY,
    PAGE_PATH_FIELD,
@@ -119,6 +125,23 @@ export function addSiteMediaUsage(
    const list = settings.image ? usage[settings.image] : undefined
    if (list) list.push({ ...SITE_MEDIA_USAGE, field: 'Share image' })
    return usage
+}
+
+export function redactMediaUsage(
+   usage: Record<string, MediaUsage[]>,
+   visible: (usage: MediaUsage) => boolean
+): MediaUsageReport {
+   const report: MediaUsageReport = { usage: {}, hidden: {} }
+   for (const [key, list] of Object.entries(usage)) {
+      const hidden = new Set<string>()
+      report.usage[key] = list.filter((item) => {
+         if (visible(item)) return true
+         hidden.add(`${item.collection}\u0000${item.id ?? ''}`)
+         return false
+      })
+      report.hidden[key] = hidden.size
+   }
+   return report
 }
 
 export async function assertKnownMedia(references: MediaReference[], lookup: MediaLookup) {

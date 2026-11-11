@@ -546,7 +546,9 @@ what their `can` list grants.
   '<scope>.<action>')` (list and item reads, create, update, delete, import, export, tags,
   settings, media, users) and answers `403` with `Missing permission: <permission>`. The role is
   read from `cms_users` on every request, so a role change applies at once. Search only returns
-  the entries the role can read, and media hits only with `media.read`.
+  the entries the role can read, and media hits only with `media.read`. Where a file is used (media
+  library, delete confirmations) names only the entries the role can read; the others show as a
+  count ("2 other entries") without titles or links.
 - **Publishing.** On an entry with drafts, a role with `update` but without `publish` saves drafts
   only: it cannot create an item as published, publish a draft, unpublish, schedule, or edit an
   item that is already published (the live content would change). The form of a published item

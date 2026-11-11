@@ -14,7 +14,16 @@ const state = vi.hoisted(() => ({
 vi.mock('#imports', () => ({
    getUserSession: async () => state.session,
    useRuntimeConfig: () => ({
-      cms: { adminEmail: 'root@example.com', media: { storage: 's3' } },
+      cms: {
+         adminEmail: 'root@example.com',
+         media: {
+            storage: 's3',
+            endpoint: 'https://s3.test',
+            bucket: 'cms',
+            accessKeyId: 'key',
+            secretAccessKey: 'secret',
+         },
+      },
       public: { cms: { i18n: { locales: [], defaultLocale: 'en' } } },
    }),
 }))
@@ -118,6 +127,35 @@ vi.mock('../src/runtime/server/utils/link-usage', () => ({
    },
 }))
 
+vi.mock('../src/runtime/server/utils/media-usage', () => {
+   const use = (collection: string, label: string, kind: string, id: string | null) => ({
+      collection,
+      label,
+      kind,
+      id,
+      title: `${label} ${id ?? ''}`.trim(),
+      field: 'Image',
+   })
+   return {
+      loadMediaUsage: async (keys: string[]) =>
+         Object.fromEntries(
+            keys.map((key) => [
+               key,
+               key === 'unused.png'
+                  ? []
+                  : [
+                       use('news', 'News', 'collection', 'news_1'),
+                       use('news', 'News', 'collection', 'news_1'),
+                       use('articles', 'Articles', 'content', 'art_1'),
+                       use('articles', 'Articles', 'content', 'art_2'),
+                       use('home', 'Home', 'single', null),
+                       use('site', 'Settings', 'site', null),
+                    ],
+            ])
+         ),
+   }
+})
+
 vi.mock('../src/runtime/server/utils/password', () => ({
    hashPassword: async () => `hash-${STAMP}`,
 }))
@@ -134,6 +172,7 @@ import linkUsagePost from '../src/runtime/server/api/link-usage.post'
 import mediaDelete from '../src/runtime/server/api/media.delete'
 import mediaGet from '../src/runtime/server/api/media.get'
 import mediaPost from '../src/runtime/server/api/media.post'
+import mediaUsagePost from '../src/runtime/server/api/media-usage.post'
 import previewLinkDelete from '../src/runtime/server/api/preview-link.delete'
 import previewLinksGet from '../src/runtime/server/api/preview-links.get'
 import previewLinksPost from '../src/runtime/server/api/preview-links.post'
@@ -166,6 +205,7 @@ const routes: [string, string, EventHandler][] = [
    ['get', '/api/cms/admin/media', mediaGet],
    ['post', '/api/cms/admin/media', mediaPost],
    ['delete', '/api/cms/admin/media', mediaDelete],
+   ['post', '/api/cms/admin/media/usage', mediaUsagePost],
    ['get', '/api/cms/tags/:collection/:field', tagsGet],
    ['get', '/api/cms/site', siteGet],
    ['put', '/api/cms/site', sitePut],
@@ -208,10 +248,12 @@ async function call(method: string, path: string, body?: unknown) {
    )
    const text = await response.text()
    let message = ''
+   let json: unknown
    try {
-      message = (JSON.parse(text) as { statusMessage?: string }).statusMessage ?? ''
+      json = JSON.parse(text)
+      message = (json as { statusMessage?: string }).statusMessage ?? ''
    } catch {}
-   return { status: response.status, message }
+   return { status: response.status, message, json }
 }
 
 function signIn(id: string, role: string) {
@@ -377,6 +419,44 @@ describe('SEO and link permissions', () => {
          'news',
          'articles',
       ])
+   })
+})
+
+describe('media usage permissions', () => {
+   const keys = { keys: ['photo.png', 'unused.png'] }
+
+   async function usageFor(role: string) {
+      signIn(`usr_${role}`, role)
+      const result = await call('POST', '/api/cms/admin/media/usage', keys)
+      expect(result.status).toBe(200)
+      return result.json as {
+         usage: Record<string, { collection: string; id: string | null; title: string }[]>
+         hidden: Record<string, number>
+      }
+   }
+
+   it('needs media.read', async () => {
+      signIn('usr_reviewer', 'reviewer')
+      const result = await call('POST', '/api/cms/admin/media/usage', keys)
+      expect(result.status).toBe(403)
+      expect(result.message).toBe('Missing permission: media.read')
+   })
+
+   it('shows the entries a role cannot read only as a count', async () => {
+      const report = await usageFor('writer')
+      expect(report.usage['photo.png']!.map((item) => [item.collection, item.id])).toEqual([
+         ['news', 'news_1'],
+         ['news', 'news_1'],
+      ])
+      expect(report.hidden).toEqual({ 'photo.png': 4, 'unused.png': 0 })
+      expect(report.usage['unused.png']).toEqual([])
+      expect(JSON.stringify(report)).not.toMatch(/Articles|art_1|Home|Settings/)
+   })
+
+   it('shows every entry to the built-in admin role', async () => {
+      const report = await usageFor('admin')
+      expect(report.usage['photo.png']).toHaveLength(6)
+      expect(report.hidden).toEqual({ 'photo.png': 0, 'unused.png': 0 })
    })
 })
 

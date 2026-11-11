@@ -238,18 +238,33 @@ export function groupMediaUsage(usage: MediaUsage[]): MediaUsageEntry[] {
    return [...entries.values()]
 }
 
+export interface MediaUsageReport {
+   usage: Record<string, MediaUsage[]>
+   hidden: Record<string, number>
+}
+
 export interface MediaUsageGroup {
    key: string
    entries: MediaUsageEntry[]
+   hidden: number
 }
 
 export function mediaUsageGroups(
    usage: Record<string, MediaUsage[]>,
-   keys: string[]
+   keys: string[],
+   hidden: Record<string, number> = {}
 ): MediaUsageGroup[] {
    return [...new Set(keys)]
-      .map((key) => ({ key, entries: groupMediaUsage(usage[key] ?? []) }))
-      .filter((group) => group.entries.length > 0)
+      .map((key) => ({
+         key,
+         entries: groupMediaUsage(usage[key] ?? []),
+         hidden: hidden[key] ?? 0,
+      }))
+      .filter((group) => group.entries.length > 0 || group.hidden > 0)
+}
+
+export function otherEntriesLabel(count: number): string {
+   return `${count} other entr${count === 1 ? 'y' : 'ies'}`
 }
 
 export interface BlockConfig {

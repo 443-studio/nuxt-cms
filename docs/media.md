@@ -257,7 +257,7 @@ The panel uses these authenticated, same-origin endpoints under `/api/cms/admin/
 | `DELETE /folders` | `?name=&recursive=` | Deletes a folder. Without `recursive=true` a folder with files answers `409`. |
 | `POST /move` | `{ keys, folder }` | Moves files to a folder (`null` is the library root). |
 | `POST /delete` | `{ keys }` | Deletes files. |
-| `POST /usage` | `{ keys }` | Returns, for each key, the entries and fields that use it. |
+| `POST /usage` | `{ keys }` | Returns `{ usage, hidden }`: for each key, the entries and fields that use it that the role can read, and how many other entries use it. |
 | `GET /download` | `?key=` | Downloads the original file with its filename (`Content-Disposition: attachment`). |
 
 `PATCH /folders` answers `400` when the target is inside the folder itself, or when the result is
