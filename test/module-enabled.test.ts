@@ -511,6 +511,24 @@ describe('module setup of the seo routes', () => {
          .filter((handler) => handler.middleware)
          .map((handler) => handler.handler)
       expect(middleware).toContain('./runtime/server/middleware/hidden-site')
+      expect(middleware).toContain('./runtime/server/middleware/redirects')
+   })
+
+   it('registers the redirects admin api', async () => {
+      await setupAndFinish()
+      const routes = kit.addServerHandler.mock.calls.map((call) => {
+         const handler = call[0] as AnyRecord
+         return `${handler.method ?? 'all'} ${handler.route}`
+      })
+      expect(routes).toEqual(
+         expect.arrayContaining([
+            'get /api/cms/redirects',
+            'post /api/cms/redirects',
+            'post /api/cms/redirects/import',
+            'put /api/cms/redirects/:id',
+            'delete /api/cms/redirects/:id',
+         ])
+      )
    })
 
    it('steps aside for @nuxtjs/sitemap and honors explicit switches', async () => {

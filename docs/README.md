@@ -14,7 +14,8 @@ deploy.
    types, relations, blocks, i18n, form layout.
 5. [Querying content](querying.md): GraphQL API, `useCms*` composables, `<CmsBlocks>`, filters,
    sorting, pagination.
-6. [SEO](seo.md): site settings, `useCmsSeo`, `/sitemap.xml`, `/robots.txt`, per-item noindex.
+6. [SEO](seo.md): site settings, `useCmsSeo`, redirects, `/sitemap.xml`, `/robots.txt`, per-item
+   noindex.
 7. [Admin panel & security](admin.md): admin pages, search, visual editor, settings, admin
    accounts, sessions.
 8. [Media](media.md): S3-compatible storage, filesystem storage or local mode, upload flow,

@@ -1334,6 +1334,35 @@ export default defineNuxtModule<ModuleOptions>({
          middleware: true,
          handler: resolver.resolve('./runtime/server/middleware/hidden-site'),
       })
+      addServerHandler({
+         middleware: true,
+         handler: resolver.resolve('./runtime/server/middleware/redirects'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/redirects.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/redirects.post'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects/import',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/redirects-import.post'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects/:id',
+         method: 'put',
+         handler: resolver.resolve('./runtime/server/api/redirect.put'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects/:id',
+         method: 'delete',
+         handler: resolver.resolve('./runtime/server/api/redirect.delete'),
+      })
       setupSeoRoutes(nuxt, resolver, options.seo, publicDir, logger)
       addServerHandler({
          route: '/api/cms/admin/settings',

@@ -4,7 +4,6 @@ import { runBatch, useDb } from '#cms-db'
 import {
    assertImmutableValues,
    assertUniqueValues,
-   immutableSelection,
    readEntryBody,
 } from '../utils/field-rules'
 import {
@@ -14,11 +13,10 @@ import {
    idColumn,
    parseId,
    requirePageRoute,
-   tableColumns,
    withContentDefaults,
    withUpdatedAt,
 } from '../utils/registry'
-import { pageFields } from '../../shared/index'
+import { isRoutedContent, pageFields } from '../../shared/index'
 import { assertMediaExists } from '../utils/media-check'
 import { writePage } from '../utils/page-storage'
 import {
@@ -28,6 +26,12 @@ import {
    splitRelationValues,
 } from '../utils/relations'
 import { assertCmsPermission, assertPublishAllowed, requireCmsAccess } from '../utils/permissions'
+import {
+   contentMovesOf,
+   invalidateRedirects,
+   planContentRedirects,
+   redirectPlanStatements,
+} from '../utils/redirects'
 import { mapConstraintErrors } from '../utils/db-errors'
 import { emitEntryChange } from '../utils/hooks'
 import { entryStatus, entryWriteAction } from '../../shared/hooks'
@@ -70,20 +74,18 @@ export default defineEventHandler(async (event) => {
    await assertRelationTargets(entry, lists)
    const set = withUpdatedAt(table, withContentDefaults(entry, values))
 
-   const statusColumn = entry.drafts ? tableColumns(table).status : undefined
-   const [existing] = await useDb()
-      .select({
-         ...immutableSelection(entry, table),
-         id: idColumn(table),
-         ...(statusColumn ? { status: statusColumn } : {}),
-      })
+   const [existing] = (await useDb()
+      .select()
       .from(table)
       .where(eq(idColumn(table), id))
-      .limit(1)
+      .limit(1)) as Record<string, unknown>[]
    if (!existing) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
    assertImmutableValues(entry, existing, body)
    await assertUniqueValues(entry, table, body, id)
    assertPublishAllowed(access, name, entry, existing.status, values.status ?? existing.status)
+   const redirects = isRoutedContent(entry)
+      ? await planContentRedirects(contentMovesOf(entry, existing, { ...existing, ...set }))
+      : null
 
    const item = await mapConstraintErrors(async () => {
       const [updated] = await runBatch((db) => [
@@ -93,7 +95,9 @@ export default defineEventHandler(async (event) => {
             .where(eq(idColumn(table), id))
             .returning(),
          ...manyToManyStatements(db, name, id, lists),
+         ...(redirects ? redirectPlanStatements(db, redirects) : []),
       ])
+      if (redirects) invalidateRedirects()
       const [row] = updated as Record<string, unknown>[]
       if (!row) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
       const [attached] = await attachManyToMany(useDb(), name, entry, [row])

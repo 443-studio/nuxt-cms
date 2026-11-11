@@ -40,7 +40,7 @@ describe('renderSchemaFile', () => {
       const out = renderSchemaFile(sampleConfig(), 'sqlite')
       const legacyDefault = ".notNull().default(sql`(datetime('now'))`)"
       expect(out).not.toContain('strftime(')
-      for (const table of ['events', 'cms_media', 'cms_users', 'cms_settings']) {
+      for (const table of ['events', 'cms_media', 'cms_users', 'cms_settings', 'cms_redirects']) {
          const body = out.slice(out.indexOf(`export const ${table} =`)).split('\n})')[0]!
          expect(body).toContain(legacyDefault)
       }

@@ -292,6 +292,8 @@ The account button at the bottom of the sidebar opens **Settings**:
   password, delete accounts.
 - **Site**: site name, title template, default description, share image and the switch that hides
   the whole site from search engines. See [SEO](seo.md#site-settings).
+- **Redirects**: the redirects of the site, with search, import and export. Changing the slug of a
+  published item adds one. See [SEO](seo.md#redirects).
 - **Content** (roles with `settings.manage`): one item for each entry the role can read.
   - **Table columns** (collections only): show, hide and drag the columns of the table, including
     **Status** and **Translations**.

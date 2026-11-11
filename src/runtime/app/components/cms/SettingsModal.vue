@@ -39,6 +39,19 @@
          <CmsSettingsSite />
       </template>
 
+      <template #actions-redirects>
+         <KButton
+            v-if="!redirectsCreating"
+            label="Add redirect"
+            :icon="cmsIcon('plus')"
+            size="sm"
+            @click="redirectsCreating = true"
+         />
+      </template>
+      <template #section-redirects>
+         <CmsSettingsRedirects v-model:creating="redirectsCreating" />
+      </template>
+
       <template v-for="item in visibleEntries" :key="item.key" #[`actions-${item.key}`]>
          <span class="cms-settings-status" :class="`is-${entryStatus}`" aria-live="polite">
             {{ STATUS_LABELS[entryStatus] }}
@@ -138,6 +151,12 @@ const sections = computed<SettingsModalSection[]>(() => [
       icon: cmsIcon('globe-alt'),
       description: 'Site name, search engines and sharing.',
    },
+   {
+      id: 'redirects',
+      label: 'Redirects',
+      icon: cmsIcon('arrow-uturn-right'),
+      description: 'Send visitors from old paths to new ones.',
+   },
    ...visibleEntries.value.map((item) => ({
       id: item.key,
       label: item.label,
@@ -149,10 +168,12 @@ const sections = computed<SettingsModalSection[]>(() => [
 
 const section = ref('account')
 const usersCreating = ref(false)
+const redirectsCreating = ref(false)
 const entryStatus = ref<EntryStatus>('idle')
 
 watch(section, () => {
    usersCreating.value = false
+   redirectsCreating.value = false
    entryStatus.value = 'idle'
 })
 

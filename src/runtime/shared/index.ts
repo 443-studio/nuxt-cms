@@ -1229,6 +1229,7 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
 export * from './conditions'
 export * from './content-routes'
 export * from './seo'
+export * from './redirects'
 export * from './layout'
 export * from './media-focal'
 export * from './users'

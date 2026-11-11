@@ -133,6 +133,10 @@ nitro: {
 On Cloudflare, `cloudflare-kv-binding` works the same way. Entries are written with a TTL, so
 drivers that support expiry clean up after themselves.
 
+**Redirects** and the **hidden site** switch are read through a 30 second in-memory cache per
+instance. The instance that saves a change drops its cache at once; the others pick it up within 30
+seconds.
+
 **Postgres connections**: each instance opens its own pool. On a serverless host with hundreds of
 concurrent cold instances that exhausts the server's connection limit. Cap the pool and put a pooler
 (pgbouncer, Neon's pooled endpoint, RDS Proxy) in front:

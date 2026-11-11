@@ -48,6 +48,7 @@ const RESERVED_ENTRY_KEYS = [
    'graphql',
    'settings',
    'cms_media',
+   'cms_redirects',
    'cms_settings',
    'cms_users',
 ]
@@ -372,6 +373,7 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
 
    const sqlTableNames = new Map<string, string>([
       ['cms_media', 'the built-in media table'],
+      ['cms_redirects', 'the built-in redirects table'],
       ['cms_settings', 'the built-in settings table'],
       ['cms_users', 'the built-in users table'],
    ])
@@ -1061,6 +1063,25 @@ function usersTableExpr(dialect: Dialect): string {
    )
 }
 
+function redirectsTableExpr(dialect: Dialect): string {
+   const pg = dialect === 'postgres'
+   const tableFn = pg ? 'pgTable' : 'sqliteTable'
+   return (
+      `export const cms_redirects = ${tableFn}('cms_redirects', {\n` +
+      `  id: text('id').primaryKey(),\n` +
+      `  from: text('from_path').notNull().unique(),\n` +
+      `  to: text('to_path').notNull(),\n` +
+      `  status: integer('status').notNull().default(301),\n` +
+      `  keepQuery: ${
+         pg ? `boolean('keep_query')` : `integer('keep_query', { mode: 'boolean' })`
+      }.notNull().default(true),\n` +
+      `  source: text('source').notNull().default('manual'),\n` +
+      `  createdAt: ${nowExpr(pg, 'created_at')},\n` +
+      `  updatedAt: ${nowExpr(pg, 'updated_at')},\n` +
+      `})`
+   )
+}
+
 function mediaTableExpr(dialect: Dialect): string {
    const pg = dialect === 'postgres'
    const tableFn = pg ? 'pgTable' : 'sqliteTable'
@@ -1140,6 +1161,7 @@ export function renderSchemaFile(
       mediaTableExpr(dialect),
       settingsTableExpr(dialect),
       usersTableExpr(dialect),
+      redirectsTableExpr(dialect),
       ...tables,
       ...joins,
       ...rows,

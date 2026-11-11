@@ -1,7 +1,7 @@
 # SEO
 
-The CMS gives the site what search engines ask for: the tags in the `<head>` of each page, a
-`/sitemap.xml` and a `/robots.txt`. Editors manage the site-wide part in the admin; the pages of
+The CMS gives the site what search engines ask for: the tags in the `<head>` of each page,
+redirects, a `/sitemap.xml` and a `/robots.txt`. Editors manage the site-wide part in the admin; the pages of
 your app call one composable.
 
 ## Site settings
@@ -154,6 +154,64 @@ hidden. A hidden site keeps the same rules: it is kept out of search results by 
 `X-Robots-Tag` header, which a server middleware adds to every response except `/cms/**` and the
 build assets under `/_nuxt/`. The middleware reads the site settings from a short in-memory cache
 (30 seconds, cleared when they are saved on the same server).
+
+## Redirects
+
+A redirect sends a visitor from a path no page answers to somewhere else. Editors manage them in
+**Settings → Redirects**: a list with search, **Add redirect**, edit and delete, and a menu to
+import a CSV or JSON file and to export the list.
+
+- **From**: the old path, like `/old-page`. It starts with `/`, has no host, query or hash, and
+  cannot be under `/cms`, `/api` or `/_nuxt`. One redirect per path.
+- **To**: a path of the site (`/new-page`, with a query or hash if you like) or an absolute
+  `http(s)` URL.
+- **Status**: `301` (the default), `302`, `307` or `308`.
+- **Keep the visitor's query**: on by default. `/old?ref=x` goes to `/new?ref=x`, after any query
+  the target has of its own.
+
+Saving refuses a redirect to itself and one that would make a loop through the other redirects
+(`/a → /b → /a`). Paths are compared after normalization: the trailing slash, repeated slashes, the
+query and the hash are dropped and percent-encoding gets one spelling, so `/Old/` and `/Old` are the
+same path. Matching is **case-sensitive**, like the content routes: `/old` and `/Old` are two paths.
+
+An import file has the columns `from`, `to`, `status`, `keepQuery` (CSV with a header row, or a JSON
+array of objects). A row with the `from` of a stored redirect replaces it. The whole file is checked
+first and nothing is written when a row is wrong.
+
+### When a page moves
+
+Change the slug of a published content item, or its publish date when the [`route`](schema.md#routes)
+has `[year]`, `[month]` or `[day]`, and the CMS leaves a `301` from the old path behind, so links to
+it keep working.
+
+- Only a live item leaves one: published, with a publish date in the past. A draft, a scheduled
+  item, a deleted item or an item being unpublished leaves none.
+- A per-locale route leaves one per locale, like `/blog/old` and `/it/blog/old`.
+- Older redirects follow along. After `/a` becomes `/b` and then `/c`, both `/a` and `/b` lead
+  straight to `/c`.
+- Moving an item back is safe: the redirect from its old path goes away, so the two paths never
+  loop.
+- A new `route` pattern in your config is not a move: add those redirects by hand or import them.
+
+These redirects show as **Added when a page moved** in the list. Editing one makes it a manual one.
+
+### A page wins over a redirect
+
+When a page of the page entry or a live content item answers at a redirect's **From**, the page
+shows and the redirect waits. Once the item is unpublished, the redirect works again. Other routes
+of your app are not checked: a redirect from one of them wins.
+
+### How it runs
+
+A server middleware handles `GET` and `HEAD` requests outside `/cms`, `/api` and `/_nuxt`. It keeps
+the redirects in memory and reloads them every 30 seconds, and at once on the server that saved a
+change. With several instances (serverless included) another instance sees a change within those 30
+seconds. A matching path costs one lookup in that map, plus one query to check for a live item.
+
+The admin API is `GET` / `POST /api/cms/redirects`, `PUT` / `DELETE /api/cms/redirects/:id` and
+`POST /api/cms/redirects/import` (`{ redirects: [...] }`, at most 5000), behind the admin session
+and the same-origin rules. Redirects live in the built-in `cms_redirects` table, created by the
+migrations like the other built-in tables. They are not part of the public GraphQL API.
 
 ## Turning them off
 

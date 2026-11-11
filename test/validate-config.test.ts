@@ -19,6 +19,14 @@ describe('validateConfig', () => {
       expect(errors.some((e) => e.includes('reserved name'))).toBe(true)
    })
 
+   it('reserves the name of the redirects table', () => {
+      const config = sampleConfig()
+      config.cms_redirects = config.categories!
+      expect(validateConfig(config, I18N)).toContain(
+         "cms.config entry 'cms_redirects': 'cms_redirects' is a reserved name"
+      )
+   })
+
    it('rejects duplicate entry ids', () => {
       const config = sampleConfig()
       config.other = { ...config.categories!, fields: { ...config.categories!.fields } }
