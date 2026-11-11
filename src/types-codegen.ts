@@ -1,6 +1,7 @@
 import { blockTypeName, blocksFieldTypeName, typeName } from './runtime/shared/graphql-sdl'
 import type { CmsConfig, CmsEntry, FieldConfig } from './runtime/shared/index'
 import {
+   blocksFieldPaths,
    entryFieldsFor,
    isCollectionKind,
    isPrivateField,
@@ -68,26 +69,48 @@ function fieldTsType(
    return isRequiredField(field) ? base : `${base} | null`
 }
 
-export function blockPropsTypeName(entryName: string, fieldKey: string, blockName: string) {
-   return `${blockTypeName(entryName, fieldKey, blockName)}Props`
+export function blockPropsTypeName(
+   entryName: string,
+   schemaPath: string | readonly string[],
+   blockName: string
+) {
+   return `${blockTypeName(entryName, schemaPath, blockName)}Props`
 }
 
-function blockTypesTs(entryName: string, key: string, field: FieldConfig): string[] {
+function blockFieldTs(
+   entryName: string,
+   schemaPath: readonly string[],
+   blockName: string,
+   key: string,
+   field: FieldConfig
+): string {
+   if (field.type === 'media') return mediaTsType(field)
+   if (field.type === 'link') return 'CmsLink'
+   if (field.type === 'blocks')
+      return `${blocksFieldTypeName(entryName, [...schemaPath, blockName, key])}[]`
+   return scalarTsType(field)
+}
+
+function blockTypesTs(
+   entryName: string,
+   schemaPath: readonly string[],
+   field: FieldConfig
+): string[] {
    const defs: string[] = []
+   const nested: string[] = []
    const members: string[] = []
    for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
-      const name = blockTypeName(entryName, key, blockName)
-      const props = blockPropsTypeName(entryName, key, blockName)
+      const name = blockTypeName(entryName, schemaPath, blockName)
+      const props = blockPropsTypeName(entryName, schemaPath, blockName)
       members.push(name)
       const lines: string[] = []
       for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
-         const base =
-            blockField.type === 'media'
-               ? mediaTsType(blockField)
-               : blockField.type === 'link'
-                 ? 'CmsLink'
-                 : scalarTsType(blockField)
+         const base = blockFieldTs(entryName, schemaPath, blockName, blockFieldKey, blockField)
          lines.push(`  ${blockFieldKey}: ${base} | null`)
+         if (blockField.type === 'blocks')
+            nested.push(
+               ...blockTypesTs(entryName, [...schemaPath, blockName, blockFieldKey], blockField)
+            )
       }
       defs.push(`export interface ${props} {\n${lines.join('\n')}\n}`)
       defs.push(
@@ -95,8 +118,10 @@ function blockTypesTs(entryName: string, key: string, field: FieldConfig): strin
       )
    }
    if (members.length)
-      defs.push(`export type ${blocksFieldTypeName(entryName, key)} = ${members.join(' | ')}`)
-   return defs
+      defs.push(
+         `export type ${blocksFieldTypeName(entryName, schemaPath)} = ${members.join(' | ')}`
+      )
+   return [...defs, ...nested]
 }
 
 function entryTs(config: CmsConfig, name: string, entry: CmsEntry): string {
@@ -204,14 +229,20 @@ function blockPropsMapTs(config: CmsConfig): string[] {
    const entries: string[] = []
    for (const [name, entry] of Object.entries(config)) {
       const fields: string[] = []
-      for (const [key, field] of Object.entries(entryFieldsFor(entry))) {
-         if (field.type !== 'blocks' || isPrivateField(field)) continue
+      for (const { field, schemaPath } of blocksFieldPaths(entryFieldsFor(entry))) {
+         if (isPrivateField(field)) continue
          const blocks = Object.keys(field.blocks ?? {}).map(
             (blockName) =>
-               `      ${JSON.stringify(blockName)}: ${blockPropsTypeName(name, key, blockName)}`
+               `      ${JSON.stringify(blockName)}: ${blockPropsTypeName(
+                  name,
+                  schemaPath,
+                  blockName
+               )}`
          )
          if (blocks.length)
-            fields.push(`    ${JSON.stringify(key)}: {\n${blocks.join('\n')}\n    }`)
+            fields.push(
+               `    ${JSON.stringify(schemaPath.join('.'))}: {\n${blocks.join('\n')}\n    }`
+            )
       }
       if (fields.length) entries.push(`  ${JSON.stringify(name)}: {\n${fields.join('\n')}\n  }`)
    }
@@ -257,7 +288,7 @@ export function renderTypesFile(config: CmsConfig): string {
    for (const [name, entry] of Object.entries(config)) {
       for (const [key, field] of Object.entries(entryFieldsFor(entry))) {
          if (field.type === 'blocks' && !isPrivateField(field))
-            parts.push(...blockTypesTs(name, key, field))
+            parts.push(...blockTypesTs(name, [key], field))
       }
       parts.push(entryTs(config, name, entry))
    }

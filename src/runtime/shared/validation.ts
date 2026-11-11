@@ -21,7 +21,9 @@ import {
    linkUrlError,
    normalizeTags,
    pageLinkPath,
+   formatBlockPath,
    selectOptionValues,
+   walkBlocks,
 } from './index'
 import type { CmsLinkValue } from './links'
 
@@ -250,6 +252,7 @@ function blockFieldSchema(
    config?: CmsConfig
 ): z.ZodType {
    if (blockField.type === 'link') return linkSchema(blockField, i18n, m, config)
+   if (blockField.type === 'blocks') return blocksFieldSchema(blockField, i18n, m, config)
    if (isTranslatableField(blockField) && i18n.locales.length)
       return withValueBounds(blockField, translatableSchema(blockField, i18n, m), m)
    return withValueBounds(blockField, optionalize(blockField, scalarSchema(blockField, m), m), m)
@@ -306,6 +309,19 @@ function blocksSchema(
       blockVariantSchema(type, block, i18n, m, config)
    )
    return z.array(z.discriminatedUnion('type', variants as never))
+}
+
+function blocksFieldSchema(
+   declared: FieldConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages,
+   config?: CmsConfig
+): z.ZodType {
+   const field = unconditional(declared)
+   const list = blocksSchema(field, i18n, m, config)
+   const base = field.required ? list.min(1, m.required) : list
+   const bounded = declared.showIf ? base : boundedBlocks(base, field, m)
+   return field.required ? bounded : bounded.nullish().transform((v) => v ?? null)
 }
 
 export function blocksCountMessage(
@@ -451,13 +467,18 @@ function hookIssues(result: CmsValidateResult) {
    )
 }
 
-function hasValidateHooks(entry: ValidatedEntry): boolean {
-   if (entry.validate) return true
-   return Object.values(entry.fields).some(
+function hasBlockValidateHooks(fields: Record<string, FieldConfig>): boolean {
+   return Object.values(fields).some(
       (field) =>
          field.type === 'blocks' &&
-         Object.values(field.blocks ?? {}).some((block) => block.validate)
+         Object.values(field.blocks ?? {}).some(
+            (block) => !!block.validate || hasBlockValidateHooks(block.fields)
+         )
    )
+}
+
+function hasValidateHooks(entry: ValidatedEntry): boolean {
+   return !!entry.validate || hasBlockValidateHooks(entry.fields)
 }
 
 export function entryValidationIssues(
@@ -481,23 +502,18 @@ export function entryValidationIssues(
          })
       }
    }
-   for (const [key, field] of Object.entries(entry.fields)) {
-      const list = values[key]
-      if (field.type !== 'blocks' || !Array.isArray(list)) continue
-      list.forEach((item: unknown, index) => {
-         if (!item || typeof item !== 'object') return
-         const block = field.blocks?.[String((item as Record<string, unknown>).type)]
-         if (!block?.validate) return
-         const result = block.validate(item as Record<string, unknown>, { ...context, index })
-         for (const issue of hookIssues(result)) {
-            issues.push({
-               path: issue.field ? [key, index, issue.field] : [key, index],
-               message: issue.message,
-               level: issue.level === 'warning' ? 'warning' : 'error',
-            })
-         }
-      })
-   }
+   walkBlocks(entry.fields, values, ({ item, block, path, index }) => {
+      if (!block.validate) return
+      for (const issue of hookIssues(
+         block.validate(item, { ...context, index, blockPath: formatBlockPath(path) })
+      )) {
+         issues.push({
+            path: issue.field ? [...path, issue.field] : [...path],
+            message: issue.message,
+            level: issue.level === 'warning' ? 'warning' : 'error',
+         })
+      }
+   })
    return issues
 }
 
@@ -557,10 +573,7 @@ export function buildEntrySchema(
          continue
       }
       if (field.type === 'blocks') {
-         const list = blocksSchema(field, i18n, m, entry.config)
-         const base = field.required ? list.min(1, m.required) : list
-         const bounded = declared.showIf ? base : boundedBlocks(base, field, m)
-         shape[key] = field.required ? bounded : bounded.nullish().transform((v) => v ?? null)
+         shape[key] = blocksFieldSchema(declared, i18n, m, entry.config)
          continue
       }
       if (isTranslatableField(field) && i18n.locales.length) {

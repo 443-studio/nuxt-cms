@@ -3,6 +3,7 @@ import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { CmsShowIf } from './conditions'
 import type { CmsContentRoute } from './content-routes'
 import type { CmsLayoutBlock, CmsListInput } from './layout'
+import { MAX_BLOCKS_DEPTH, blockFieldsDeep, mapBlocks } from './block-paths'
 
 export type CmsTable = SQLiteTable | PgTable
 
@@ -279,6 +280,7 @@ export interface CmsValidateContext {
 
 export interface CmsBlockValidateContext extends CmsValidateContext {
    index: number
+   blockPath: string
 }
 
 export type CmsValidateResult = readonly CmsValidationIssue[] | null | undefined | void
@@ -562,10 +564,8 @@ export function translatableBlockFieldKeys(block: BlockConfig): string[] {
 
 export function hasTranslatableBlockFields(field: FieldConfig): boolean {
    if (field.type !== 'blocks') return false
-   return Object.values(field.blocks ?? {}).some((block) =>
-      Object.values(block.fields).some(
-         (blockField) => isTranslatableField(blockField) || isLocalizedLinkField(blockField)
-      )
+   return blockFieldsDeep(field).some(
+      (blockField) => isTranslatableField(blockField) || isLocalizedLinkField(blockField)
    )
 }
 
@@ -584,11 +584,9 @@ export function isHiddenBlock(item: unknown): boolean {
 }
 
 export function publicBlocks(field: FieldConfig, value: unknown): unknown {
-   if (!Array.isArray(value)) return value
-   return value.filter((item) => {
-      if (!isHiddenBlock(item)) return true
-      return declaresHiddenField(field.blocks?.[String((item as Record<string, unknown>).type)])
-   })
+   return mapBlocks(field, value, (item, block) =>
+      isHiddenBlock(item) && !declaresHiddenField(block) ? null : item
+   )
 }
 
 export function localizeBlock(
@@ -618,8 +616,12 @@ export function localizeBlocks(
    locale: string,
    defaultLocale: string
 ): unknown {
-   if (!Array.isArray(value)) return value
-   return value.map((item) => localizeBlock(field, item, locale, defaultLocale))
+   return mapBlocks(
+      field,
+      value,
+      (item, _block, owner) =>
+         localizeBlock(owner, item, locale, defaultLocale) as Record<string, unknown>
+   )
 }
 
 export const CMS_GRAPHQL_BATCH_LIMIT = 20
@@ -841,11 +843,82 @@ export function normalizeContentEntries<T extends Record<string, unknown>>(
    return config
 }
 
+function boundBlocksField(
+   field: FieldConfig,
+   depth: number,
+   trail: ReadonlySet<object>
+): FieldConfig {
+   const blocks = field.blocks
+   if (!blocks || typeof blocks !== 'object') return field
+   const inner = new Set(trail).add(blocks)
+   let changed = false
+   const bounded: Record<string, BlockConfig> = {}
+   for (const [name, block] of Object.entries(blocks)) {
+      if (!block?.fields || typeof block.fields !== 'object') {
+         bounded[name] = block
+         continue
+      }
+      let fields: Record<string, FieldConfig> | null = null
+      let dropped = false
+      for (const [key, subfield] of Object.entries(block.fields)) {
+         if (subfield?.type !== 'blocks' || !subfield.blocks) continue
+         const cyclic = inner.has(subfield.blocks)
+         if (depth >= MAX_BLOCKS_DEPTH) {
+            if (cyclic) dropped = true
+            continue
+         }
+         const next = boundBlocksField(subfield, depth + 1, inner)
+         if (next === subfield) continue
+         fields ??= { ...block.fields }
+         fields[key] = next
+      }
+      if (dropped) {
+         changed = true
+         continue
+      }
+      if (fields) {
+         changed = true
+         bounded[name] = { ...block, fields }
+      } else {
+         bounded[name] = block
+      }
+   }
+   return changed ? { ...field, blocks: bounded } : field
+}
+
+function boundFields<T extends FieldConfig | null>(fields: Record<string, T>): Record<string, T> {
+   let next: Record<string, T> | null = null
+   for (const [key, field] of Object.entries(fields)) {
+      if (field?.type !== 'blocks') continue
+      const bounded = boundBlocksField(field, 1, new Set())
+      if (bounded === field) continue
+      next ??= { ...fields }
+      next[key] = bounded as T
+   }
+   return next ?? fields
+}
+
+export function boundBlockNesting<T extends Record<string, unknown>>(config: T): T {
+   for (const entry of Object.values(config) as CmsEntry[]) {
+      if (!entry?.fields || typeof entry.fields !== 'object') continue
+      entry.fields = boundFields(entry.fields)
+      if (entry.overrides && typeof entry.overrides === 'object') {
+         entry.overrides = Object.fromEntries(
+            Object.entries(entry.overrides).map(([path, override]) => [
+               path,
+               override && typeof override === 'object' ? boundFields(override) : override,
+            ])
+         )
+      }
+   }
+   return config
+}
+
 export function normalizeCmsConfig<T extends Record<string, unknown>>(
    config: T,
    i18n?: Pick<CmsI18n, 'locales'>
 ): T {
-   return expandMobileMedia(normalizeContentEntries(config, i18n))
+   return boundBlockNesting(expandMobileMedia(normalizeContentEntries(config, i18n)))
 }
 
 export function slugSourceValue(
@@ -876,12 +949,9 @@ export function resolveBlocksMedia(
    value: unknown,
    resolve: (key: string) => unknown
 ): unknown {
-   if (!Array.isArray(value)) return value
-   return value.map((item) => {
-      if (!item || typeof item !== 'object') return item
-      const block = field.blocks?.[String((item as Record<string, unknown>).type)]
+   return mapBlocks(field, value, (item, block) => {
       if (!block) return item
-      const resolved: Record<string, unknown> = { ...(item as Record<string, unknown>) }
+      const resolved: Record<string, unknown> = { ...item }
       for (const [key, blockField] of Object.entries(block.fields)) {
          if (blockField.type !== 'media') continue
          const media = resolved[key]
@@ -1020,12 +1090,21 @@ export function typeName(name: string) {
    return name.replace(/(?:^|_)([a-z0-9])/gi, (_, c: string) => c.toUpperCase())
 }
 
-export function blocksFieldTypeName(entryName: string, fieldKey: string) {
-   return `${typeName(entryName)}${typeName(fieldKey)}Block`
+export function blocksTypePrefix(entryName: string, schemaPath: string | readonly string[]) {
+   const segments = typeof schemaPath === 'string' ? schemaPath.split('.') : schemaPath
+   return `${typeName(entryName)}${segments.map(typeName).join('')}`
 }
 
-export function blockTypeName(entryName: string, fieldKey: string, blockName: string) {
-   return `${typeName(entryName)}${typeName(fieldKey)}${typeName(blockName)}`
+export function blocksFieldTypeName(entryName: string, schemaPath: string | readonly string[]) {
+   return `${blocksTypePrefix(entryName, schemaPath)}Block`
+}
+
+export function blockTypeName(
+   entryName: string,
+   schemaPath: string | readonly string[],
+   blockName: string
+) {
+   return `${blocksTypePrefix(entryName, schemaPath)}${typeName(blockName)}`
 }
 
 interface FieldInputBase {
@@ -1141,6 +1220,13 @@ export interface LinkFieldInput extends FieldInputBase {
 
 type BlockField<T> = Omit<T, 'private' | 'tab' | 'default' | 'unique' | 'immutable'>
 
+export interface NestedBlocksFieldInput extends Omit<FieldInputBase, 'private' | 'tab'> {
+   type: 'blocks'
+   blocks: Record<string, BlockInput>
+   min?: number
+   max?: number
+}
+
 export type BlockFieldInput =
    | BlockField<TextFieldInput>
    | BlockField<RichtextFieldInput>
@@ -1153,6 +1239,7 @@ export type BlockFieldInput =
    | BlockField<JsonFieldInput>
    | BlockField<LinkFieldInput>
    | Omit<BlockField<MediaFieldInput>, 'mobile'>
+   | NestedBlocksFieldInput
 
 export interface BlockInput {
    label: string
@@ -1255,6 +1342,7 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
    return blocks
 }
 
+export * from './block-paths'
 export * from './conditions'
 export * from './content-routes'
 export * from './seo'

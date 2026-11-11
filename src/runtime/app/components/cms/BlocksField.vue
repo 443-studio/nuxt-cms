@@ -12,6 +12,7 @@
                'is-missing': hasMissingMedia(item),
                'is-media-only': mediaOnly,
                'is-disabled': disabled,
+               'is-invalid': tileInvalid(index),
             }"
             :draggable="disabled ? undefined : 'true'"
             :data-cms-tile="index"
@@ -216,29 +217,43 @@
          />
       </KModal>
 
-      <KModal v-model:open="editorOpen" :title="editorTitle" :size="editorWide ? 'lg' : 'md'">
-         <CmsFormSections
-            v-if="editorBlock"
-            :key="editorIndex ?? ''"
-            :layout="editorLayout"
-            :shown="isEditorFieldShown"
-         >
-            <template #field="{ fieldKey: blockKey }">
-               <KFormField
-                  :label="editorBlock.fields[blockKey]!.label"
-                  :description="editorBlock.fields[blockKey]!.description"
-                  :icon="cmsIcon(fieldIcon(editorBlock.fields[blockKey]!))"
-                  :required="editorBlock.fields[blockKey]!.required"
-               >
-                  <CmsFieldInput
-                     :model-value="editorItem?.[blockKey]"
-                     :field="editorBlock.fields[blockKey]!"
-                     :locale="locale"
-                     @update:model-value="(value: unknown) => updateEditorField(blockKey, value)"
-                  />
-               </KFormField>
-            </template>
-         </CmsFormSections>
+      <KModal
+         v-if="!nested"
+         v-model:open="editorOpen"
+         :title="editorTitle"
+         :trail="editorTrail"
+         :size="editorWide ? 'lg' : 'md'"
+         @navigate="navigateEditor"
+      >
+         <CmsBlockEditorProvider :scope="editorScope">
+            <CmsFormSections
+               v-if="editorBlock"
+               :key="editorKey"
+               :layout="editorLayout"
+               :shown="isEditorFieldShown"
+            >
+               <template #field="{ fieldKey: blockKey }">
+                  <KFormField
+                     :name="editorFieldName(blockKey)"
+                     :label="editorBlock.fields[blockKey]!.label"
+                     :description="editorBlock.fields[blockKey]!.description"
+                     :icon="cmsIcon(fieldIcon(editorBlock.fields[blockKey]!))"
+                     :required="editorBlock.fields[blockKey]!.required"
+                  >
+                     <CmsFieldInput
+                        :model-value="editorItem?.[blockKey]"
+                        :field="editorBlock.fields[blockKey]!"
+                        :locale="locale"
+                        :entry-name="entryName"
+                        :field-key="
+                           editorBlock.fields[blockKey]!.type === 'blocks' ? blockKey : undefined
+                        "
+                        @update:model-value="(value: unknown) => updateEditorField(blockKey, value)"
+                     />
+                  </KFormField>
+               </template>
+            </CmsFormSections>
+         </CmsBlockEditorProvider>
 
          <template #footer>
             <KStack v-if="disabled" direction="row" justify="end">
@@ -258,7 +273,7 @@
                      variant="soft"
                      tone="neutral"
                      aria-label="Move earlier"
-                     :disabled="editorIndex === 0"
+                     :disabled="editorPosition === 0"
                      @click="moveCurrent(-1)"
                   />
                   <KButton
@@ -266,7 +281,7 @@
                      variant="soft"
                      tone="neutral"
                      aria-label="Move later"
-                     :disabled="editorIndex === items.length - 1"
+                     :disabled="editorPosition === editorList.length - 1"
                      @click="moveCurrent(1)"
                   />
                   <KButton
@@ -274,11 +289,11 @@
                      :icon="cmsIcon('document-duplicate')"
                      variant="soft"
                      tone="neutral"
-                     :disabled="!canAdd"
+                     :disabled="!editorCanAdd"
                      @click="duplicateCurrent"
                   />
                   <KButton
-                     v-if="editorItem && !declaresHiddenField(blockOf(editorItem))"
+                     v-if="editorItem && !declaresHiddenField(editorBlock)"
                      :label="isHidden(editorItem) ? 'Show' : 'Hide'"
                      :icon="cmsIcon(isHidden(editorItem) ? 'eye' : 'eye-slash')"
                      variant="soft"
@@ -303,10 +318,21 @@
 </template>
 
 <script setup lang="ts">
-import type { FieldConfig } from '#nuxt-cms'
+import type { CmsBlockPath, FieldConfig } from '#nuxt-cms'
 import {
+   blockAt,
    blockFormLayout,
+   blockListAt,
+   blockListPath,
+   blockPathIndex,
+   blockSchemaPath,
    canAddBlock,
+   formatBlockPath,
+   insertBlocks,
+   moveBlock,
+   removeBlock,
+   resolveBlockPath,
+   updateBlockAt,
    declaresHiddenField,
    isFieldVisible,
    isHiddenBlock,
@@ -327,18 +353,21 @@ import {
    Modal as KModal,
    Stack as KStack,
    useFieldControl,
+   useFormContext,
 } from '@xleddyl/443-components-vue'
-import { computed, onMounted, ref, useState, watch } from '#imports'
+import { computed, inject, nextTick, onMounted, ref, useState, watch } from '#imports'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
 import type { CmsPresetDetails } from '../../../shared/presets'
 import { CMS_PRESET_ICON, presetInsertNotice } from '../../../shared/presets'
 import type { CmsBlockValue, CmsClipboardAction } from '../../../shared/preview'
-import { clipboardActionApplies } from '../../../shared/preview'
+import { blockSummary, clipboardActionApplies } from '../../../shared/preview'
 import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsPresets } from '../../composables/cms-presets'
 import { useCmsRuntime } from '../../composables/cms-runtime'
+import type { CmsBlockEditorScope } from '../../utils/block-editor'
+import { CMS_BLOCK_EDITOR, CmsBlockEditorProvider } from '../../utils/block-editor'
 import { clipboardTarget } from '../../utils/keyboard'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
@@ -354,6 +383,35 @@ const model = defineModel<Record<string, unknown>[] | null>({ required: true })
 const { mediaBaseUrl, i18n } = useCmsRuntime()
 const mediaKeys = useCmsMediaKeys()
 const { disabled } = useFieldControl()
+
+const parentEditor = inject(CMS_BLOCK_EDITOR, null)
+const nested = computed(() => !!parentEditor && !!props.fieldKey)
+const nestedListPath = computed<CmsBlockPath | null>(() =>
+   parentEditor && props.fieldKey ? [...parentEditor.path.value, props.fieldKey] : null
+)
+
+const presetFieldKey = computed(() => {
+   if (!nested.value) return props.fieldKey
+   const schema = parentEditor?.schemaPath.value
+   return schema && props.fieldKey ? [...schema, props.fieldKey].join('.') : undefined
+})
+
+const form = useFormContext()
+
+const formPath = computed(() => {
+   if (!nested.value) return props.fieldKey ?? null
+   const base = parentEditor?.formPath.value
+   return base && nestedListPath.value ? `${base}.${formatBlockPath(nestedListPath.value)}` : null
+})
+
+function tileInvalid(index: number) {
+   const base = formPath.value
+   if (!base || !form) return false
+   const prefix = `${base}.${index}`
+   return Object.entries(form.errors).some(
+      ([key, message]) => !!message && (key === prefix || key.startsWith(`${prefix}.`))
+   )
+}
 
 const blocks = computed(() => props.field.blocks ?? {})
 const items = computed(() => (Array.isArray(model.value) ? model.value : []))
@@ -389,6 +447,7 @@ const visual = computed(() => {
    const list = Object.values(blocks.value)
    return (
       !mediaOnly.value &&
+      !nested.value &&
       !!props.entryName &&
       !!props.fieldKey &&
       !!list.length &&
@@ -499,19 +558,13 @@ function summaryOf(item: Record<string, unknown>) {
       const text = value.replace(/<[^>]*>/g, ' ').trim()
       if (text) return text.length > 80 ? `${text.slice(0, 77)}…` : text
    }
-   return ''
+   const block = blockOf(item)
+   const hasNested = Object.values(block?.fields ?? {}).some((field) => field.type === 'blocks')
+   return hasNested ? blockSummary(block, item as CmsBlockValue, locale, i18n.defaultLocale) : ''
 }
 
 function isHidden(item: Record<string, unknown>) {
    return isHiddenBlock(item)
-}
-
-function updateField(index: number, key: string, value: unknown) {
-   const current = items.value[index]
-   if (!current || disabled.value) return
-   const updated = { ...current, [key]: value }
-   uids.set(updated, uidFor(current))
-   model.value = items.value.map((item, i) => (i === index ? updated : item))
 }
 
 function add(type: string) {
@@ -608,27 +661,58 @@ function onDragEnd() {
    dropIndex.value = null
 }
 
-const editorIndex = ref<number | null>(null)
+const ROOT = '_'
+
+const editorPath = ref<CmsBlockPath | null>(null)
+
+const rootFields = computed(() => ({ [ROOT]: props.field }))
+const rootValues = computed(() => ({ [ROOT]: items.value }))
+
+function fullPath(path: CmsBlockPath): CmsBlockPath {
+   return [ROOT, ...path]
+}
+
+const editorLocation = computed(() =>
+   editorPath.value
+      ? resolveBlockPath(rootFields.value, rootValues.value, fullPath(editorPath.value))
+      : null
+)
 
 const editorOpen = computed({
-   get: () => editorIndex.value !== null,
+   get: () => editorPath.value !== null,
    set: (value: boolean) => {
-      if (!value) editorIndex.value = null
+      if (!value) editorPath.value = null
    },
 })
 
-const editorItem = computed(() =>
-   editorIndex.value === null ? undefined : items.value[editorIndex.value]
+const editorItem = computed(() => editorLocation.value?.item)
+
+const editorBlock = computed(() => editorLocation.value?.block)
+
+const editorPosition = computed(() => editorLocation.value?.index ?? -1)
+
+const editorList = computed(() =>
+   editorPath.value
+      ? blockListAt(rootValues.value, blockListPath(fullPath(editorPath.value))) ?? []
+      : []
 )
 
-const editorBlock = computed(() => (editorItem.value ? blockOf(editorItem.value) : undefined))
+const editorCanAdd = computed(() =>
+   editorLocation.value
+      ? canAddBlock(editorLocation.value.field, editorList.value.length)
+      : canAdd.value
+)
+
+const editorKey = computed(() => (editorPath.value ? formatBlockPath(editorPath.value) : ''))
 
 const editorLayout = computed(() =>
    editorBlock.value ? blockFormLayout(editorBlock.value) : { main: [] }
 )
 
-const editorWide = computed(() =>
-   editorLayout.value.main.some((section) => section.rows.some((row) => row.length > 1))
+const editorWide = computed(
+   () =>
+      editorLayout.value.main.some((section) => section.rows.some((row) => row.length > 1)) ||
+      Object.values(editorBlock.value?.fields ?? {}).some((field) => field.type === 'blocks')
 )
 
 function isEditorFieldShown(key: string) {
@@ -637,45 +721,138 @@ function isEditorFieldShown(key: string) {
    return !!field && isFieldVisible(field, editorItem.value, fields)
 }
 
-const editorTitle = computed(() => (editorItem.value ? labelOf(editorItem.value) : ''))
+function itemLabel(item: Record<string, unknown>, block: { label: string } | undefined) {
+   return block?.label ?? String(item.type)
+}
+
+const editorTitle = computed(() =>
+   editorItem.value ? itemLabel(editorItem.value, editorBlock.value) : ''
+)
+
+const editorAncestors = computed(() => {
+   const path = editorPath.value
+   if (!path) return []
+   const ancestors: CmsBlockPath[] = []
+   for (let end = 1; end < path.length - 1; end += 2) ancestors.push(path.slice(0, end))
+   return ancestors
+})
+
+const editorTrail = computed(() =>
+   editorAncestors.value.map((path) => {
+      const location = resolveBlockPath(rootFields.value, rootValues.value, fullPath(path))
+      return location ? itemLabel(location.item, location.block) : ''
+   })
+)
+
+function navigateEditor(index: number) {
+   const target = editorAncestors.value[index]
+   if (target) editorPath.value = target
+}
+
+const editorScope: CmsBlockEditorScope = {
+   path: computed(() => editorPath.value ?? []),
+   schemaPath: computed(() => {
+      if (!editorPath.value || !props.fieldKey) return null
+      const schema = blockSchemaPath(rootFields.value, rootValues.value, fullPath(editorPath.value))
+      const type = editorItem.value?.type
+      return schema && type ? [props.fieldKey, ...schema.slice(1), String(type)] : null
+   }),
+   formPath: computed(() => (props.fieldKey && !nested.value ? props.fieldKey : null)),
+   open: (path) => {
+      editorPath.value = path
+   },
+}
+
+watch(editorLocation, (location) => {
+   if (location || !editorPath.value) return
+   const path = editorPath.value
+   void nextTick(() => {
+      if (editorPath.value === path && !blockAt(rootValues.value, fullPath(path)))
+         editorPath.value = null
+   })
+})
+
+function editorFieldName(key: string) {
+   const base = editorScope.formPath.value
+   return base && editorPath.value
+      ? `${base}.${formatBlockPath(editorPath.value)}.${key}`
+      : undefined
+}
+
+function commitRoot(values: Record<string, unknown>) {
+   const next = values[ROOT]
+   const list = Array.isArray(next) ? (next as Record<string, unknown>[]) : []
+   const previous = items.value
+   if (list.length === previous.length) {
+      list.forEach((item, index) => {
+         const before = previous[index]
+         if (before && item !== before && !uids.has(item)) uids.set(item, uidFor(before))
+      })
+   }
+   model.value = list.length ? list : null
+}
 
 function openEditor(index: number) {
-   editorIndex.value = index
+   if (nested.value && parentEditor && nestedListPath.value) {
+      parentEditor.open([...nestedListPath.value, index])
+      return
+   }
+   editorPath.value = [index]
 }
 
 function updateEditorField(key: string, value: unknown) {
-   if (editorIndex.value === null) return
-   updateField(editorIndex.value, key, value)
+   if (!editorPath.value || disabled.value) return
+   commitRoot(
+      updateBlockAt(rootValues.value, fullPath(editorPath.value), (item) => ({
+         ...item,
+         [key]: value,
+      }))
+   )
+}
+
+function leaveEditorItem() {
+   const path = editorPath.value
+   editorPath.value = path && path.length > 2 ? path.slice(0, -2) : null
 }
 
 function removeCurrent() {
-   if (editorIndex.value === null) return
-   remove(editorIndex.value)
-   editorIndex.value = null
+   if (!editorPath.value || disabled.value) return
+   const path = editorPath.value
+   commitRoot(removeBlock(rootValues.value, fullPath(path)))
+   leaveEditorItem()
 }
 
 function moveCurrent(delta: number) {
-   if (editorIndex.value === null) return
-   const next = editorIndex.value + delta
-   move(editorIndex.value, delta)
-   editorIndex.value = next
+   const path = editorPath.value
+   if (!path || disabled.value) return
+   const index = blockPathIndex(path)
+   const target = index + delta
+   if (target < 0 || target >= editorList.value.length) return
+   const full = fullPath(path)
+   commitRoot(
+      moveBlock(rootValues.value, full, blockListPath(full), delta > 0 ? target + 1 : target)
+   )
+   editorPath.value = [...path.slice(0, -1), target]
 }
 
 function toggleHiddenCurrent() {
-   if (editorIndex.value === null || !editorItem.value || disabled.value) return
-   const index = editorIndex.value
-   const current = items.value[index]
-   if (!current) return
-   const { hidden: _hidden, ...rest } = current
-   const updated = isHidden(current) ? rest : { ...rest, hidden: true }
-   uids.set(updated, uidFor(current))
-   model.value = items.value.map((item, i) => (i === index ? updated : item))
+   if (!editorPath.value || !editorItem.value || disabled.value) return
+   commitRoot(
+      updateBlockAt(rootValues.value, fullPath(editorPath.value), (current) => {
+         const { hidden: _hidden, ...rest } = current
+         return isHidden(current) ? rest : { ...rest, hidden: true }
+      })
+   )
 }
 
 function duplicateCurrent() {
-   if (editorIndex.value === null) return
-   duplicate(editorIndex.value)
-   editorIndex.value = null
+   const path = editorPath.value
+   const current = editorItem.value
+   if (!path || !current || !editorCanAdd.value || disabled.value) return
+   const copy = JSON.parse(JSON.stringify(current)) as Record<string, unknown>
+   const full = fullPath(path)
+   commitRoot(insertBlocks(rootValues.value, blockListPath(full), blockPathIndex(path) + 1, [copy]))
+   leaveEditorItem()
 }
 
 const clipboard = useCmsClipboard()
@@ -738,7 +915,7 @@ const presetsEnabled = computed(
       !mediaOnly.value &&
       !disabled.value &&
       !!props.entryName &&
-      !!props.fieldKey &&
+      !!presetFieldKey.value &&
       can(`${props.entryName}.update`)
 )
 
@@ -748,7 +925,7 @@ const {
    create: createPreset,
 } = useCmsPresets(
    () => (presetsEnabled.value ? props.entryName : undefined),
-   () => props.fieldKey
+   () => presetFieldKey.value
 )
 
 const presets = computed(() => (presetsEnabled.value ? fieldPresets.value : []))

@@ -13,12 +13,25 @@ function fieldShape(key: string, field: FieldConfig): FieldShape {
    }
    if (field.type === 'media')
       shape.push({ mediaType: mediaTypeFilter(field.mediaType)?.sort() ?? null })
+   if (field.type === 'blocks') {
+      const blocks = field.blocks ?? {}
+      shape.push({
+         blocks: Object.keys(blocks)
+            .sort()
+            .map((name) => [name, blockFieldShapes(blocks[name]!)]),
+      })
+   }
    return shape
 }
 
+function blockFieldShapes(block: Pick<BlockConfig, 'fields'>): FieldShape[] {
+   return Object.keys(block.fields)
+      .sort()
+      .map((key) => fieldShape(key, block.fields[key]!))
+}
+
 export function blockShape(block: Pick<BlockConfig, 'fields'>): string {
-   const keys = Object.keys(block.fields).sort()
-   return JSON.stringify(keys.map((key) => fieldShape(key, block.fields[key]!)))
+   return JSON.stringify(blockFieldShapes(block))
 }
 
 function hashText(text: string): string {

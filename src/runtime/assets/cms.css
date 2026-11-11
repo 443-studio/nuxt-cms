@@ -1916,6 +1916,10 @@ body:has(.cms-scope) {
    border-color: color-mix(in oklab, var(--k-warning) 55%, transparent);
 }
 
+.cms-block-tile.is-invalid {
+   border-color: var(--k-danger);
+}
+
 .cms-block-tile.is-dragging {
    opacity: 0.4;
    transform: scale(0.98);

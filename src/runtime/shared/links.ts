@@ -1,4 +1,5 @@
 import type { CmsConfig, CmsEntry, FieldConfig } from './index'
+import { blockReferenceLabel, walkBlocks } from './block-paths'
 import { contentItemPath, isRoutedContent } from './content-routes'
 
 export const LINK_URL_MAX_LENGTH = 2048
@@ -211,23 +212,17 @@ export function linkReferences(
 ): CmsLinkReference[] {
    const references: CmsLinkReference[] = []
    for (const [key, field] of Object.entries(fields)) {
-      const value = values[key]
-      if (field.type === 'link') {
-         const target = linkTargetOf(value)
-         if (target) references.push({ field: key, ...target })
-         continue
-      }
-      if (field.type !== 'blocks' || !Array.isArray(value)) continue
-      value.forEach((item: unknown, index) => {
-         if (!isRecord(item)) return
-         const block = field.blocks?.[String(item.type)]
-         for (const [blockFieldKey, blockField] of Object.entries(block?.fields ?? {})) {
-            if (blockField.type !== 'link') continue
-            const target = linkTargetOf(item[blockFieldKey])
-            if (target) references.push({ field: `${key}[${index}].${blockFieldKey}`, ...target })
-         }
-      })
+      if (field.type !== 'link') continue
+      const target = linkTargetOf(values[key])
+      if (target) references.push({ field: key, ...target })
    }
+   walkBlocks(fields, values, ({ item, block, path }) => {
+      for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
+         if (blockField.type !== 'link') continue
+         const target = linkTargetOf(item[blockFieldKey])
+         if (target) references.push({ field: blockReferenceLabel(path, blockFieldKey), ...target })
+      }
+   })
    return references
 }
 

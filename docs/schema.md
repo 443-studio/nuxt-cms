@@ -141,6 +141,11 @@ pages_media   (page_id -> pages.id on delete cascade, key, position default 0, m
 - A `blocks` field stores each block at its own `position`: the block type is a row with
   `key = <field>._type`, each subfield is a row with `key = <field>.<subfield>` (media subfields
   in `<entry>_media`, the others in `<entry>_fields`).
+- A [nested `blocks` subfield](#nested-blocks) is one `<entry>_fields` row
+  `<field>.<subfield>` at the position of its parent block, holding the JSON of the whole nested
+  list (the same shape a collection column holds). Media keys inside it stay in that JSON, not in
+  `<entry>_media`: media usage, the save check of media keys and link references read the decoded
+  value, so they see them. Pages saved before a block had a nested field read it as `null`.
 - An empty value (`null`) has no row. An empty list of blocks reads back as `null`.
 - `relation` and `slug` fields must be listed in `columns` (they need their foreign key and their
   unique index), and many-to-many relations are not supported on pages.
@@ -608,8 +613,9 @@ gallery: { label: 'Gallery', type: 'blocks', min: 2, max: 8, blocks: { ... } }
   The schema, the column and the query shape do not change. On `number` and `text` fields the same
   options bound the value and the length (see [Field options](#field-options)).
 
-Block fields accept every field type **except** `slug`, `relation`, `blocks`, `tags` and
-multi-select (`select` with `multiple: true`). A block field can take a `showIf` that tests the other fields of
+Block fields accept every field type **except** `slug`, `relation`, `tags` and
+multi-select (`select` with `multiple: true`); a `blocks` field inside a block nests blocks (see
+[Nested blocks](#nested-blocks)). A block field can take a `showIf` that tests the other fields of
 the same block item (see [Conditional fields](#conditional-fields)). They can be `translatable` (see below) but not `private`: mark the
 whole `blocks` field private instead.
 `required` inside a block is an admin and save-time rule: the API and the generated types always
@@ -668,6 +674,63 @@ defineProps<NewsBodyHeroProps>()
 The same type is reachable as `CmsBlockProps<'news', 'body', 'hero'>`, for use outside
 `defineProps` (Vue cannot resolve a generic indexed type in `defineProps`, so use the named
 interface there).
+
+### Nested blocks
+
+A block can hold its own `blocks` field, for layouts such as columns, tabs, accordions or a grid of
+cards. The nested field takes `label`, `blocks`, `min`, `max`, `required`, `description` and
+`showIf` like any block field (not `translatable`, `private` or `default`), and its blocks take
+every block option (`component`, `icon`, `group`, `layout`, `validate`, ...):
+
+```ts
+const content = defineCmsBlocks({ text: { ... }, image: { ... } })
+
+const sections = defineCmsBlocks({
+   ...content,
+   columns: {
+      label: 'Columns',
+      component: 'SectionColumns',
+      fields: {
+         columns: {
+            label: 'Columns',
+            type: 'blocks',
+            min: 2,
+            max: 3,
+            blocks: {
+               column: {
+                  label: 'Column',
+                  component: 'SectionColumn',
+                  fields: { content: { label: 'Content', type: 'blocks', blocks: content } },
+               },
+            },
+         },
+      },
+   },
+})
+```
+
+- Blocks nest at most **3 levels** (`MAX_BLOCKS_DEPTH`): the top `blocks` field is level 1, a
+  `blocks` field in one of its blocks level 2, one more level 3. A deeper field fails the build.
+- A block set may contain itself: declare the nested field with `blocks: {}` and assign it after,
+  `sections.columns.fields.items.blocks = sections`. Nesting stops at the limit: at level 3 the
+  blocks whose nested field would point back into the set are left out of the set, so the picker
+  never offers a container that could not hold anything.
+- Everything that works on blocks works at every level: validation (`min`, `max`, `required`
+  while visible, block `validate` with the item, its `index` in its list and its `blockPath` such
+  as `body.2.columns.0`), errors on the exact field (`body.2.columns.0.heading`), hidden items,
+  translatable fields, media, links, search, media and link usage, translation progress and
+  actions, Duplicate, JSON import and export, copy and paste, presets.
+- No migration: nested items live in the JSON of the parent item (and in one row on pages).
+- GraphQL and `#cms-types` name nested types after their path: the field interface
+  `<Entry><Field><Block><SubField>Block`, the block types `<Entry><Field><Block><SubField><Block>`
+  and `...Props` (for example `NewsBodyColumnsColumnsColumnProps`), and
+  `CmsBlockProps<'news', 'body.columns.columns', 'column'>`. The build fails when two generated
+  type names clash.
+- A nested block item is addressed by its path from the entry values: `body.2.columns.0` is item 0
+  of the `columns` field of item 2 of `body`. Pure helpers in `#nuxt-cms` read and change values by
+  path: `parseBlockPath`, `formatBlockPath`, `blockAt`, `blockListAt`, `resolveBlockPath`,
+  `blocksFieldAt`, `blockSchemaPath`, `blocksFieldAtSchemaPath`, `updateBlockAt`, `insertBlocks`,
+  `removeBlock`, `moveBlock`, `walkBlocks`, `mapBlocks`, `blocksFieldPaths`.
 
 ### Translatable block fields
 
@@ -913,7 +976,8 @@ saved on a `page` entry. A translatable value is a `{ locale: text }` map, and
 `defaultLocaleValue(value, defaultLocale)` from `#nuxt-cms` reads its text in the default locale (a
 plain string, from a field that is not translatable, is returned as it is).
 
-A block can have its own `validate`, with the values of one block item and `{ ..., index }`. Its
+A block can have its own `validate`, with the values of one block item and `{ ..., index, blockPath }`
+(`index` in its own list, `blockPath` like `body.2` or `body.2.columns.0` for a nested block). Its
 `field` names a field of the block, and the message shows on the `blocks` field (in the visual
 editor, on the field of the selected block):
 

@@ -313,7 +313,7 @@ describe('validateConfig', () => {
       expect(errors.some((e) => e.includes("relation target 'nope'"))).toBe(true)
    })
 
-   it('rejects relation/blocks/slug fields inside blocks', () => {
+   it('rejects relation and slug fields inside blocks', () => {
       const config = sampleConfig()
       config.events!.fields.body!.blocks!.hero!.fields.rel = {
          label: 'Rel',

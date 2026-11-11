@@ -80,6 +80,11 @@ function plainShape(field: FieldConfig, raw: unknown, i18n: CmsI18n): unknown {
 }
 
 export function pastedFieldValue(field: FieldConfig, raw: unknown, i18n: CmsI18n): unknown {
+   if (field.type === 'blocks') {
+      if (!Array.isArray(raw)) return null
+      const { list } = pasteBlocks([], 0, raw.filter(isBlockItem), field, i18n)
+      return list.length ? list : null
+   }
    const localized = isTranslatableField(field) && i18n.locales.length > 0
    const shaped = localized ? localizedShape(raw, i18n) : plainShape(field, raw, i18n)
    return blockFieldValue(field, shaped, i18n)

@@ -94,42 +94,66 @@ function entrySdl(config: CmsConfig, name: string, entry: CmsEntry): string {
    return `type ${typeName(name)} {\n${lines.join('\n')}\n}`
 }
 
-function blockFieldSdl(field: FieldConfig): string {
+function blockFieldSdl(
+   name: string,
+   schemaPath: readonly string[],
+   blockName: string,
+   key: string,
+   field: FieldConfig
+): string {
    if (field.type === 'media') return 'CmsMedia'
    if (field.type === 'link') return 'CmsLink'
+   if (field.type === 'blocks')
+      return `[${blocksFieldTypeName(name, [...schemaPath, blockName, key])}!]`
    return scalarFor(field)
 }
 
-function sharedBlockFieldsSdl(field: FieldConfig): string[] {
-   const blocks = Object.values(field.blocks ?? {})
+function sharedBlockFieldsSdl(
+   name: string,
+   schemaPath: readonly string[],
+   field: FieldConfig
+): string[] {
+   const blocks = Object.entries(field.blocks ?? {})
    const first = blocks[0]
    if (!first) return []
    const lines: string[] = []
-   for (const key of Object.keys(first.fields)) {
-      const rendered = blocks.map((block) => block.fields[key])
-      if (rendered.some((blockField) => !blockField)) continue
-      const types = rendered.map((blockField) => blockFieldSdl(blockField!))
+   for (const key of Object.keys(first[1].fields)) {
+      if (blocks.some(([, block]) => !block.fields[key])) continue
+      const types = blocks.map(([blockName, block]) =>
+         blockFieldSdl(name, schemaPath, blockName, key, block.fields[key]!)
+      )
       if (types.some((type) => type !== types[0])) continue
       lines.push(`  ${key}: ${types[0]}`)
    }
    return lines
 }
 
-function blocksSdl(name: string, key: string, field: FieldConfig): string[] {
+function blocksSdl(name: string, schemaPath: readonly string[], field: FieldConfig): string[] {
    const blocks = Object.entries(field.blocks ?? {})
    if (!blocks.length) return []
-   const interfaceName = blocksFieldTypeName(name, key)
-   const shared = ['  type: String!', ...sharedBlockFieldsSdl(field)]
+   const interfaceName = blocksFieldTypeName(name, schemaPath)
+   const shared = ['  type: String!', ...sharedBlockFieldsSdl(name, schemaPath, field)]
    const defs = [`interface ${interfaceName} {\n${shared.join('\n')}\n}`]
+   const nested: string[] = []
    for (const [blockName, block] of blocks) {
       const lines = ['  type: String!']
       for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
-         lines.push(`  ${blockFieldKey}: ${blockFieldSdl(blockField)}`)
+         lines.push(
+            `  ${blockFieldKey}: ${blockFieldSdl(
+               name,
+               schemaPath,
+               blockName,
+               blockFieldKey,
+               blockField
+            )}`
+         )
+         if (blockField.type === 'blocks')
+            nested.push(...blocksSdl(name, [...schemaPath, blockName, blockFieldKey], blockField))
       }
-      const gqlType = blockTypeName(name, key, blockName)
+      const gqlType = blockTypeName(name, schemaPath, blockName)
       defs.push(`type ${gqlType} implements ${interfaceName} {\n${lines.join('\n')}\n}`)
    }
-   return defs
+   return [...defs, ...nested]
 }
 
 function filterSdl(name: string, entry: CmsEntry): string {
@@ -174,7 +198,7 @@ export function renderGraphqlSdl(config: CmsConfig): string {
       types.push(entrySdl(config, name, entry))
       for (const [key, field] of Object.entries(entryFields(entry))) {
          if (field.type === 'blocks' && !isPrivateField(field))
-            types.push(...blocksSdl(name, key, field))
+            types.push(...blocksSdl(name, [key], field))
       }
 
       if (entry.kind === 'single') {

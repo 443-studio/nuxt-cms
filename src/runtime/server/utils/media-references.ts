@@ -5,9 +5,11 @@ import type { CmsEntry, CmsSiteSettings, FieldConfig, MediaUsage } from '../../s
 import {
    CMS_SITE_SETTINGS_KEY,
    PAGE_PATH_FIELD,
+   blockReferenceLabel,
    pageFields,
    pageRouteOf,
    selectOptionLabel,
+   walkBlocks,
 } from '../../shared/index'
 
 export interface MediaReference {
@@ -33,22 +35,18 @@ export function mediaReferences(
 ): MediaReference[] {
    const references: MediaReference[] = []
    for (const [key, field] of Object.entries(fields)) {
-      const value = values[key]
-      if (field.type === 'media') {
-         for (const mediaKey of mediaKeysOf(value)) references.push({ field: key, key: mediaKey })
-         continue
-      }
-      if (field.type !== 'blocks' || !Array.isArray(value)) continue
-      value.forEach((item: Record<string, unknown> | null, index) => {
-         const block = item ? field.blocks?.[String(item.type)] : undefined
-         for (const [blockFieldKey, blockField] of Object.entries(block?.fields ?? {})) {
-            if (blockField.type !== 'media') continue
-            for (const mediaKey of mediaKeysOf(item?.[blockFieldKey])) {
-               references.push({ field: `${key}[${index}].${blockFieldKey}`, key: mediaKey })
-            }
-         }
-      })
+      if (field.type !== 'media') continue
+      for (const mediaKey of mediaKeysOf(values[key]))
+         references.push({ field: key, key: mediaKey })
    }
+   walkBlocks(fields, values, ({ item, block, path }) => {
+      for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
+         if (blockField.type !== 'media') continue
+         for (const mediaKey of mediaKeysOf(item[blockFieldKey])) {
+            references.push({ field: blockReferenceLabel(path, blockFieldKey), key: mediaKey })
+         }
+      }
+   })
    return references
 }
 

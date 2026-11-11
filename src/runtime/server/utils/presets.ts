@@ -4,7 +4,7 @@ import { eq, like } from 'drizzle-orm'
 import { useDb } from '#cms-db'
 import { cms_settings } from '#cms-tables'
 import type { CmsSessionUser, FieldConfig } from '../../shared/index'
-import { entryFieldsFor } from '../../shared/index'
+import { blocksFieldAtSchemaPath, entryFieldsFor } from '../../shared/index'
 import type { CmsBlockPreset, CmsPresetAction } from '../../shared/presets'
 import {
    CMS_PRESET_KEY_PREFIX,
@@ -30,9 +30,8 @@ export async function requirePresetAccess(
 export function presetBlocksField(event: H3Event): { source: string; field: FieldConfig } {
    const { name, entry } = getRegistryEntry(event)
    const key = getRouterParam(event, 'field') ?? ''
-   const fields = entryFieldsFor(entry)
-   const field = Object.hasOwn(fields, key) ? fields[key] : undefined
-   if (!field || field.type !== 'blocks') {
+   const field = blocksFieldAtSchemaPath(entryFieldsFor(entry), key)
+   if (!field) {
       throw createError({ statusCode: 404, statusMessage: `Unknown blocks field: ${key}` })
    }
    return { source: `${name}.${key}`, field }

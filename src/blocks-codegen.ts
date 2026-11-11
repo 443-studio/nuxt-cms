@@ -1,5 +1,10 @@
 import type { CmsConfig } from './runtime/shared/index'
-import { blockTypeName, entryFieldsFor, isPrivateField } from './runtime/shared/index'
+import {
+   blockTypeName,
+   blocksFieldPaths,
+   entryFieldsFor,
+   isPrivateField,
+} from './runtime/shared/index'
 
 export interface BlockComponentRef {
    entry: string
@@ -20,16 +25,16 @@ export function componentPascalName(name: string): string {
 export function collectBlockComponents(config: CmsConfig): BlockComponentRef[] {
    const refs: BlockComponentRef[] = []
    for (const [entryName, entry] of Object.entries(config)) {
-      for (const [fieldKey, field] of Object.entries(entryFieldsFor(entry))) {
-         if (field.type !== 'blocks' || isPrivateField(field)) continue
+      for (const { field, schemaPath } of blocksFieldPaths(entryFieldsFor(entry))) {
+         if (isPrivateField(field)) continue
          for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
             if (typeof block.component !== 'string' || !block.component.trim()) continue
             refs.push({
                entry: entryName,
-               field: fieldKey,
+               field: schemaPath.join('.'),
                block: blockName,
                component: componentPascalName(block.component.trim()),
-               typeName: blockTypeName(entryName, fieldKey, blockName),
+               typeName: blockTypeName(entryName, schemaPath, blockName),
             })
          }
       }

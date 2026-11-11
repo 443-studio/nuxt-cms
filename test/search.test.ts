@@ -101,6 +101,21 @@ function searchConfig(): CmsConfig {
                      body: { label: 'Paragraph', type: 'richtext', translatable: true },
                   },
                },
+               columns: {
+                  label: 'Columns',
+                  fields: {
+                     items: {
+                        label: 'Column items',
+                        type: 'blocks',
+                        blocks: {
+                           note: {
+                              label: 'Note',
+                              fields: { text: { label: 'Note text', type: 'text' } },
+                           },
+                        },
+                     },
+                  },
+               },
             },
          },
       },
@@ -138,6 +153,21 @@ function searchConfig(): CmsConfig {
                      fields: { heading: { label: 'Heading', type: 'text', translatable: true } },
                   },
                   quote: { label: 'Quote', fields: { text: { label: 'Text', type: 'text' } } },
+                  group: {
+                     label: 'Group',
+                     fields: {
+                        inner: {
+                           label: 'Inner',
+                           type: 'blocks',
+                           blocks: {
+                              quote: {
+                                 label: 'Quote',
+                                 fields: { text: { label: 'Text', type: 'text' } },
+                              },
+                           },
+                        },
+                     },
+                  },
                },
             },
          },
@@ -256,6 +286,13 @@ beforeAll(async () => {
       body: [
          { type: 'hero', heading: { en: 'Welcome anglers', it: 'Benvenuti pescatori' } },
          { type: 'quote', text: 'Fish are friends' },
+         {
+            type: 'group',
+            inner: [
+               { type: 'quote', text: 'Lorem' },
+               { type: 'quote', text: 'Deeply nested carp' },
+            ],
+         },
       ],
    })
    await insert('events', { id: 'percent', title: '100% natural bait', slug: 'percent' })
@@ -282,7 +319,10 @@ beforeAll(async () => {
    await savePage('/', {
       metaTitle: { en: 'Home', de: 'Startseite' },
       intro: { en: '<p>Welcome</p>', de: '<p>Wir sind ein Verein für Fischer</p>' },
-      sections: [{ type: 'text', body: { en: '<p>Our <i>rivers</i> are clean</p>' } }],
+      sections: [
+         { type: 'text', body: { en: '<p>Our <i>rivers</i> are clean</p>' } },
+         { type: 'columns', items: [{ type: 'note', text: 'Pike season in the column' }] },
+      ],
    })
    await savePage('/about', {
       metaTitle: { en: 'About us', it: 'Chi siamo' },
@@ -322,12 +362,23 @@ describe('search helpers', () => {
          field: 'intro',
          locale: 'de',
          block: 2,
+         blockPath: ['intro', 2],
+      })
+      expect(cmsSearchLink('/cms/news/1', { field: 'body', block: '2.items.0' })).toBe(
+         '/cms/news/1?field=body&block=2.items.0'
+      )
+      expect(readSearchFocus({ field: 'body', block: '2.items.0' })).toEqual({
+         field: 'body',
+         locale: null,
+         block: 2,
+         blockPath: ['body', 2, 'items', 0],
       })
       expect(readSearchFocus({ block: '1' })).toBeNull()
       expect(readSearchFocus({ tab: 'seo', block: 'x' })).toEqual({
          tab: 'seo',
          locale: null,
          block: null,
+         blockPath: null,
       })
    })
 })
@@ -396,6 +447,27 @@ describe('label search', () => {
 })
 
 describe('value search', () => {
+   it('finds values inside nested blocks and links to their path', async () => {
+      expect(values(await search('nested carp'))).toEqual([
+         expect.objectContaining({
+            collection: 'events',
+            id: 'spring',
+            field: 'body',
+            fieldLabel: 'Body › Group › Inner › Quote › Text',
+            to: '/cms/events/spring?field=body&block=2.inner.1',
+         }),
+      ])
+      expect(values(await search('pike season'))).toEqual([
+         expect.objectContaining({
+            collection: 'pages',
+            id: 'home',
+            field: 'sections',
+            fieldLabel: 'Sections › Columns › Column items › Note › Note text',
+            to: '/cms/pages/home?field=sections&block=1.items.0',
+         }),
+      ])
+   })
+
    it('returns label hits before value hits', async () => {
       const response = await search('hero')
       expect(response.hits[0]!.type).not.toBe('value')

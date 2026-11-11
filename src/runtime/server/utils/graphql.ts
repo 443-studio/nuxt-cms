@@ -38,6 +38,8 @@ import {
    contentRouteLocales,
    decodeTranslatableMedia,
    entryFieldsFor,
+   blockFieldsDeep,
+   blocksFieldPaths,
    hasTranslatableBlockFields,
    isExternalLinkUrl,
    isMultiValueField,
@@ -49,6 +51,7 @@ import {
    linkLabelText,
    localeText,
    localizeBlocks,
+   mapBlocks,
    mediaPublicUrl,
    mediaTypeFor,
    pickTranslatedMedia,
@@ -186,24 +189,19 @@ function linkSource(value: unknown, locale: string): LinkSource | null {
 }
 
 function blockLinks(field: FieldConfig, value: unknown, locale: string): unknown {
-   if (!Array.isArray(value)) return value
-   return value.map((item) => {
-      if (!item || typeof item !== 'object') return item
-      const block = field.blocks?.[String((item as Record<string, unknown>).type)]
+   return mapBlocks(field, value, (item, block) => {
       const keys = Object.entries(block?.fields ?? {})
          .filter(([, blockField]) => blockField.type === 'link')
          .map(([key]) => key)
       if (!keys.length) return item
-      const resolved: Record<string, unknown> = { ...(item as Record<string, unknown>) }
+      const resolved: Record<string, unknown> = { ...item }
       for (const key of keys) resolved[key] = linkSource(resolved[key], locale)
       return resolved
    })
 }
 
 function hasBlockLinks(field: FieldConfig): boolean {
-   return Object.values(field.blocks ?? {}).some((block) =>
-      Object.values(block.fields).some((blockField) => blockField.type === 'link')
-   )
+   return blockFieldsDeep(field).some((blockField) => blockField.type === 'link')
 }
 
 function localizeRow(entry: CmsEntry, row: Record<string, unknown>, locale: string): Row {
@@ -543,12 +541,12 @@ function entryResolvers(config: CmsConfig, name: string, entry: CmsEntry) {
    return resolvers
 }
 
-function blockResolvers(name: string, key: string, field: FieldConfig) {
+function blockResolvers(name: string, schemaPath: readonly string[], field: FieldConfig) {
    const resolvers: Record<string, Record<string, unknown>> = {}
 
-   resolvers[blocksFieldTypeName(name, key)] = {
+   resolvers[blocksFieldTypeName(name, schemaPath)] = {
       __resolveType: (value: Record<string, unknown>) =>
-         blockTypeName(name, key, String(value.type)),
+         blockTypeName(name, schemaPath, String(value.type)),
    }
 
    for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
@@ -559,7 +557,7 @@ function blockResolvers(name: string, key: string, field: FieldConfig) {
          fieldLevel[blockFieldKey] = (parent: Record<string, unknown>, _args: unknown, ctx: Ctx) =>
             resolveMedia(ctx, parent[blockFieldKey])
       }
-      resolvers[blockTypeName(name, key, blockName)] = fieldLevel
+      resolvers[blockTypeName(name, schemaPath, blockName)] = fieldLevel
    }
 
    return resolvers
@@ -598,10 +596,8 @@ export function buildCmsSchema() {
       const fieldLevel = entryResolvers(config, name, entry)
       if (Object.keys(fieldLevel).length) typeResolvers[gqlType] = fieldLevel
 
-      for (const [key, field] of Object.entries(entryFieldsFor(entry))) {
-         if (field.type === 'blocks' && !isPrivateField(field))
-            Object.assign(typeResolvers, blockResolvers(name, key, field))
-      }
+      for (const { field, schemaPath } of blocksFieldPaths(entryFieldsFor(entry)))
+         Object.assign(typeResolvers, blockResolvers(name, schemaPath, field))
 
       if (entry.kind === 'page') {
          queryResolvers[name] = async (_: unknown, args: { locale?: string }) => {

@@ -1,3 +1,5 @@
+import type { CmsBlockPath } from './block-paths'
+import { parseBlockPath } from './block-paths'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsEntryKind, FieldConfig } from './index'
 import { entryTabs, fieldTab, pageAllFields, pageRoutes } from './index'
 
@@ -49,7 +51,12 @@ export interface CmsSearchFocus {
    field?: string
    locale?: string | null
    block?: number | null
+   blockPath?: CmsBlockPath | null
    tab?: string
+}
+
+export type CmsSearchLinkFocus = Omit<CmsSearchFocus, 'block' | 'blockPath'> & {
+   block?: number | string | null
 }
 
 const SNIPPET_BEFORE = 40
@@ -120,7 +127,7 @@ export function searchFieldPath(...labels: string[]): string {
    return labels.join(CMS_SEARCH_PATH_SEPARATOR)
 }
 
-export function cmsSearchLink(path: string, focus: CmsSearchFocus = {}): string {
+export function cmsSearchLink(path: string, focus: CmsSearchLinkFocus = {}): string {
    const params = new URLSearchParams()
    if (focus.field) params.set('field', focus.field)
    if (focus.locale) params.set('locale', focus.locale)
@@ -138,12 +145,15 @@ export function readSearchFocus(query: Record<string, unknown>): CmsSearchFocus 
    const field = text(query.field)
    const tab = text(query.tab)
    if (!field && !tab) return null
-   const block = Number.parseInt(text(query.block) ?? '', 10)
+   const blockText = text(query.block)
+   const block = Number.parseInt(blockText ?? '', 10)
+   const blockPath = field && blockText ? parseBlockPath(`${field}.${blockText}`) : null
    return {
       ...(field ? { field } : {}),
       ...(tab ? { tab } : {}),
       locale: text(query.locale) ?? null,
       block: Number.isInteger(block) && block >= 0 ? block : null,
+      blockPath: blockPath && blockPath.length % 2 === 0 ? blockPath : null,
    }
 }
 
@@ -192,7 +202,8 @@ function overridePathsOf(entry: CmsEntry, key: string): string[] {
 function blockCandidates(
    key: string,
    field: FieldConfig,
-   link: { to: string; id: string | null; title: string | null }
+   link: { to: string; id: string | null; title: string | null },
+   labels: string[] = [field.label]
 ): LabelCandidate[] {
    const candidates: LabelCandidate[] = []
    for (const block of Object.values(field.blocks ?? {}) as BlockConfig[]) {
@@ -200,7 +211,7 @@ function blockCandidates(
          type: 'block',
          ...link,
          field: key,
-         fieldLabel: searchFieldPath(field.label, block.label),
+         fieldLabel: searchFieldPath(...labels, block.label),
          texts: [block.label],
       })
       for (const blockField of Object.values(block.fields)) {
@@ -208,9 +219,13 @@ function blockCandidates(
             type: 'field',
             ...link,
             field: key,
-            fieldLabel: searchFieldPath(field.label, block.label, blockField.label),
+            fieldLabel: searchFieldPath(...labels, block.label, blockField.label),
             texts: [blockField.label],
          })
+         if (blockField.type === 'blocks')
+            candidates.push(
+               ...blockCandidates(key, blockField, link, [...labels, block.label, blockField.label])
+            )
       }
    }
    return candidates

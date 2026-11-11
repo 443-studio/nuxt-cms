@@ -8,6 +8,8 @@ import {
    isTranslatableField,
    isTranslatableMediaField,
    localizeBlocks,
+   mapBlocks,
+   walkBlocks,
    mediaFilename,
    mediaPublicUrl,
    mediaTypeForKey,
@@ -29,8 +31,7 @@ function previewBlockLinks(
    items: CmsBlockValue[],
    resolveLink: CmsPreviewLinkResolver
 ): CmsBlockValue[] {
-   return items.map((item) => {
-      const block = isRecord(item) ? field.blocks?.[String(item.type)] : undefined
+   return mapBlocks(field, items, (item, block) => {
       const keys = Object.entries(block?.fields ?? {})
          .filter(([, blockField]) => blockField.type === 'link')
          .map(([key]) => key)
@@ -38,7 +39,7 @@ function previewBlockLinks(
       const resolved = { ...item }
       for (const key of keys) resolved[key] = resolveLink(item[key])
       return resolved
-   })
+   }) as CmsBlockValue[]
 }
 
 export const CMS_PREVIEW_CHANNEL = 'nuxt-cms:preview'
@@ -447,20 +448,11 @@ export function collectMediaKeys(
    values: Record<string, unknown> | null | undefined
 ): string[] {
    const keys = new Set<string>()
-   for (const [key, field] of Object.entries(fields)) {
-      const value = values?.[key]
-      if (field.type === 'media') {
-         pushMediaKeys(keys, field, value)
-         continue
-      }
-      if (field.type !== 'blocks' || !Array.isArray(value)) continue
-      for (const item of value) {
-         if (!isRecord(item)) continue
-         const block = field.blocks?.[String(item.type)]
-         for (const [blockKey, blockField] of Object.entries(block?.fields ?? {}))
-            pushMediaKeys(keys, blockField, item[blockKey])
-      }
-   }
+   for (const [key, field] of Object.entries(fields)) pushMediaKeys(keys, field, values?.[key])
+   walkBlocks(fields, values, ({ item, block }) => {
+      for (const [blockKey, blockField] of Object.entries(block.fields))
+         pushMediaKeys(keys, blockField, item[blockKey])
+   })
    return [...keys]
 }
 
@@ -596,7 +588,35 @@ export function blockSummary(
       if (text) break
    }
    if (!text) text = blockMediaName(block, item, locale, defaultLocale)
+   if (!text) text = nestedBlockSummary(block, item, locale, defaultLocale, max)
    return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+function nestedBlockSummary(
+   block: BlockConfig | undefined,
+   item: CmsBlockValue,
+   locale: string,
+   defaultLocale: string,
+   max: number
+): string {
+   let count = 0
+   for (const [key, field] of Object.entries(block?.fields ?? {})) {
+      const list = item[key]
+      if (field.type !== 'blocks' || !Array.isArray(list)) continue
+      for (const child of list) {
+         if (!isRecord(child)) continue
+         count++
+         const text = blockSummary(
+            field.blocks?.[String(child.type)],
+            child as CmsBlockValue,
+            locale,
+            defaultLocale,
+            max
+         )
+         if (text) return text
+      }
+   }
+   return count ? `${count} ${count === 1 ? 'block' : 'blocks'}` : ''
 }
 
 export function blockErrorIndexes(

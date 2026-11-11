@@ -158,3 +158,36 @@ export const invalidOptions = defineCmsConfig({
       validate: 'nope',
    },
 })
+
+const leafSections = defineCmsBlocks({
+   text: { label: 'Text', fields: { heading: { label: 'Heading', type: 'text' } } },
+})
+
+export const sections = defineCmsBlocks({
+   ...leafSections,
+   columns: {
+      label: 'Columns',
+      fields: {
+         items: { label: 'Items', type: 'blocks', blocks: leafSections, min: 2, max: 3 },
+         nested: { label: 'Nested', type: 'blocks', blocks: {} },
+      },
+   },
+})
+
+sections.columns.fields.nested.blocks = sections
+
+export const nestedConfig = defineCmsConfig({
+   news: { id: 'news', label: 'News', kind: 'content', blocks: sections },
+})
+
+export const invalidNested = defineCmsBlocks({
+   columns: {
+      label: 'Columns',
+      fields: {
+         // @ts-expect-error
+         items: { label: 'Items', type: 'blocks', blocks: leafSections, private: true },
+         // @ts-expect-error
+         other: { label: 'Other', type: 'blocks' },
+      },
+   },
+})

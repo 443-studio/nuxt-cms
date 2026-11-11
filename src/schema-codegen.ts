@@ -1,4 +1,4 @@
-import { typeName } from './runtime/shared/graphql-sdl'
+import { blockTypeName, blocksFieldTypeName, typeName } from './runtime/shared/graphql-sdl'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from './runtime/shared/index'
 import {
    CONTENT_ROUTE_FIELDS,
@@ -6,6 +6,8 @@ import {
    PAGE_PATH_FIELD,
    CONDITION_GROUPS,
    CONDITION_OPERATORS,
+   MAX_BLOCKS_DEPTH,
+   blocksFieldPaths,
    contentRouteClashErrors,
    contentRouteConfigErrors,
    declaredLinkTargets,
@@ -286,64 +288,7 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
          errors.push(...fieldOptionErrors(fat, field, entry, null))
          if (field.type === 'blocks') {
             if (field.translatable) errors.push(`${fat}: blocks fields cannot be translatable`)
-            errors.push(...blocksCountErrors(fat, field))
-            if (!field.blocks || !Object.keys(field.blocks).length) {
-               errors.push(`${fat}: blocks requires a non-empty blocks map`)
-            }
-            for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
-               const bat = `${fat}, block '${blockName}'`
-               if (!IDENTIFIER.test(blockName))
-                  errors.push(`${bat}: key must be a valid identifier`)
-               if (!block.fields || !Object.keys(block.fields).length)
-                  errors.push(`${bat}: fields must not be empty`)
-               errors.push(...blockMetaErrors(bat, block))
-               errors.push(...layoutErrors(bat, block.fields ?? {}, block.layout))
-               for (const [blockFieldKey, blockField] of Object.entries(block.fields ?? {})) {
-                  const bfat = `${bat}, field '${blockFieldKey}'`
-                  if (!IDENTIFIER.test(blockFieldKey))
-                     errors.push(`${bfat}: key must be a valid identifier`)
-                  if (blockFieldKey === 'type')
-                     errors.push(`${bfat}: 'type' is reserved inside blocks`)
-                  if (['relation', 'blocks', 'slug', 'tags'].includes(blockField.type)) {
-                     errors.push(
-                        `${bfat}: ${blockField.type} fields are not supported inside blocks`
-                     )
-                  }
-                  errors.push(...linkFieldErrors(bfat, blockField, config))
-                  if (blockField.translatable) {
-                     if (
-                        blockField.type !== 'link' &&
-                        !TRANSLATABLE_FIELD_TYPES.includes(blockField.type)
-                     )
-                        errors.push(`${bfat}: ${TRANSLATABLE_ERROR}`)
-                     if (!locales.length)
-                        errors.push(
-                           `${bfat}: translatable requires cms.i18n.locales in nuxt.config`
-                        )
-                  }
-                  if (blockField.private)
-                     errors.push(`${bfat}: private fields are not supported inside blocks`)
-                  if (blockField.showIf !== undefined)
-                     errors.push(
-                        ...showIfErrors(
-                           bfat,
-                           blockFieldKey,
-                           blockField.showIf,
-                           block.fields ?? {},
-                           'a field of this block'
-                        )
-                     )
-                  if ((blockField as FieldConfig).mobile)
-                     errors.push(`${bfat}: mobile is not supported inside blocks`)
-                  errors.push(...valueBoundsErrors(bfat, blockField))
-                  errors.push(...fieldOptionErrors(bfat, blockField, entry, 'blocks'))
-                  if (blockField.type === 'select')
-                     errors.push(...selectOptionErrors(bfat, blockField))
-                  if (blockField.type === 'select' && blockField.multiple) {
-                     errors.push(`${bfat}: multiple select is not supported inside blocks`)
-                  }
-               }
-            }
+            errors.push(...blocksFieldErrors(fat, field, 1, { config, entry, locales }))
          }
          if (field.type === 'relation') {
             const to = relationTarget(field)
@@ -411,7 +356,111 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
    }
 
    errors.push(...contentRouteClashErrors(config))
+   errors.push(...blockTypeNameErrors(config))
 
+   return errors
+}
+
+interface BlocksScope {
+   config: CmsConfig
+   entry: CmsEntry
+   locales: string[]
+}
+
+function blocksFieldErrors(
+   fat: string,
+   field: FieldConfig,
+   depth: number,
+   scope: BlocksScope
+): string[] {
+   const { config, entry, locales } = scope
+   const errors: string[] = []
+   errors.push(...blocksCountErrors(fat, field))
+   if (!field.blocks || !Object.keys(field.blocks).length) {
+      errors.push(`${fat}: blocks requires a non-empty blocks map`)
+   }
+   for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
+      const bat = `${fat}, block '${blockName}'`
+      if (!IDENTIFIER.test(blockName)) errors.push(`${bat}: key must be a valid identifier`)
+      if (!block.fields || !Object.keys(block.fields).length)
+         errors.push(`${bat}: fields must not be empty`)
+      errors.push(...blockMetaErrors(bat, block))
+      errors.push(...layoutErrors(bat, block.fields ?? {}, block.layout))
+      for (const [blockFieldKey, blockField] of Object.entries(block.fields ?? {})) {
+         const bfat = `${bat}, field '${blockFieldKey}'`
+         if (!IDENTIFIER.test(blockFieldKey)) errors.push(`${bfat}: key must be a valid identifier`)
+         if (blockFieldKey === 'type') errors.push(`${bfat}: 'type' is reserved inside blocks`)
+         if (['relation', 'slug', 'tags'].includes(blockField.type)) {
+            errors.push(`${bfat}: ${blockField.type} fields are not supported inside blocks`)
+         }
+         errors.push(...linkFieldErrors(bfat, blockField, config))
+         if (blockField.translatable) {
+            if (blockField.type === 'blocks')
+               errors.push(`${bfat}: blocks fields cannot be translatable`)
+            else if (
+               blockField.type !== 'link' &&
+               !TRANSLATABLE_FIELD_TYPES.includes(blockField.type)
+            )
+               errors.push(`${bfat}: ${TRANSLATABLE_ERROR}`)
+            if (!locales.length)
+               errors.push(`${bfat}: translatable requires cms.i18n.locales in nuxt.config`)
+         }
+         if (blockField.private)
+            errors.push(`${bfat}: private fields are not supported inside blocks`)
+         if (blockField.showIf !== undefined)
+            errors.push(
+               ...showIfErrors(
+                  bfat,
+                  blockFieldKey,
+                  blockField.showIf,
+                  block.fields ?? {},
+                  'a field of this block'
+               )
+            )
+         if ((blockField as FieldConfig).mobile)
+            errors.push(`${bfat}: mobile is not supported inside blocks`)
+         if (blockField.type === 'blocks') {
+            if (depth >= MAX_BLOCKS_DEPTH)
+               errors.push(
+                  `${bfat}: blocks nest at most ${MAX_BLOCKS_DEPTH} levels deep (a blocks field in a block in a blocks field counts as 2)`
+               )
+            else errors.push(...blocksFieldErrors(bfat, blockField, depth + 1, scope))
+            errors.push(...fieldOptionErrors(bfat, blockField, entry, 'blocks'))
+            continue
+         }
+         errors.push(...valueBoundsErrors(bfat, blockField))
+         errors.push(...fieldOptionErrors(bfat, blockField, entry, 'blocks'))
+         if (blockField.type === 'select') errors.push(...selectOptionErrors(bfat, blockField))
+         if (blockField.type === 'select' && blockField.multiple) {
+            errors.push(`${bfat}: multiple select is not supported inside blocks`)
+         }
+      }
+   }
+   return errors
+}
+
+function blockTypeNameErrors(config: CmsConfig): string[] {
+   const errors: string[] = []
+   const seen = new Map<string, string>()
+   for (const [name, entry] of Object.entries(config)) seen.set(typeName(name), `entry '${name}'`)
+   const claim = (type: string, owner: string) => {
+      const existing = seen.get(type)
+      if (existing && existing !== owner)
+         errors.push(
+            `cms.config: GraphQL type name '${type}' of ${owner} clashes with ${existing}, rename a block or field`
+         )
+      else seen.set(type, owner)
+   }
+   for (const [name, entry] of Object.entries(config)) {
+      const fields = entry.kind === 'page' ? pageAllFields(entry) : entry.fields ?? {}
+      for (const { field, schemaPath } of blocksFieldPaths(fields)) {
+         if (field.private) continue
+         const where = `'${name}.${schemaPath.join('.')}'`
+         claim(blocksFieldTypeName(name, schemaPath), `the blocks of ${where}`)
+         for (const blockName of Object.keys(field.blocks ?? {}))
+            claim(blockTypeName(name, schemaPath, blockName), `block '${blockName}' of ${where}`)
+      }
+   }
    return errors
 }
 

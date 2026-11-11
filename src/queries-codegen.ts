@@ -21,14 +21,26 @@ function fieldSelection(key: string, field: FieldConfig): string {
    return key
 }
 
-function blocksSelection(entryName: string, key: string, field: FieldConfig): string {
+function blocksSelection(
+   entryName: string,
+   schemaPath: readonly string[],
+   field: FieldConfig
+): string {
    const parts = ['__typename type']
    for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
       const fields = Object.entries(block.fields).map(([blockFieldKey, blockField]) =>
-         fieldSelection(blockFieldKey, blockField)
+         blockField.type === 'blocks'
+            ? `${blockFieldKey} { ${blocksSelection(
+                 entryName,
+                 [...schemaPath, blockName, blockFieldKey],
+                 blockField
+              )} }`
+            : fieldSelection(blockFieldKey, blockField)
       )
       if (!fields.length) continue
-      parts.push(`... on ${blockTypeName(entryName, key, blockName)} { ${fields.join(' ')} }`)
+      parts.push(
+         `... on ${blockTypeName(entryName, schemaPath, blockName)} { ${fields.join(' ')} }`
+      )
    }
    return parts.join(' ')
 }
@@ -52,7 +64,7 @@ function entrySelection(
          continue
       }
       if (field.type === 'blocks') {
-         parts.push(`${key} { ${blocksSelection(name, key, field)} }`)
+         parts.push(`${key} { ${blocksSelection(name, [key], field)} }`)
          continue
       }
       parts.push(fieldSelection(key, field))

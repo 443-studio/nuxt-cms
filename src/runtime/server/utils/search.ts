@@ -1,9 +1,12 @@
 import type { SQL } from 'drizzle-orm'
 import { desc, inArray, or, sql } from 'drizzle-orm'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import type { CmsConfig, CmsEntry, CmsI18n, FieldConfig } from '../../shared/index'
+import type { CmsBlockPath, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from '../../shared/index'
 import {
    decodeTranslatableValue,
+   formatBlockPath,
+   resolveBlockPath,
+   walkBlocks,
    isMultiSelect,
    isTranslatableField,
    linkLabelTexts,
@@ -60,7 +63,7 @@ interface FieldText {
 
 interface RowHit {
    field: string
-   block: number | null
+   block: string | null
    fieldLabel: string
    locale: string | null
    snippet: CmsSearchSnippet
@@ -165,21 +168,29 @@ function rowHits(
          collect(field, value, { field: key, block: null, fieldLabel: field.label })
          continue
       }
-      if (!Array.isArray(value)) continue
-      value.forEach((item: Row | null, index) => {
-         const block = item ? field.blocks?.[String(item.type)] : undefined
-         if (!item || !block) return
+      walkBlocks({ [key]: field }, row, ({ item, block, path }) => {
+         if (hits.length >= CMS_SEARCH_HITS_PER_ROW) return false
          for (const [blockKey, blockField] of Object.entries(block.fields)) {
-            if (!isSearchableField(blockField)) continue
+            if (!isSearchableField(blockField) || blockField.type === 'blocks') continue
             collect(blockField, item[blockKey], {
                field: key,
-               block: index,
-               fieldLabel: searchFieldPath(field.label, block.label, blockField.label),
+               block: formatBlockPath(path.slice(1)),
+               fieldLabel: searchFieldPath(...blockLabels(fields, row, path), blockField.label),
             })
          }
       })
    }
    return hits
+}
+
+function blockLabels(fields: Record<string, FieldConfig>, row: Row, path: CmsBlockPath): string[] {
+   const labels: string[] = []
+   for (let end = 2; end <= path.length; end += 2) {
+      const location = resolveBlockPath(fields, row, path.slice(0, end))
+      if (!location) break
+      labels.push(location.field.label, location.block?.label ?? String(location.item.type))
+   }
+   return labels
 }
 
 function titleOf(entry: CmsEntry, row: Row, defaultLocale: string): string | null {

@@ -68,7 +68,8 @@ What they select:
 
 - every public field of the entry, plus `id` and `updatedAt` (and `createdAt` for a collection);
 - media fields with all their keys (`key url type alt folder mime size width height focalX focalY`);
-- blocks fields with `__typename`, `type` and an inline fragment per block type;
+- blocks fields with `__typename`, `type` and an inline fragment per block type, nested blocks
+  included (down to the nesting limit);
 - relations one level deep. The related entry brings its own fields, but not its own relations.
 
 `data` holds `null` for a single and `[]` for a collection before the query resolves and after it
@@ -349,6 +350,27 @@ Every block field is nullable in the API and in the generated types, even when i
 block items are stored as JSON, so older items can lack a field added or made required later.
 `type` and `__typename` are always set.
 
+[Nested blocks](schema.md#nested-blocks) follow the same pattern one level down. The interface of
+a nested field adds the block and the field to the name, `<Entry><Field><Block><SubField>Block`,
+and so do its block types:
+
+```graphql
+body {
+   __typename type
+   ... on NewsBodyColumns {
+      columns {
+         __typename type
+         ... on NewsBodyColumnsColumnsColumn {
+            content { __typename type ... on NewsBodyColumnsColumnsColumnContentText { heading body } }
+         }
+      }
+   }
+}
+```
+
+Hidden items are dropped at every level, translatable fields are localized and media and links are
+resolved inside nested blocks as at the top level.
+
 ## Rendering blocks
 
 `<CmsBlocks>` renders a blocks value with the components named by `component` on each block (see
@@ -373,9 +395,32 @@ For a value without `__typename` (a hand-written query, or raw data), pass the e
 
 The components are imported at build time from `#components`, as lazy components, through a
 generated map (`#cms-blocks`). Nothing is registered globally and nothing is resolved by name at
-runtime. The `annotate` prop adds `data-cms-block` (the index) and `data-cms-block-type` to the root
-element of each block, for tools that need to find a block in the page. The visual editor uses it,
-so give each block component a single root element.
+runtime. The `annotate` prop adds `data-cms-block` (the index), `data-cms-block-path` (the item path,
+`body.2`) and `data-cms-block-type` to the root element of each block, for tools that need to find a
+block in the page. The visual editor uses it, so give each block component a single root element.
+
+For [nested blocks](schema.md#nested-blocks), render the nested field with `<CmsBlocks>` inside the
+block component:
+
+```vue
+<template>
+   <div class="grid md:grid-cols-2">
+      <CmsBlocks :blocks="columns" />
+   </div>
+</template>
+
+<script setup lang="ts">
+import type { NewsBodyColumnsProps } from '#cms-types'
+
+defineProps<NewsBodyColumnsProps>()
+</script>
+```
+
+A nested `<CmsBlocks>` knows its parent block: it inherits `entry` and `annotate`, and finds the
+name of the field from the prop you pass it (pass `field="columns"` when you pass a filtered or
+copied list). With `annotate`, nested roots get `data-cms-block-path` (`body.2.columns.0`),
+`data-cms-block-parent` (`body.2`) and `data-cms-block-type`, but no `data-cms-block`, so
+`data-cms-block` keeps meaning a top-level block.
 
 ### Marking fields
 

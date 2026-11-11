@@ -1,7 +1,7 @@
 import type { CmsValidationIssue } from '#nuxt-cms'
 import { defaultLocaleValue, defineCmsBlocks, defineCmsConfig } from '#nuxt-cms'
 
-const sections = defineCmsBlocks({
+const content = defineCmsBlocks({
    text: {
       label: 'Text',
       component: 'SectionText',
@@ -53,6 +53,64 @@ const sections = defineCmsBlocks({
             withLabel: true,
             translatable: true,
             required: true,
+         },
+      },
+   },
+})
+
+const sections = defineCmsBlocks({
+   ...content,
+   columns: {
+      label: 'Columns',
+      component: 'SectionColumns',
+      icon: 'view-columns',
+      description: 'Two or three columns side by side, each with its own blocks.',
+      group: 'Layout',
+      tags: ['grid', 'side by side'],
+      fields: {
+         heading: { label: 'Heading', type: 'text', translatable: true },
+         columns: {
+            label: 'Columns',
+            type: 'blocks',
+            min: 2,
+            max: 3,
+            blocks: {
+               column: {
+                  label: 'Column',
+                  component: 'SectionColumn',
+                  icon: 'rectangle-stack',
+                  fields: {
+                     content: { label: 'Content', type: 'blocks', blocks: content },
+                  },
+               },
+            },
+         },
+      },
+   },
+   accordion: {
+      label: 'Accordion',
+      component: 'SectionAccordion',
+      icon: 'queue-list',
+      description: 'Panels that open one at a time, for FAQs and long details.',
+      group: 'Layout',
+      tags: ['faq', 'collapse', 'details'],
+      fields: {
+         heading: { label: 'Heading', type: 'text', translatable: true },
+         panels: {
+            label: 'Panels',
+            type: 'blocks',
+            min: 1,
+            blocks: {
+               panel: {
+                  label: 'Panel',
+                  component: 'SectionAccordionPanel',
+                  icon: 'chevron-down',
+                  fields: {
+                     title: { label: 'Title', type: 'text', translatable: true, required: true },
+                     content: { label: 'Content', type: 'blocks', blocks: content },
+                  },
+               },
+            },
          },
       },
    },
@@ -117,6 +175,7 @@ export default defineCmsConfig({
          '/about': {
             intro: { label: 'Intro', type: 'text', textarea: true, translatable: true },
             founded: { label: 'Founded in', type: 'number', integer: true },
+            body: { label: 'Body', type: 'blocks', blocks: sections },
          },
          '/guides/knots': {
             difficulty: {

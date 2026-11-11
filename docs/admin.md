@@ -59,6 +59,16 @@ key; the block editor also carries two move buttons, which is the way on a touch
 add tile appends. Copied blocks paste into any `blocks` field that has their type, here or in the
 [visual editor](#copy-and-paste), even in another entry.
 
+**Nested blocks.** A block with its own [`blocks` field](schema.md#nested-blocks) shows that field
+as a grid of tiles inside its editor, with the same add, order, remove, hide, copy, paste and preset
+actions. A click on a nested tile opens that block in the same editor, with the path of parent
+blocks as a breadcrumb in the title (**Columns › Column › Text**): click a parent or **Back** to go
+up one level. Move, **Duplicate**, **Hide** and **Remove** of the editor act on the open block in
+its own list. After a failed save, tiles holding an invalid field are outlined in red at every level,
+and the field shows its message when you open its block. A tile whose block only holds other blocks
+previews the first text of its nested blocks, or their count. In the visual editor the inspector
+of the selected block shows its nested fields as tiles too.
+
 **Media lists.** A `blocks` field with one block type that has one `media` field (for example a
 photo gallery) is edited as a media list. **+** opens the media library and adds the file you pick.
 The X on a tile removes it, and a drag changes the order. No editor opens.
