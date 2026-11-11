@@ -132,6 +132,7 @@ const tabsBinding = computed(() =>
    tabbed.value
       ? {
            items: tabList.value.map((tab) => ({ value: tab.id, label: tab.label })),
+           label: 'Entry fields',
            modelValue: activeTab.value,
            panelFocusable: false,
            'onUpdate:modelValue': (value: string | number | undefined) => {
