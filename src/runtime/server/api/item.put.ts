@@ -1,11 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { createError, defineEventHandler } from 'h3'
 import { runBatch, useDb } from '#cms-db'
-import {
-   assertImmutableValues,
-   assertUniqueValues,
-   readEntryBody,
-} from '../utils/field-rules'
+import { assertImmutableValues, assertUniqueValues, readEntryBody } from '../utils/field-rules'
 import {
    decodeRows,
    encodeColumnValues,
@@ -16,13 +12,14 @@ import {
    withContentDefaults,
    withUpdatedAt,
 } from '../utils/registry'
-import { isRoutedContent, pageFields } from '../../shared/index'
+import { isRoutedContent, pageFields, rowAfterUpdate } from '../../shared/index'
 import { assertMediaExists } from '../utils/media-check'
 import { writePage } from '../utils/page-storage'
 import {
    assertRelationTargets,
-   attachManyToMany,
    manyToManyStatements,
+   readBackSaved,
+   savedReadBackError,
    splitRelationValues,
 } from '../utils/relations'
 import { assertCmsPermission, assertPublishAllowed, requireCmsAccess } from '../utils/permissions'
@@ -84,10 +81,10 @@ export default defineEventHandler(async (event) => {
    await assertUniqueValues(entry, table, body, id)
    assertPublishAllowed(access, name, entry, existing.status, values.status ?? existing.status)
    const redirects = isRoutedContent(entry)
-      ? await planContentRedirects(contentMovesOf(entry, existing, { ...existing, ...set }))
+      ? await planContentRedirects(contentMovesOf(entry, existing, rowAfterUpdate(existing, set)))
       : null
 
-   const item = await mapConstraintErrors(async () => {
+   const saved = await mapConstraintErrors(async () => {
       const [updated] = await runBatch((db) => [
          db
             .update(table)
@@ -100,9 +97,10 @@ export default defineEventHandler(async (event) => {
       if (redirects) invalidateRedirects()
       const [row] = updated as Record<string, unknown>[]
       if (!row) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
-      const [attached] = await attachManyToMany(useDb(), name, entry, [row])
-      return decodeRows(entry, [attached!])[0]
+      return row
    })
+   const readBack = await readBackSaved(name, entry, saved)
+   const item = decodeRows(entry, [readBack.row])[0]
    const status = entry.drafts ? entryStatus(item?.status) : null
    emitEntryChange(event, user, {
       entry: name,
@@ -112,5 +110,6 @@ export default defineEventHandler(async (event) => {
       status,
       item: item ?? null,
    })
+   if (readBack.error) throw savedReadBackError(readBack.error)
    return item
 })

@@ -93,6 +93,14 @@ export function isUniqueValueField(field: FieldConfig): boolean {
    return !!field.unique && UNIQUE_FIELD_TYPES.includes(field.type) && !isTranslatableField(field)
 }
 
+export function isCaseInsensitiveUnique(field: Pick<FieldConfig, 'type'>): boolean {
+   return field.type === 'email'
+}
+
+export function uniqueCompareValue<T>(field: Pick<FieldConfig, 'type'>, value: T): T | string {
+   return isCaseInsensitiveUnique(field) && typeof value === 'string' ? value.toLowerCase() : value
+}
+
 export function isImmutableField(field: FieldConfig): boolean {
    return (
       !!field.immutable &&

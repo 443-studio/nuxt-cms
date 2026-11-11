@@ -28,6 +28,7 @@ import {
 } from '../../shared/index'
 import { normalizeTimestamp, nowTimestamp } from '../../shared/timestamps'
 import { customId } from './custom-id'
+import type { WriteDb } from './write-statements'
 import { getContentI18n, resolveTable, tableColumns } from './registry'
 import { assertCmsPermission, requireCmsAccess } from './permissions'
 
@@ -193,8 +194,8 @@ export async function revokePreviewLink(
    if (!row) throw createError({ statusCode: 404, statusMessage: 'Preview link not found' })
 }
 
-export async function deleteItemPreviewLinks(name: string, itemId: string) {
-   await useDb()
+export function deleteItemPreviewLinksStatement(db: WriteDb, name: string, itemId: string) {
+   return db
       .delete(cms_preview_links)
       .where(and(eq(cms_preview_links.entry, name), eq(cms_preview_links.itemId, itemId)))
 }

@@ -4,7 +4,12 @@ import cmsConfig from '#cms-config'
 import cmsRoles from '#cms-roles'
 import type { CmsConfig, CmsEntry, CmsSessionUser } from '../../shared/index'
 import type { CmsAccess, CmsRoles } from '../../shared/roles'
-import { can, publishPermissionError, resolveCmsAccess } from '../../shared/roles'
+import {
+   can,
+   deletePermissionError,
+   publishPermissionError,
+   resolveCmsAccess,
+} from '../../shared/roles'
 import { requireAdmin } from './require-admin'
 
 export interface CmsAuthorized {
@@ -42,6 +47,17 @@ export async function requireCmsPermission(
    const authorized = await requireCmsAccess(event)
    assertCmsPermission(authorized.access, permission)
    return authorized
+}
+
+export function assertDeleteAllowed(
+   access: CmsAccess,
+   name: string,
+   entry: Pick<CmsEntry, 'drafts'>,
+   status: unknown
+) {
+   assertCmsPermission(access, `${name}.delete`)
+   const message = deletePermissionError(access, name, entry, status)
+   if (message) forbidden(message)
 }
 
 export function assertPublishAllowed(

@@ -101,6 +101,18 @@ export function presetFits(
    )
 }
 
+export function presetSourceEntry(preset: Pick<CmsBlockPreset, 'source'>): string {
+   return preset.source.split('.')[0] ?? ''
+}
+
+export function presetReadable(
+   preset: Pick<CmsBlockPreset, 'source'>,
+   canRead: (permission: string) => boolean
+): boolean {
+   const entry = presetSourceEntry(preset)
+   return !!entry && canRead(`${entry}.read`)
+}
+
 export function parseStoredPreset(raw: string): CmsBlockPreset | null {
    try {
       const parsed = storedSchema.safeParse(JSON.parse(raw))

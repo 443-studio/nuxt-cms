@@ -558,8 +558,9 @@ what their `can` list grants.
 - **Publishing.** On an entry with drafts, a role with `update` but without `publish` saves drafts
   only: it cannot create an item as published, publish a draft, unpublish, schedule, or edit an
   item that is already published (the live content would change). The form of a published item
-  shows a notice and is read only. The import dry run reports the same rule per row. `delete` is
-  its own permission and also removes published items.
+  shows a notice and is read only. The import dry run reports the same rule per row. Deleting a
+  published or scheduled item needs `delete` and `publish` (taking it offline is a publish
+  decision); drafts need only `delete`.
 - **Import** needs `import` and `create` (plus `update` in upsert mode). **Duplicate** needs
   `create`.
 - **SEO.** Settings → Site needs `settings.manage` (`GET` and `PUT /api/cms/site`), Settings →
@@ -572,8 +573,9 @@ what their `can` list grants.
   its `...` menu only has **Copy**, the block picker, Undo and Redo are gone, and the keys that
   change blocks do nothing. The language switch, selection, hover and copy keep working.
 - **Block presets.** Using them (the field list and **Save as preset**,
-  `/api/cms/presets/<entry>/<field>`) needs `<entry>.update`; listing, renaming and deleting them
-  in Settings needs `settings.manage`.
+  `/api/cms/presets/<entry>/<field>`) needs `<entry>.update`, and the picker only offers presets
+  saved from an entry the role can `read` (a preset holds a copy of that content); listing,
+  renaming and deleting them in Settings needs `settings.manage`.
 - **Links.** The link picker only searches the entries the role can read, and the preview only
   resolves links to them. `POST /api/cms/link-usage` needs `read` on the entry of every target
   and only reports the entries the role can read.

@@ -5,8 +5,10 @@ import { duplicateEntryValues } from '../src/runtime/shared/duplicate'
 import {
    changedImmutableKeys,
    entryDefaults,
+   isCaseInsensitiveUnique,
    lockedFieldKeys,
    resolveFieldDefault,
+   uniqueCompareValue,
    withEntryDefaults,
 } from '../src/runtime/shared/field-options'
 import { buildEntrySchema, valueBoundsMessage } from '../src/runtime/shared/validation'
@@ -151,13 +153,14 @@ describe('field options at build time', () => {
    it('accepts valid options', () => {
       expect(
          errorsFor({
-            title: { default: 'Untitled', min: 2, max: 40, unique: true, immutable: true },
-            seats: { default: 10, min: 0, max: 500, unique: true },
+            title: { default: 'Untitled', min: 2, max: 40, immutable: true },
+            seats: { default: 10, min: 0, max: 500 },
+            code: { label: 'Code', type: 'text', unique: true },
             date: { default: 'today', immutable: true },
             visibility: { default: 'public' },
             species: { default: ['bass', 'pike'] },
             featured: { default: false, immutable: true },
-            contactEmail: { default: 'info@example.com', unique: true },
+            contactEmail: { default: 'info@example.com' },
             description: { default: '<p>Hi</p>' },
             slug: { immutable: true },
             category: { immutable: true },
@@ -186,6 +189,8 @@ describe('field options at build time', () => {
       [{ slug: { unique: true } }, '(a slug is always unique)'],
       [{ description: { unique: true } }, 'unique is only supported on'],
       [{ title: { unique: true, translatable: true } }, 'unique is not supported on translatable'],
+      [{ seats: { unique: true, default: 1 } }, 'default is not supported on unique fields'],
+      [{ contactEmail: { unique: true, default: 'a@b.co' } }, 'default is not supported on unique'],
       [{ metadata: { immutable: true } }, 'immutable is only supported on'],
       [{ tags: { immutable: true } }, '(not many-to-many)'],
       [{ title: { immutable: 'yes' as never } }, 'immutable must be a boolean'],
@@ -253,5 +258,15 @@ describe('unique columns', () => {
       })
       expect(copy.contactEmail).toBeNull()
       expect(copy.seats).toBe(3)
+   })
+})
+
+describe('unique comparison', () => {
+   it('compares emails without case and other values exactly', () => {
+      expect(isCaseInsensitiveUnique({ type: 'email' })).toBe(true)
+      expect(isCaseInsensitiveUnique({ type: 'text' })).toBe(false)
+      expect(uniqueCompareValue({ type: 'email' }, 'Ann@Example.com')).toBe('ann@example.com')
+      expect(uniqueCompareValue({ type: 'text' }, 'SPR-26')).toBe('SPR-26')
+      expect(uniqueCompareValue({ type: 'number' }, 4)).toBe(4)
    })
 })

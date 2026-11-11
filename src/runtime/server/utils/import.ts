@@ -1,12 +1,19 @@
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { CmsDb } from '#cms-db'
-import type { CmsConfig, CmsEntry, CmsI18n } from '../../shared/index'
-import { relationTarget } from '../../shared/index'
+import type { CmsConfig, CmsContentMoves, CmsEntry, CmsI18n } from '../../shared/index'
+import {
+   isRoutedContent,
+   mergeContentMoves,
+   relationTarget,
+   rowAfterUpdate,
+} from '../../shared/index'
 import { uniqueFieldKeys } from '../../shared/duplicate'
 import {
    changedImmutableKeys,
    immutableFieldKeys,
+   isCaseInsensitiveUnique,
+   uniqueCompareValue,
    withEntryDefaults,
 } from '../../shared/field-options'
 import type {
@@ -29,6 +36,8 @@ import {
    withTimestamps,
    withUpdatedAt,
 } from './registry'
+import type { CmsRedirectPlan } from '../../shared/index'
+import { contentMovesOf, planContentRedirects } from './redirects'
 import { manyToManyStatements, splitRelationValues } from './relations'
 import { chunks, KEY_CHUNK } from './write-statements'
 
@@ -170,22 +179,28 @@ async function checkUnique(rows: PreparedImportRow[], context: ImportContext) {
    const columns = context.table as unknown as Columns
    for (const key of uniqueFieldKeys(context.entry)) {
       const column = columns[key]
+      const field = context.entry.fields[key]!
       if (!column) continue
       const owners = new Map<string | number, PreparedImportRow>()
       for (const row of rows) {
          const value = row.values?.[key]
          if (!((typeof value === 'string' && value) || typeof value === 'number')) continue
-         const owner = owners.get(value)
+         const compared = uniqueCompareValue(field, value)
+         const owner = owners.get(compared)
          if (owner) addError(row, key, `Same value as row ${owner.index}`)
-         else owners.set(value, row)
+         else owners.set(compared, row)
       }
+      const lower = isCaseInsensitiveUnique(field)
       for (const chunk of chunks([...owners.keys()], KEY_CHUNK)) {
          const found = (await context.db
             .select({ id: columns.id!, value: column })
             .from(context.table)
-            .where(inArray(column, chunk))) as { id: string; value: string | number }[]
+            .where(lower ? inArray(sql`lower(${column})`, chunk) : inArray(column, chunk))) as {
+            id: string
+            value: string | number
+         }[]
          for (const match of found) {
-            const row = owners.get(match.value)
+            const row = owners.get(uniqueCompareValue(field, match.value))
             if (row && row.id !== String(match.id))
                addError(row, key, 'This value is already used by another entry')
          }
@@ -361,4 +376,33 @@ export function importWriteStatements(
       later.push(...manyToManyStatements(db, name, id, lists))
    }
    return [...main, ...later]
+}
+
+export async function planImportRedirects(
+   db: CmsDb,
+   entry: CmsEntry,
+   table: SQLiteTable,
+   rows: PreparedImportRow[]
+): Promise<CmsRedirectPlan | null> {
+   if (!isRoutedContent(entry)) return null
+   const updates = rows.filter((row) => row.action === 'update' && row.values && row.id)
+   if (!updates.length) return null
+   const idCol = (table as unknown as Columns).id!
+   const before = new Map<string, Row>()
+   for (const ids of chunks(
+      updates.map((row) => row.id!),
+      KEY_CHUNK
+   )) {
+      const found = (await db.select().from(table).where(inArray(idCol, ids))) as Row[]
+      for (const row of found) before.set(String(row.id), row)
+   }
+   const moves: CmsContentMoves[] = []
+   for (const row of updates) {
+      const existing = before.get(row.id!)
+      if (!existing) continue
+      const { values } = splitRelationValues(entry, encodeColumnValues(entry, row.values!))
+      const after = rowAfterUpdate(existing, withContentDefaults(entry, values))
+      moves.push(contentMovesOf(entry, existing, after))
+   }
+   return planContentRedirects(mergeContentMoves(moves))
 }

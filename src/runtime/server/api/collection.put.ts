@@ -16,7 +16,8 @@ import {
 } from '../utils/registry'
 import {
    assertRelationTargets,
-   attachManyToMany,
+   readBackSaved,
+   savedReadBackError,
    manyToManyStatements,
    splitRelationValues,
 } from '../utils/relations'
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event) => {
    await assertRelationTargets(entry, lists)
    const set = withUpdatedAt(table, values)
 
-   const item = await mapConstraintErrors(async () => {
+   const saved = await mapConstraintErrors(async () => {
       const [upserted] = await runBatch((db) => [
          db
             .insert(table)
@@ -56,9 +57,10 @@ export default defineEventHandler(async (event) => {
          ...manyToManyStatements(db, name, entry.id, lists),
       ])
       const [row] = upserted as Record<string, unknown>[]
-      const [attached] = await attachManyToMany(useDb(), name, entry, [row!])
-      return decodeRows(entry, [attached!])[0]
+      return row!
    })
+   const readBack = await readBackSaved(name, entry, saved)
+   const item = decodeRows(entry, [readBack.row])[0]
    const status = entry.drafts ? entryStatus(item?.status) : null
    emitEntryChange(event, user, {
       entry: name,
@@ -68,5 +70,6 @@ export default defineEventHandler(async (event) => {
       status,
       item: item ?? null,
    })
+   if (readBack.error) throw savedReadBackError(readBack.error)
    return item
 })

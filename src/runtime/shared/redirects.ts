@@ -241,6 +241,16 @@ export function contentPathMoves(
    return { moves: [...moves].map(([from, to]) => ({ from, to })), livePaths }
 }
 
+export function rowAfterUpdate<T extends Record<string, unknown>>(
+   existing: T,
+   set: Record<string, unknown>
+): T {
+   const next: Record<string, unknown> = { ...existing }
+   for (const [key, value] of Object.entries(set)) if (value !== undefined) next[key] = value
+   if (Object.hasOwn(existing, 'status') && next.status == null) next.status = existing.status
+   return next as T
+}
+
 export function contentItemMoves(
    entry: Pick<CmsEntry, 'kind' | 'route'>,
    before: CmsContentRouteItem,
@@ -254,6 +264,15 @@ export function contentItemMoves(
       contentItemPaths(entry, before, locales),
       contentItemPaths(entry, after, locales)
    )
+}
+
+export function mergeContentMoves(list: readonly CmsContentMoves[]): CmsContentMoves {
+   const livePaths = [...new Set(list.flatMap((moves) => moves.livePaths))]
+   const live = new Set(livePaths.map(normalizeRedirectPath))
+   const moves = list
+      .flatMap((item) => item.moves)
+      .filter((move) => !live.has(normalizeRedirectPath(move.from)))
+   return { moves, livePaths }
 }
 
 export function planRedirectMoves(

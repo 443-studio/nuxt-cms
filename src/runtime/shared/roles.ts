@@ -178,6 +178,16 @@ export function publishPermissionError(
    return null
 }
 
+export function deletePermissionError(
+   access: CmsAccess,
+   name: string,
+   entry: Pick<CmsEntry, 'drafts'>,
+   status: unknown
+): string | null {
+   if (!entry.drafts || status !== 'published' || can(access, `${name}.publish`)) return null
+   return `Deleting a published or scheduled item needs the ${name}.publish permission`
+}
+
 export function canGrantRole(
    access: CmsAccess | null | undefined,
    role: string,

@@ -301,8 +301,14 @@ const itemActions = computed<MenuEntry[]>(() =>
               : []),
         ]
 )
+const canDeleteItem = computed(
+   () =>
+      can(`${name}.delete`) &&
+      ((JSON.parse(snapshot.value) as Record<string, unknown>).status !== 'published' ||
+         canPublish.value)
+)
 const deleteActions = computed<MenuEntry[]>(() =>
-   !isNew && can(`${name}.delete`)
+   !isNew && canDeleteItem.value
       ? [{ label: 'Delete', icon: cmsIcon('trash'), tone: 'danger', onSelect: remove }]
       : []
 )

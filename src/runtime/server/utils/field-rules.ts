@@ -1,4 +1,4 @@
-import { and, eq, ne } from 'drizzle-orm'
+import { and, eq, ne, sql } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { H3Event } from 'h3'
 import { createError, readBody } from 'h3'
@@ -8,7 +8,9 @@ import { pageFields } from '../../shared/index'
 import {
    changedImmutableKeys,
    immutableFieldKeys,
+   isCaseInsensitiveUnique,
    isUniqueValueField,
+   uniqueCompareValue,
    withEntryDefaults,
 } from '../../shared/field-options'
 import { validationMessages } from '../../shared/validation'
@@ -98,7 +100,9 @@ export async function assertUniqueValues(
       const column = columns[key]
       const value = values[key]
       if (!isUniqueValueField(field) || !column || value === null || value === undefined) continue
-      const same = eq(column, value)
+      const same = isCaseInsensitiveUnique(field)
+         ? sql`lower(${column}) = ${uniqueCompareValue(field, value)}`
+         : eq(column, value)
       const [match] = await useDb()
          .select({ id: idColumn(table) })
          .from(table)

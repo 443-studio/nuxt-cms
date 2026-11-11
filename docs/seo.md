@@ -201,6 +201,8 @@ it keep working.
 - Moving an item back is safe: the redirect from its old path goes away, so the two paths never
   loop.
 - A new `route` pattern in your config is not a move: add those redirects by hand or import them.
+- An [import](admin.md) in upsert mode that changes the slug of live items leaves the same
+  redirects, written in the batch of the import.
 
 These redirects show as **Added when a page moved** in the list. Editing one makes it a manual one.
 They are written in the same batch as the item, as part of the save: the save needs no
@@ -222,7 +224,10 @@ seconds. A matching path costs one lookup in that map, plus one query to check f
 
 The admin API is `GET` / `POST /api/cms/redirects`, `PUT` / `DELETE /api/cms/redirects/:id` and
 `POST /api/cms/redirects/import` (`{ redirects: [...] }`, at most 5000), behind `redirects.manage`
-and the same-origin rules. Manual changes and imports fire no hook or webhook. Redirects live in the built-in `cms_redirects` table, created by the
+and the same-origin rules. Manual changes and imports fire no hook or webhook. The loop check and
+the write of a manual change run one at a time on each server instance, so two editors cannot
+build a loop by saving at once; with several instances, two saves landing on different instances
+at the same moment are not serialized. Redirects live in the built-in `cms_redirects` table, created by the
 migrations like the other built-in tables. They are not part of the public GraphQL API.
 
 ## Turning them off

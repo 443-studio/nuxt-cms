@@ -25,8 +25,10 @@ import {
    existingImportIds,
    importPreview,
    importWriteStatements,
+   planImportRedirects,
    validateImportRows,
 } from '../utils/import'
+import { invalidateRedirects, redirectPlanStatements } from '../utils/redirects'
 import { mediaLookup } from '../utils/media-check'
 import { getContentI18n, getRegistryEntry } from '../utils/registry'
 import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
@@ -99,9 +101,14 @@ export default defineEventHandler(async (event) => {
    }
 
    const written = assignImportIds(entry, rows)
+   const redirects = await planImportRedirects(db, entry, table, written)
    await mapConstraintErrors(() =>
-      runBatch((tx) => importWriteStatements(tx, name, entry, table, written))
+      runBatch((tx) => [
+         ...importWriteStatements(tx, name, entry, table, written),
+         ...(redirects ? redirectPlanStatements(tx, redirects) : []),
+      ])
    )
+   if (redirects) invalidateRedirects()
    emitEntryChange(event, user, {
       entry: name,
       kind: entry.kind,

@@ -274,7 +274,7 @@ describe('preview links with a database', () => {
 
    it('deletes the links of a deleted item', async () => {
       await links.createPreviewLink(access, 'other', { duration: '1h' })
-      await links.deleteItemPreviewLinks('news', 'draft')
+      await links.deleteItemPreviewLinksStatement(db() as never, 'news', 'draft')
       const rows = (await db().select().from(previewTable)) as { itemId: string }[]
       expect(rows.some((row) => row.itemId === 'draft')).toBe(false)
       expect(rows.some((row) => row.itemId === 'other')).toBe(true)

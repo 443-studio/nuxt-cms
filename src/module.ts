@@ -28,7 +28,13 @@ import { createJiti } from 'jiti'
 import { renderBrandFile, resolveBrand } from './brand-codegen'
 import { renderImageFile, resolveCmsImageSetup } from './image-codegen'
 import { renderGraphqlSdl } from './runtime/shared/graphql-sdl'
-import { migrationsDirFor } from './runtime/shared/migrations-dir'
+import type { CmsMigrationFixes } from './runtime/shared/migrations-dir'
+import {
+   MIGRATION_FIXES_FILE,
+   fixNewMigrations,
+   migrationSqlFiles,
+   migrationsDirFor,
+} from './runtime/shared/migrations-dir'
 import type { CmsConfig, CmsPageRoute, MediaStorageMode } from './runtime/shared/index'
 import { DEFAULT_MEDIA_MAX_FILE_SIZE, normalizeCmsConfig } from './runtime/shared/index'
 import {
@@ -62,7 +68,7 @@ import {
    renderMigrationsTypes,
 } from './migrations-codegen'
 import type { Driver } from './schema-codegen'
-import { renderSchemaFile, validateConfig } from './schema-codegen'
+import { renderSchemaFile, uniqueTextColumns, validateConfig } from './schema-codegen'
 import { renderQueriesFile } from './queries-codegen'
 import { resolvePageRoutes, routePathsFromDir } from './runtime/shared/page-routes'
 import { renderTypesFile } from './types-codegen'
@@ -879,6 +885,16 @@ export default defineNuxtModule<ModuleOptions>({
       const relativeMigrationsDir = relative(nuxt.options.rootDir, migrationsDir)
 
       const toPosix = (path: string) => path.replace(/\\/g, '/')
+      const migrationFixes: CmsMigrationFixes = {
+         dialect,
+         out: toPosix(migrationsDir),
+         uniqueTextColumns: uniqueTextColumns(cmsConfig),
+      }
+      addTemplate({
+         filename: `cms/${MIGRATION_FIXES_FILE}`,
+         write: true,
+         getContents: () => JSON.stringify(migrationFixes, null, 2),
+      })
       addTemplate({
          filename: 'cms/drizzle.config.ts',
          write: true,
@@ -1005,13 +1021,24 @@ export default defineNuxtModule<ModuleOptions>({
                `--schema=${relativeSchemaPath}`,
                `--out=${relativeMigrationsDir}`,
             ]
+            const before = migrationSqlFiles(migrationsDir)
             const code = await new Promise<number>((done) => {
                spawn(process.execPath, args, { cwd: nuxt.options.rootDir, stdio: 'inherit' })
                   .on('close', (exitCode) => done(exitCode ?? 1))
                   .on('error', () => done(1))
             })
-            if (code !== 0)
+            if (code !== 0) {
                logger.error(`[nuxt-cms] drizzle-kit generate failed (exit code ${code})`)
+               return
+            }
+            const fixed = fixNewMigrations(
+               migrationsDir,
+               before,
+               migrationFixes.uniqueTextColumns,
+               dialect
+            )
+            for (const file of fixed)
+               logger.info(`[nuxt-cms] ${file}: blank values of new unique fields become NULL`)
          })
       }
 

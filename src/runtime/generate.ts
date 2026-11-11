@@ -1,7 +1,20 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
+import type { CmsMigrationFixes } from './shared/migrations-dir'
+import { MIGRATION_FIXES_FILE, fixNewMigrations, migrationSqlFiles } from './shared/migrations-dir'
+
+function readMigrationFixes(configPath: string, root: string): CmsMigrationFixes | null {
+   const path = join(dirname(configPath), MIGRATION_FIXES_FILE)
+   if (!existsSync(path)) return null
+   try {
+      const fixes = JSON.parse(readFileSync(path, 'utf8')) as CmsMigrationFixes
+      return { ...fixes, out: isAbsolute(fixes.out) ? fixes.out : resolve(root, fixes.out) }
+   } catch {
+      return null
+   }
+}
 
 export interface GenerateMigrationsOptions {
    root?: string
@@ -16,6 +29,8 @@ export async function generateMigrations(opts: GenerateMigrationsOptions = {}): 
          `[nuxt-cms] drizzle config not found at ${configPath}. Run \`nuxi prepare\` first.`
       )
    }
+   const fixes = readMigrationFixes(configPath, root)
+   const before = fixes ? migrationSqlFiles(fixes.out) : []
    const require = createRequire(import.meta.url)
    const bin = join(dirname(require.resolve('drizzle-kit')), 'bin.cjs')
    const code = await new Promise<number>((done) => {
@@ -27,4 +42,5 @@ export async function generateMigrations(opts: GenerateMigrationsOptions = {}): 
          .on('error', () => done(1))
    })
    if (code !== 0) throw new Error(`[nuxt-cms] drizzle-kit generate failed (exit ${code})`)
+   if (fixes) fixNewMigrations(fixes.out, before, fixes.uniqueTextColumns, fixes.dialect)
 }

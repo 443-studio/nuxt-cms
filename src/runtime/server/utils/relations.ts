@@ -153,3 +153,31 @@ export async function attachManyToMany<T extends Row>(
    }
    return rows
 }
+
+export interface SavedReadBack<T> {
+   row: T
+   error: unknown
+}
+
+export async function readBackSaved<T extends Row>(
+   name: string,
+   entry: CmsEntry,
+   row: T
+): Promise<SavedReadBack<T>> {
+   try {
+      const [attached] = await attachManyToMany(useDb(), name, entry, [row])
+      return { row: attached ?? row, error: null }
+   } catch (error) {
+      return { row, error }
+   }
+}
+
+export function savedReadBackError(error: unknown) {
+   return createError({
+      statusCode: 500,
+      statusMessage:
+         'The changes were saved, but the saved item could not be read back. Reload it.',
+      data: { saved: true },
+      cause: error,
+   })
+}

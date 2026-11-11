@@ -15,6 +15,8 @@ import {
    presetKey,
    presetPermission,
    presetPickerItem,
+   presetReadable,
+   presetSourceEntry,
    presetTypes,
    presetUpdateSchema,
    renamePreset,
@@ -335,5 +337,15 @@ describe('stored presets', () => {
          description: '2 blocks · Top of the page',
          keywords: ['Presets', 'quote', 'text'],
       })
+   })
+})
+
+describe('preset visibility', () => {
+   it('needs read on the entry the preset was saved from', () => {
+      const saved = preset({ source: 'news.body.columns.items' })
+      expect(presetSourceEntry(saved)).toBe('news')
+      expect(presetReadable(saved, (permission) => permission === 'news.read')).toBe(true)
+      expect(presetReadable(saved, (permission) => permission === 'blog.read')).toBe(false)
+      expect(presetReadable(preset({ source: '' }), () => true)).toBe(false)
    })
 })

@@ -1,5 +1,6 @@
 import { blockTypeName, blocksFieldTypeName, typeName } from './runtime/shared/graphql-sdl'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from './runtime/shared/index'
+import type { CmsUniqueTextColumn } from './runtime/shared/migrations-dir'
 import {
    CONTENT_ROUTE_FIELDS,
    CONTENT_SYSTEM_FIELDS,
@@ -899,6 +900,10 @@ function fieldOptionErrors(
          errors.push(`${at}: unique is not supported on singles, which hold one item`)
       else if (field.translatable)
          errors.push(`${at}: unique is not supported on translatable fields`)
+      else if (field.default !== undefined)
+         errors.push(
+            `${at}: default is not supported on unique fields (every new item would get the same value)`
+         )
    }
    if (field.immutable !== undefined && typeof field.immutable !== 'boolean')
       errors.push(`${at}: immutable must be a boolean`)
@@ -988,6 +993,19 @@ function pageColumnsErrors(at: string, entry: CmsEntry): string[] {
          errors.push(`${fat}: ${field.type} fields on pages need to be listed in columns`)
    }
    return errors
+}
+
+export function uniqueTextColumns(config: CmsConfig): CmsUniqueTextColumn[] {
+   return Object.entries(config)
+      .filter(([, entry]) => !entry.table && entry.kind !== 'page')
+      .flatMap(([name, entry]) =>
+         Object.entries(entry.fields)
+            .filter(
+               ([, field]) =>
+                  isUniqueValueField(field) && field.type !== 'number' && !isRequiredField(field)
+            )
+            .map(([key]) => ({ table: name, column: snakeCase(key) }))
+      )
 }
 
 function snakeCase(key: string) {

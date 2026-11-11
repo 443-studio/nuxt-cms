@@ -112,7 +112,19 @@ function otherTargets(redirects: readonly CmsRedirect[], skipId?: string) {
    return redirectTargetMap(redirects.filter((redirect) => redirect.id !== skipId))
 }
 
-export async function createRedirect(input: CmsRedirectInput): Promise<CmsRedirect> {
+let pendingWrite: Promise<unknown> = Promise.resolve()
+
+export function serializeRedirectWrite<T>(write: () => Promise<T>): Promise<T> {
+   const run = pendingWrite.then(write)
+   pendingWrite = run.catch(() => {})
+   return run
+}
+
+export function createRedirect(input: CmsRedirectInput): Promise<CmsRedirect> {
+   return serializeRedirectWrite(() => writeNewRedirect(input))
+}
+
+async function writeNewRedirect(input: CmsRedirectInput): Promise<CmsRedirect> {
    const errors = redirectErrors(input, otherTargets(await listRedirects()))
    if (errors.length) throw invalid(errors)
    const draft = normalizeRedirectInput(input)
@@ -133,7 +145,11 @@ export async function createRedirect(input: CmsRedirectInput): Promise<CmsRedire
    return toRedirect(row!)
 }
 
-export async function updateRedirect(id: string, input: CmsRedirectInput): Promise<CmsRedirect> {
+export function updateRedirect(id: string, input: CmsRedirectInput): Promise<CmsRedirect> {
+   return serializeRedirectWrite(() => writeRedirectUpdate(id, input))
+}
+
+async function writeRedirectUpdate(id: string, input: CmsRedirectInput): Promise<CmsRedirect> {
    const redirects = await listRedirects()
    if (!redirects.some((redirect) => redirect.id === id))
       throw createError({ statusCode: 404, statusMessage: 'Redirect not found' })
@@ -175,7 +191,11 @@ export interface RedirectImportResult {
    updated: number
 }
 
-export async function importRedirects(inputs: CmsRedirectInput[]): Promise<RedirectImportResult> {
+export function importRedirects(inputs: CmsRedirectInput[]): Promise<RedirectImportResult> {
+   return serializeRedirectWrite(() => writeRedirectImport(inputs))
+}
+
+async function writeRedirectImport(inputs: CmsRedirectInput[]): Promise<RedirectImportResult> {
    const errors: string[] = []
    inputs.forEach((input, index) => {
       for (const error of [...redirectFromErrors(input.from), ...redirectToErrors(input.to)])

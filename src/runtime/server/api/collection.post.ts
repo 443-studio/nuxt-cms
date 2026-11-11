@@ -1,5 +1,5 @@
 import { createError, defineEventHandler } from 'h3'
-import { runBatch, useDb } from '#cms-db'
+import { runBatch } from '#cms-db'
 import { customId } from '../utils/custom-id'
 import { mapConstraintErrors } from '../utils/db-errors'
 import { emitEntryChange } from '../utils/hooks'
@@ -15,7 +15,8 @@ import { entryStatus } from '../../shared/hooks'
 import { isCollectionKind } from '../../shared/index'
 import {
    assertRelationTargets,
-   attachManyToMany,
+   readBackSaved,
+   savedReadBackError,
    manyToManyStatements,
    splitRelationValues,
 } from '../utils/relations'
@@ -38,15 +39,16 @@ export default defineEventHandler(async (event) => {
    withContentDefaults(entry, values)
    const id = customId(entry.id)
    values.id = id
-   const item = await mapConstraintErrors(async () => {
+   const saved = await mapConstraintErrors(async () => {
       const [inserted] = await runBatch((db) => [
          db.insert(table).values(withTimestamps(table, values)).returning(),
          ...manyToManyStatements(db, name, id, lists),
       ])
       const [row] = inserted as Record<string, unknown>[]
-      const [attached] = await attachManyToMany(useDb(), name, entry, [row!])
-      return decodeRows(entry, [attached!])[0]
+      return row!
    })
+   const readBack = await readBackSaved(name, entry, saved)
+   const item = decodeRows(entry, [readBack.row])[0]
    emitEntryChange(event, user, {
       entry: name,
       kind: entry.kind,
@@ -55,5 +57,6 @@ export default defineEventHandler(async (event) => {
       status: entry.drafts ? entryStatus(item?.status) : null,
       item: item ?? null,
    })
+   if (readBack.error) throw savedReadBackError(readBack.error)
    return item
 })

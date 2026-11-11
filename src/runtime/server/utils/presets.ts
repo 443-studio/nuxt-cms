@@ -6,6 +6,7 @@ import { cms_settings } from '#cms-tables'
 import type { CmsSessionUser, FieldConfig } from '../../shared/index'
 import { blocksFieldAtSchemaPath, entryFieldsFor } from '../../shared/index'
 import type { CmsBlockPreset, CmsPresetAction } from '../../shared/presets'
+import type { CmsAccess } from '../../shared/roles'
 import {
    CMS_PRESET_KEY_PREFIX,
    CMS_PRESET_MAX_BYTES,
@@ -21,10 +22,10 @@ const PRESET_ID = /^preset_[A-Za-z0-9]{1,64}$/
 export async function requirePresetAccess(
    event: H3Event,
    action: CmsPresetAction
-): Promise<CmsSessionUser> {
+): Promise<{ user: CmsSessionUser; access: CmsAccess }> {
    const { user, access } = await requireCmsAccess(event)
    assertCmsPermission(access, presetPermission(action, getRouterParam(event, 'collection') ?? ''))
-   return user
+   return { user, access }
 }
 
 export function presetBlocksField(event: H3Event): { source: string; field: FieldConfig } {

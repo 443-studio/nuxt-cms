@@ -5,6 +5,7 @@ import {
    contentPathMoves,
    findRedirectLoop,
    isContentItemLive,
+   mergeContentMoves,
    normalizeRedirectInput,
    normalizeRedirectPath,
    planRedirectMoves,
@@ -18,6 +19,7 @@ import {
    redirectToErrors,
    redirectsToTable,
    retargetRedirect,
+   rowAfterUpdate,
 } from '../src/runtime/shared/index'
 
 const NOW = new Date('2026-06-01T00:00:00.000Z')
@@ -312,5 +314,35 @@ describe('redirect import and export', () => {
          ['from', 'to', 'status', 'keepQuery'],
          ['/old', '/new', '308', 'true'],
       ])
+   })
+})
+
+describe('rowAfterUpdate', () => {
+   it('keeps the stored values that the update leaves out or sends empty', () => {
+      const existing = { id: 'p1', slug: 'a', status: 'published', publishedAt: '2026-01-01' }
+      expect(rowAfterUpdate(existing, { slug: 'b', status: undefined })).toEqual({
+         ...existing,
+         slug: 'b',
+      })
+      expect(rowAfterUpdate(existing, { status: null, publishedAt: null })).toEqual({
+         ...existing,
+         publishedAt: null,
+      })
+      expect(rowAfterUpdate(existing, { status: 'draft' }).status).toBe('draft')
+   })
+})
+
+describe('mergeContentMoves', () => {
+   it('joins the moves of several items and drops a move from a path another item now holds', () => {
+      expect(
+         mergeContentMoves([
+            { moves: [{ from: '/blog/a', to: '/blog/b' }], livePaths: ['/blog/b'] },
+            { moves: [{ from: '/blog/c', to: '/blog/a' }], livePaths: ['/blog/a'] },
+         ])
+      ).toEqual({
+         moves: [{ from: '/blog/c', to: '/blog/a' }],
+         livePaths: ['/blog/b', '/blog/a'],
+      })
+      expect(mergeContentMoves([])).toEqual({ moves: [], livePaths: [] })
    })
 })

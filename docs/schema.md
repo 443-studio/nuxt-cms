@@ -415,8 +415,12 @@ API create that leaves the key out, and an import row that creates an entry with
 
 **`unique: true`** on `text`, `email` and `number` adds a unique index to the column (the
 generated migration holds it: an existing duplicate makes the migration fail, so clean the data
-first). Values match exactly, case included. A blank value is stored as `null`, and any number of
-items may be empty. The admin API checks the value before it writes and answers `409` with the
+first). Before the index, the migration sets blank values of an optional unique `text` or `email`
+field to `null`, since older saves stored them as `''`. Values match exactly, case included,
+except `email`: the admin API and the import compare emails without case (`Ann@x.com` and
+`ann@x.com` clash there), while the database index stays case-sensitive and emails keep the case
+they were typed with. A blank value is stored as `null`, and any number of items may be empty. A
+unique field takes no `default` (every new item would get the same value). The admin API checks the value before it writes and answers `409` with the
 issue on the field (`ValidationMessages.unique`, "This value is already used by another entry"),
 which the admin form shows under the field. Duplicate clears a unique field and the import reports a
 value already taken by another row or entry. Not supported on translatable fields (no per-locale

@@ -262,4 +262,33 @@ describe('redirects with a database', () => {
       ).rejects.toMatchObject({ statusCode: 400 })
       expect((await table())['/loop-a']).toBeUndefined()
    })
+
+   it('checks concurrent manual writes one after the other, so they cannot form a loop', async () => {
+      const results = await Promise.allSettled([
+         redirects.createRedirect({ from: '/race-a', to: '/race-b' }),
+         redirects.createRedirect({ from: '/race-b', to: '/race-a' }),
+      ])
+      expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected'])
+      expect((await table())['/race-b']).toBeUndefined()
+   })
+
+   it('writes auto redirects for live items whose slug an import upsert changes', async () => {
+      const { planImportRedirects } = await import('../src/runtime/server/utils/import')
+      const entry = (state.config as CmsConfig).blog!
+      const db = state.db as ReturnType<typeof drizzle>
+      const plan = await planImportRedirects(db as never, entry, blog, [
+         { index: 1, id: 'p1', action: 'update', errors: [], values: { slug: 'first-import' } },
+         { index: 2, id: 'draft', action: 'update', errors: [], values: { slug: 'draft-x' } },
+         { index: 3, id: null, action: 'create', errors: [], values: { slug: 'new-one' } },
+      ])
+      expect(plan?.upserts).toEqual([
+         { from: '/blog/first', to: '/blog/first-import' },
+         { from: '/it/blog/first', to: '/it/blog/first-import' },
+      ])
+      expect(
+         await planImportRedirects(db as never, entry, blog, [
+            { index: 1, id: 'draft', action: 'update', errors: [], values: { slug: 'draft-y' } },
+         ])
+      ).toBeNull()
+   })
 })

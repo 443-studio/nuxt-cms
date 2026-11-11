@@ -11,6 +11,7 @@ import {
    entryPermissionActions,
    expandPermissions,
    matchesPermission,
+   deletePermissionError,
    publishPermissionError,
    resolveCmsAccess,
    resolveRoles,
@@ -413,5 +414,18 @@ describe('validateRoles', () => {
       expect(
          validateRoles({ writer: { can: ['home.update', 'pages.read'] } }, cfg).warnings
       ).toEqual([])
+   })
+})
+
+describe('deletePermissionError', () => {
+   const cfg = config()
+   const writer = resolveCmsAccess('writer', ROLES, cfg)
+   const editor = resolveCmsAccess('editor', ROLES, cfg)
+
+   it('needs publish to delete a published or scheduled item', () => {
+      expect(deletePermissionError(writer, 'news', cfg.news!, 'published')).toMatch(/news\.publish/)
+      expect(deletePermissionError(writer, 'news', cfg.news!, 'draft')).toBeNull()
+      expect(deletePermissionError(editor, 'news', cfg.news!, 'published')).toBeNull()
+      expect(deletePermissionError(writer, 'news', { drafts: false }, 'published')).toBeNull()
    })
 })

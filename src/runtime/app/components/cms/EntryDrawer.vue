@@ -182,7 +182,15 @@ function setState(state: Record<string, unknown>) {
 const { can, entryLock } = useCmsPermissions()
 const canPublish = computed(() => can(`${props.collection}.publish`))
 const canCreate = computed(() => can(`${props.collection}.create`))
-const canDelete = computed(() => can(`${props.collection}.delete`))
+const canDelete = computed(
+   () =>
+      can(`${props.collection}.delete`) &&
+      (!drafts.value ||
+         canPublish.value ||
+         (snapshot.value
+            ? (JSON.parse(snapshot.value) as Record<string, unknown>).status
+            : null) !== 'published')
+)
 const lock = computed(() =>
    loading.value
       ? null
