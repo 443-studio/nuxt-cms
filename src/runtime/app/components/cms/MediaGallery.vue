@@ -44,8 +44,10 @@
                   label="New folder"
                   :icon="cmsIcon('folder-plus')"
                   variant="soft"
+                  tone="neutral"
                   size="sm"
                   :disabled="!canNest"
+                  :disabled-reason="`Folders go ${MEDIA_FOLDER_MAX_DEPTH} levels deep at most`"
                   @click="openNewFolder"
                />
                <KButton
@@ -105,6 +107,7 @@
                label="Move to…"
                :icon="cmsIcon('folder-arrow-down')"
                variant="soft"
+               tone="neutral"
                size="xs"
                @click="openMove"
             />
@@ -139,9 +142,7 @@
          />
       </div>
 
-      <div v-if="library.loading.value" class="cms-media-loading">
-         <KSpinner />
-      </div>
+      <KSkeletonList v-if="library.loading.value" :rows="6" avatar class="cms-media-loading" />
 
       <KEmptyState
          v-else-if="loadError"
@@ -153,6 +154,7 @@
                label="Retry"
                :icon="cmsIcon('arrow-path')"
                variant="soft"
+               tone="neutral"
                @click="library.reload()"
             />
          </template>
@@ -160,10 +162,7 @@
 
       <template v-else>
          <section v-if="recent.length" class="cms-media-section">
-            <h3 class="cms-media-section-title">
-               <KIcon :name="cmsIcon('clock')" />
-               Recent
-            </h3>
+            <KSeparator variant="heading" label="Recent" :level="3" :lines="false" />
             <div class="cms-media-grid is-compact is-recent">
                <KCard
                   v-for="item in recent"
@@ -199,7 +198,7 @@
          </section>
 
          <section v-if="visibleFolders.length" class="cms-media-section">
-            <h3 v-if="query" class="cms-media-section-title">Folders</h3>
+            <KSeparator v-if="query" variant="heading" label="Folders" :level="3" :lines="false" />
             <div class="cms-media-folders">
                <button
                   v-for="child in visibleFolders"
@@ -232,16 +231,17 @@
          </section>
 
          <section v-if="visibleFiles.length" class="cms-media-section">
-            <h3
+            <KSeparator
                v-if="query || visibleFolders.length || recent.length"
-               class="cms-media-section-title"
-            >
-               {{
+               variant="heading"
+               :label="
                   query
                      ? `${visibleFiles.length} file${visibleFiles.length > 1 ? 's' : ''}`
                      : 'Files'
-               }}
-            </h3>
+               "
+               :level="3"
+               :lines="false"
+            />
 
             <div
                v-if="view === 'grid'"
@@ -398,13 +398,15 @@
                   label="Clear search"
                   :icon="cmsIcon('x-mark')"
                   variant="soft"
+                  tone="neutral"
+                  size="sm"
                   @click="search = ''"
                />
                <KButton
                   v-else
                   label="Upload"
                   :icon="cmsIcon('cloud-arrow-up')"
-                  variant="soft"
+                  size="sm"
                   @click="uploadOpen = true"
                />
             </template>
@@ -415,7 +417,7 @@
             v-model:page="page"
             :total="visibleFiles.length"
             :page-size="PAGE_SIZE"
-            :show-summary="false"
+            size="sm"
             class="cms-media-pagination"
          />
       </template>
@@ -538,7 +540,9 @@ import {
    Modal as KModal,
    Pagination as KPagination,
    SegmentedControl as KSegmentedControl,
+   Separator as KSeparator,
    SelectionBar as KSelectionBar,
+   SkeletonList as KSkeletonList,
    Spinner as KSpinner,
    Stack as KStack,
    toast,

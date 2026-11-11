@@ -590,13 +590,6 @@ body:has(.cms-scope) {
    flex-shrink: 0;
 }
 
-.cms-settings-subtitle {
-   margin: 0.75rem 0 0.375rem;
-   font-size: 0.75rem;
-   font-weight: 500;
-   color: var(--k-text-muted);
-}
-
 .cms-settings-list {
    display: flex;
    flex-direction: column;
@@ -894,21 +887,6 @@ body:has(.cms-scope) {
    text-align: center;
 }
 
-.cms-media-loading {
-   display: flex;
-   flex: 1;
-   align-items: center;
-   justify-content: center;
-   padding-block: 2.5rem;
-   color: var(--k-text-dimmed);
-   animation: k-fade 300ms var(--k-ease) 120ms backwards;
-}
-
-.cms-media-detail .cms-media-loading {
-   justify-content: flex-start;
-   padding-block: 0.5rem;
-}
-
 .cms-media-nav {
    display: flex;
    flex-wrap: wrap;
@@ -948,16 +926,6 @@ body:has(.cms-scope) {
    display: flex;
    flex-direction: column;
    gap: 0.625rem;
-}
-
-.cms-media-section-title {
-   --k-icon-size: 0.875rem;
-   display: inline-flex;
-   align-items: center;
-   gap: 0.375rem;
-   font-size: 0.75rem;
-   font-weight: 500;
-   color: var(--k-text-muted);
 }
 
 .cms-media-folders {
@@ -1348,7 +1316,8 @@ body:has(.cms-scope) {
 }
 
 .cms-media-pagination {
-   justify-content: center;
+   padding-top: 0.75rem;
+   border-top: 1px solid var(--k-line);
 }
 
 .cms-media-drop-overlay {

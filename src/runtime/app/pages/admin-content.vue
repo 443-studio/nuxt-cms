@@ -19,7 +19,6 @@
             variant="ghost"
             tone="neutral"
             :aria-label="`Back to ${config.label}`"
-            :title="`Back to ${config.label}`"
             @click="goBack"
          />
       </template>
@@ -124,7 +123,6 @@
                variant="ghost"
                tone="neutral"
                aria-label="More actions"
-               title="More actions"
             />
          </KDropdownMenu>
          <CmsSharePreview

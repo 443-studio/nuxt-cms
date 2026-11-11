@@ -16,7 +16,6 @@
             variant="ghost"
             tone="neutral"
             aria-label="Regenerate slug"
-            title="Regenerate slug"
             :disabled="disabled"
             @click="regenerate"
          />

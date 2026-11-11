@@ -38,7 +38,7 @@
       </ul>
 
       <template v-if="hidden.length">
-         <p class="cms-settings-subtitle">Hidden</p>
+         <KSeparator variant="heading" label="Hidden" :level="3" />
          <ul class="cms-settings-list">
             <li v-for="key in hidden" :key="key" class="cms-settings-item is-muted">
                <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
@@ -56,7 +56,11 @@
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
-import { Icon as KIcon, Switch as KSwitch } from '@xleddyl/443-components-vue'
+import {
+   Icon as KIcon,
+   Separator as KSeparator,
+   Switch as KSwitch,
+} from '@xleddyl/443-components-vue'
 import { computed, ref } from '#imports'
 import { TRANSLATIONS_COLUMN } from '../../../shared/translations'
 import { cmsIcon, fieldIcon } from '../../utils/ui'

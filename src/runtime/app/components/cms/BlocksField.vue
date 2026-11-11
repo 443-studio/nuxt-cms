@@ -188,7 +188,6 @@
                   variant="ghost"
                   tone="neutral"
                   aria-label="Back to the form"
-                  title="Back to the form"
                   @click="visualOpen = false"
                />
             </template>

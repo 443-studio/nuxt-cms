@@ -6,7 +6,6 @@
          variant="ghost"
          tone="neutral"
          aria-label="More actions"
-         title="More actions"
       />
    </KDropdownMenu>
 </template>

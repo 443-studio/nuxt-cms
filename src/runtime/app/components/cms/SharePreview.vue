@@ -78,7 +78,7 @@
 
          <KStack gap="sm">
             <span class="k-label">Active links</span>
-            <KSpinner v-if="loading" />
+            <KSkeletonList v-if="loading" :rows="2" />
             <ul v-else-if="links.length" class="cms-share-list">
                <li v-for="link in links" :key="link.id" class="cms-share-row">
                   <div class="cms-share-text">
@@ -123,7 +123,7 @@ import {
    Modal as KModal,
    SegmentedControl as KSegmentedControl,
    Select as KSelect,
-   Spinner as KSpinner,
+   SkeletonList as KSkeletonList,
    Stack as KStack,
    toast,
 } from '@xleddyl/443-components-vue'

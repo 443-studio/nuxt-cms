@@ -97,6 +97,7 @@
             :label="importLabel"
             :icon="cmsIcon('arrow-down-tray')"
             :disabled="!canImport"
+            disabled-reason="Choose a file without errors first"
             :loading="importing"
             @click="commit"
          />
