@@ -5,6 +5,7 @@ import {
    entryFieldsFor,
    hasTranslatableBlockFields,
    isCollectionKind,
+   isLocalizedLinkField,
    isTranslatableField,
 } from './index'
 import { stripMarkup } from './search'
@@ -41,7 +42,10 @@ export function isTranslationFilled(field: FieldConfig, value: unknown): boolean
 
 export function hasTranslatableContent(fields: Record<string, FieldConfig>): boolean {
    return Object.values(fields).some(
-      (field) => isTranslatableField(field) || hasTranslatableBlockFields(field)
+      (field) =>
+         isTranslatableField(field) ||
+         isLocalizedLinkField(field) ||
+         hasTranslatableBlockFields(field)
    )
 }
 
@@ -77,6 +81,20 @@ function visitBlocks(field: FieldConfig, value: unknown, defaultLocale: string, 
    return changed ? items : undefined
 }
 
+function visitLinkLabel(field: FieldConfig, value: unknown, defaultLocale: string, visit: Visit) {
+   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+   const { label, ...rest } = value as Values
+   const translations =
+      typeof label === 'string'
+         ? { [defaultLocale]: label }
+         : label && typeof label === 'object' && !Array.isArray(label)
+           ? (label as Translations)
+           : null
+   const next = visit(field, translations)
+   if (next === undefined) return undefined
+   return next && Object.keys(next).length ? { ...rest, label: next } : rest
+}
+
 function visitTranslations(
    fields: Record<string, FieldConfig>,
    values: Values,
@@ -90,9 +108,11 @@ function visitTranslations(
       if (!field || !isFieldVisible(field, values, fields)) continue
       const replaced = isTranslatableField(field)
          ? visit(field, decodeTranslatableValue(values[key], defaultLocale))
-         : field.type === 'blocks'
-           ? visitBlocks(field, values[key], defaultLocale, visit)
-           : undefined
+         : isLocalizedLinkField(field)
+           ? visitLinkLabel(field, values[key], defaultLocale, visit)
+           : field.type === 'blocks'
+             ? visitBlocks(field, values[key], defaultLocale, visit)
+             : undefined
       if (replaced === undefined) continue
       next ??= { ...values }
       next[key] = replaced

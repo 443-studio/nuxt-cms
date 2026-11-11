@@ -73,6 +73,7 @@ import {
 import { computed, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { useCmsLinkTargets } from '../../composables/cms-link-targets'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsIcon, errorMessage } from '../../utils/ui'
@@ -90,8 +91,11 @@ const config = cmsConfig as CmsConfig
 const { i18n } = useCmsRuntime()
 const toast = useCmsToast()
 const targets = useCmsLinkTargets(config)
+const { can } = useCmsPermissions()
 
-const targetNames = computed(() => linkTargetNames(config, props.field))
+const targetNames = computed(() =>
+   linkTargetNames(config, props.field).filter((name) => can(`${name}.read`))
+)
 const external = computed(() => allowsExternalLinks(props.field))
 const activeLocale = computed(() => props.locale ?? i18n.defaultLocale)
 

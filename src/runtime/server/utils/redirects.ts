@@ -1,5 +1,4 @@
 import { asc, eq, inArray } from 'drizzle-orm'
-import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { z } from 'zod'
 import cmsConfig from '#cms-config'
@@ -16,7 +15,6 @@ import type {
    CmsRedirectPlan,
    CmsRedirectStatus,
    CmsRedirectTarget,
-   CmsSessionUser,
 } from '../../shared/index'
 import {
    REDIRECT_FROM_MAX_LENGTH,
@@ -40,7 +38,6 @@ import { findContentByPath } from './content-routes'
 import { customId } from './custom-id'
 import { mapConstraintErrors } from './db-errors'
 import { getContentI18n } from './registry'
-import { requireAdmin } from './require-admin'
 
 export const REDIRECTS_CACHE_TTL_MS = 30_000
 
@@ -56,10 +53,6 @@ export const redirectInputSchema = z
       keepQuery: z.boolean().optional(),
    })
    .strict()
-
-export function requireRedirectsAccess(event: H3Event): Promise<CmsSessionUser> {
-   return requireAdmin(event)
-}
 
 export function toRedirect(row: RedirectRow): CmsRedirect {
    return {

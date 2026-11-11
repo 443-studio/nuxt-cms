@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
    session: {} as { user?: Record<string, unknown> },
    users: {} as Record<string, { id: string; email: string; role: string; passwordHash: string }>,
    search: null as Record<string, unknown> | null,
+   linkUsage: null as { keys: string[]; include?: (name: string) => boolean } | null,
 }))
 
 vi.mock('#imports', () => ({
@@ -30,6 +31,8 @@ vi.mock('#cms-tables', () => ({
    cms_users: { id: 'id', email: 'email' },
    cms_settings: { key: 'key' },
    cms_media: { key: 'key' },
+   cms_redirects: { id: 'id', from: 'from_path', to: 'to_path' },
+   cms_preview_links: { id: 'id', tokenHash: 'token_hash' },
 }))
 
 vi.mock('#cms-media-manifest', () => ({ builtAt: null, files: null }))
@@ -58,6 +61,15 @@ vi.mock('#cms-config', () => ({
          table: {},
          fields: { headline: { label: 'Headline', type: 'text' } },
       },
+      articles: {
+         id: 'articles',
+         label: 'Articles',
+         kind: 'content',
+         drafts: true,
+         route: '/articles/[slug]',
+         table: { id: 'id' },
+         fields: { title: { label: 'Title', type: 'text' } },
+      },
    },
 }))
 
@@ -72,6 +84,16 @@ vi.mock('#cms-roles', () => ({
          label: 'Manager',
          description: null,
          can: ['users.manage', 'news.*', 'categories.read', 'media.read'],
+      },
+      seo: {
+         label: 'SEO',
+         description: null,
+         can: ['redirects.manage', 'settings.manage', 'articles.update', 'news.read'],
+      },
+      reviewer: {
+         label: 'Reviewer',
+         description: null,
+         can: ['articles.read'],
       },
    },
 }))
@@ -89,6 +111,13 @@ vi.mock('../src/runtime/server/utils/search', () => ({
    },
 }))
 
+vi.mock('../src/runtime/server/utils/link-usage', () => ({
+   loadLinkUsage: async (keys: string[], include?: (name: string) => boolean) => {
+      state.linkUsage = { keys, include }
+      return {}
+   },
+}))
+
 vi.mock('../src/runtime/server/utils/password', () => ({
    hashPassword: async () => `hash-${STAMP}`,
 }))
@@ -101,13 +130,24 @@ import collectionImport from '../src/runtime/server/api/collection-import.post'
 import itemDelete from '../src/runtime/server/api/item.delete'
 import itemGet from '../src/runtime/server/api/item.get'
 import itemPut from '../src/runtime/server/api/item.put'
+import linkUsagePost from '../src/runtime/server/api/link-usage.post'
 import mediaDelete from '../src/runtime/server/api/media.delete'
 import mediaGet from '../src/runtime/server/api/media.get'
 import mediaPost from '../src/runtime/server/api/media.post'
+import previewLinkDelete from '../src/runtime/server/api/preview-link.delete'
+import previewLinksGet from '../src/runtime/server/api/preview-links.get'
+import previewLinksPost from '../src/runtime/server/api/preview-links.post'
+import redirectDelete from '../src/runtime/server/api/redirect.delete'
+import redirectPut from '../src/runtime/server/api/redirect.put'
+import redirectsGet from '../src/runtime/server/api/redirects.get'
+import redirectsImport from '../src/runtime/server/api/redirects-import.post'
+import redirectsPost from '../src/runtime/server/api/redirects.post'
 import searchGet from '../src/runtime/server/api/search.get'
 import settingsDelete from '../src/runtime/server/api/settings.delete'
 import settingsGet from '../src/runtime/server/api/settings.get'
 import settingsPut from '../src/runtime/server/api/settings.put'
+import siteGet from '../src/runtime/server/api/site.get'
+import sitePut from '../src/runtime/server/api/site.put'
 import tagsGet from '../src/runtime/server/api/tags.get'
 import userDelete from '../src/runtime/server/api/user.delete'
 import userPut from '../src/runtime/server/api/user.put'
@@ -127,6 +167,17 @@ const routes: [string, string, EventHandler][] = [
    ['post', '/api/cms/admin/media', mediaPost],
    ['delete', '/api/cms/admin/media', mediaDelete],
    ['get', '/api/cms/tags/:collection/:field', tagsGet],
+   ['get', '/api/cms/site', siteGet],
+   ['put', '/api/cms/site', sitePut],
+   ['get', '/api/cms/redirects', redirectsGet],
+   ['post', '/api/cms/redirects', redirectsPost],
+   ['post', '/api/cms/redirects/import', redirectsImport],
+   ['put', '/api/cms/redirects/:id', redirectPut],
+   ['delete', '/api/cms/redirects/:id', redirectDelete],
+   ['get', '/api/cms/preview-links/:collection/:id', previewLinksGet],
+   ['post', '/api/cms/preview-links/:collection/:id', previewLinksPost],
+   ['delete', '/api/cms/preview-links/:collection/:id/:linkId', previewLinkDelete],
+   ['post', '/api/cms/link-usage', linkUsagePost],
    ['get', '/api/cms/export/:collection', collectionExport],
    ['post', '/api/cms/import/:collection', collectionImport],
    ['get', '/api/cms/admin/:collection', collectionGet],
@@ -172,6 +223,7 @@ beforeEach(() => {
    state.users = {}
    state.session = {}
    state.search = null
+   state.linkUsage = null
 })
 
 describe('admin endpoint permissions', () => {
@@ -258,6 +310,73 @@ describe('admin endpoint permissions', () => {
       expect((await call('GET', '/api/cms/search?q=hello')).status).toBe(200)
       expect(Object.keys(state.search!.config as object)).toEqual(['news', 'categories'])
       expect(state.search!.media).toBe(true)
+   })
+})
+
+describe('SEO and link permissions', () => {
+   const site = { name: null, titleTemplate: null, description: null, image: null, hidden: false }
+   const redirect = { from: '/old', to: '/new' }
+
+   it('keeps site settings and redirects to their permissions', async () => {
+      signIn('usr_writer', 'writer')
+      const forbidden: [string, string, string, unknown?][] = [
+         ['GET', '/api/cms/site', 'settings.manage'],
+         ['PUT', '/api/cms/site', 'settings.manage', site],
+         ['GET', '/api/cms/redirects', 'redirects.manage'],
+         ['POST', '/api/cms/redirects', 'redirects.manage', redirect],
+         ['POST', '/api/cms/redirects/import', 'redirects.manage', { redirects: [redirect] }],
+         ['PUT', '/api/cms/redirects/rdr_1', 'redirects.manage', redirect],
+         ['DELETE', '/api/cms/redirects/rdr_1', 'redirects.manage'],
+      ]
+      for (const [method, path, permission, body] of forbidden) {
+         const result = await call(method, path, body)
+         expect(result.status, `${method} ${path}`).toBe(403)
+         expect(result.message, `${method} ${path}`).toBe(`Missing permission: ${permission}`)
+      }
+      signIn('usr_seo', 'seo')
+      for (const [method, path, , body] of forbidden)
+         expect((await call(method, path, body)).status, `${method} ${path}`).toBe(599)
+   })
+
+   it('gives the built-in admin role site settings and redirects', async () => {
+      signIn('usr_admin', 'admin')
+      expect((await call('GET', '/api/cms/redirects')).status).toBe(599)
+      expect((await call('PUT', '/api/cms/site', site)).status).toBe(599)
+   })
+
+   it('lists preview links with read, creates and revokes them with update', async () => {
+      const links = '/api/cms/preview-links/articles/art_1'
+      signIn('usr_writer', 'writer')
+      expect((await call('GET', links)).message).toBe('Missing permission: articles.read')
+      signIn('usr_reviewer', 'reviewer')
+      expect((await call('GET', links)).status).toBe(599)
+      const create = await call('POST', links, { duration: '1d' })
+      expect(create.status).toBe(403)
+      expect(create.message).toBe('Missing permission: articles.update')
+      expect((await call('DELETE', `${links}/pvl_1`)).message).toBe(
+         'Missing permission: articles.update'
+      )
+      signIn('usr_seo', 'seo')
+      expect((await call('POST', links, { duration: '1d' })).status).toBe(599)
+      expect((await call('DELETE', `${links}/pvl_1`)).status).toBe(599)
+      expect((await call('GET', '/api/cms/preview-links/news/news_1')).status).toBe(400)
+   })
+
+   it('checks link usage against the target entry and filters it to readable entries', async () => {
+      signIn('usr_writer', 'writer')
+      const body = { targets: [{ entry: 'articles', id: 'art_1' }] }
+      const forbidden = await call('POST', '/api/cms/link-usage', body)
+      expect(forbidden.status).toBe(403)
+      expect(forbidden.message).toBe('Missing permission: articles.read')
+      expect(state.linkUsage).toBeNull()
+      signIn('usr_seo', 'seo')
+      expect((await call('POST', '/api/cms/link-usage', body)).status).toBe(200)
+      expect(state.linkUsage!.keys).toEqual(['articles:art_1'])
+      const include = state.linkUsage!.include!
+      expect(['news', 'categories', 'home', 'articles'].filter(include)).toEqual([
+         'news',
+         'articles',
+      ])
    })
 })
 

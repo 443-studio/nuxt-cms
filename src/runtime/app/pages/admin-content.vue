@@ -264,13 +264,13 @@ const { items: translationItems } = useCmsTranslationActions({
    locale: () => editor.value?.locale,
    disabled: () => !!lock.value,
 })
-const canShare = !isNew && !!config.route
+const canShare = computed(() => !isNew && !!config.route && can(`${name}.update`))
 const shareOpen = ref(false)
 const entryItems = computed<MenuEntry[]>(() =>
    isNew
       ? []
       : [
-           ...(canShare
+           ...(canShare.value
               ? [{ label: 'Share preview', onSelect: () => (shareOpen.value = true) }]
               : []),
            ...(can(`${name}.create`) ? [{ label: 'Duplicate', onSelect: duplicate }] : []),

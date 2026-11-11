@@ -6,7 +6,8 @@ your app call one composable.
 
 ## Site settings
 
-**Settings → Site** in the admin holds the settings of the whole site. Every admin can edit them.
+**Settings → Site** in the admin holds the settings of the whole site. Roles with
+`settings.manage` see and edit them (the built-in `admin` role and the super admin have it).
 
 - **Site name**: shown in page titles and as `og:site_name`. Translatable when `cms.i18n` has
   locales.
@@ -23,7 +24,8 @@ your app call one composable.
 
 They are stored as one row of the built-in `cms_settings` table (key `cms:site`), so they need no
 migration and no entry in `cms.config.ts`. Saving checks the share image against the media library.
-The admin API is `GET` / `PUT /api/cms/site` (admin session, same-origin rules).
+The admin API is `GET` / `PUT /api/cms/site` (`settings.manage`, same-origin rules). Saving them
+fires no hook or webhook.
 
 The public GraphQL API serves them in the requested locale:
 
@@ -157,7 +159,8 @@ build assets under `/_nuxt/`. The middleware reads the site settings from a shor
 
 ## Redirects
 
-A redirect sends a visitor from a path no page answers to somewhere else. Editors manage them in
+A redirect sends a visitor from a path no page answers to somewhere else. Roles with
+`redirects.manage` (the built-in `admin` role and the super admin have it) manage them in
 **Settings → Redirects**: a list with search, **Add redirect**, edit and delete, and a menu to
 import a CSV or JSON file and to export the list.
 
@@ -194,6 +197,9 @@ it keep working.
 - A new `route` pattern in your config is not a move: add those redirects by hand or import them.
 
 These redirects show as **Added when a page moved** in the list. Editing one makes it a manual one.
+They are written in the same batch as the item, as part of the save: the save needs no
+`redirects.manage`, only its own permissions (`<entry>.update`, and `publish` since the item is
+published), and fires one `cms:entry:change` with no event of its own.
 
 ### A page wins over a redirect
 
@@ -209,8 +215,8 @@ change. With several instances (serverless included) another instance sees a cha
 seconds. A matching path costs one lookup in that map, plus one query to check for a live item.
 
 The admin API is `GET` / `POST /api/cms/redirects`, `PUT` / `DELETE /api/cms/redirects/:id` and
-`POST /api/cms/redirects/import` (`{ redirects: [...] }`, at most 5000), behind the admin session
-and the same-origin rules. Redirects live in the built-in `cms_redirects` table, created by the
+`POST /api/cms/redirects/import` (`{ redirects: [...] }`, at most 5000), behind `redirects.manage`
+and the same-origin rules. Manual changes and imports fire no hook or webhook. Redirects live in the built-in `cms_redirects` table, created by the
 migrations like the other built-in tables. They are not part of the public GraphQL API.
 
 ## Turning them off

@@ -1,8 +1,9 @@
 import { defineEventHandler } from 'h3'
 import type { CmsRedirect } from '../../shared/index'
-import { listRedirects, requireRedirectsAccess } from '../utils/redirects'
+import { listRedirects } from '../utils/redirects'
+import { requireCmsPermission } from '../utils/permissions'
 
 export default defineEventHandler(async (event): Promise<CmsRedirect[]> => {
-   await requireRedirectsAccess(event)
+   await requireCmsPermission(event, 'redirects.manage')
    return listRedirects()
 })

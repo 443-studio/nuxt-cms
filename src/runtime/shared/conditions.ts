@@ -63,12 +63,20 @@ export function fieldConditions(field: FieldConfig): ShowIfCondition[] {
    return isConditionList(showIf) ? [...showIf] : [showIf]
 }
 
+function isEmptyLinkTarget(link: Record<string, unknown>): boolean {
+   return (
+      isEmptyConditionValue(link.url) &&
+      (isEmptyConditionValue(link.entry) || isEmptyConditionValue(link.id))
+   )
+}
+
 export function isEmptyConditionValue(value: unknown, type?: FieldType): boolean {
    if (value == null) return true
    if (typeof value === 'string') return !value.trim()
    if (Array.isArray(value)) return !value.length
    if (typeof value === 'object') {
       if (type === 'json') return !Object.keys(value).length
+      if (type === 'link') return isEmptyLinkTarget(value as Record<string, unknown>)
       return Object.values(value).every((entry) => isEmptyConditionValue(entry))
    }
    return false

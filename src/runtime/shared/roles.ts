@@ -1,5 +1,5 @@
 import type { CmsConfig, CmsEntry, FieldConfig } from './index'
-import { entryFieldsFor, isCollectionKind, relationTarget } from './index'
+import { declaredLinkTargets, entryFieldsFor, isCollectionKind, relationTarget } from './index'
 
 export const CMS_ADMIN_ROLE = 'admin'
 export const CMS_SUPERADMIN_ROLE = 'superadmin'
@@ -21,6 +21,7 @@ export const CMS_SYSTEM_SCOPES = {
    media: CMS_MEDIA_PERMISSION_ACTIONS,
    users: ['manage'],
    settings: ['manage'],
+   redirects: ['manage'],
 } as const satisfies Record<string, readonly string[]>
 
 export type CmsEntryPermissionAction = (typeof CMS_ENTRY_PERMISSION_ACTIONS)[number]
@@ -299,6 +300,8 @@ function accessWarnings(key: string, permissions: string[], config: CmsConfig): 
          if (field.type === 'media') needsMedia = true
          if (field.type === 'relation' && relationTarget(field))
             relationTargets.add(relationTarget(field))
+         if (field.type === 'link')
+            for (const target of declaredLinkTargets(field) ?? []) relationTargets.add(target)
       }
    }
    if (needsMedia && !granted.has('media.read')) {

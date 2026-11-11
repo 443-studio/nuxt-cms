@@ -30,6 +30,9 @@ export function collectLinkUsage(
    return usage
 }
 
-export async function loadLinkUsage(keys: string[]): Promise<Record<string, MediaUsage[]>> {
-   return collectLinkUsage(await usageSources(), keys)
+export async function loadLinkUsage(
+   keys: string[],
+   include?: (name: string) => boolean
+): Promise<Record<string, MediaUsage[]>> {
+   return collectLinkUsage(await usageSources(include), keys)
 }

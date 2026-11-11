@@ -254,7 +254,8 @@ A permission is `<scope>.<action>`:
 | an entry key (single, page) | `read`, `update` |
 | `media` | `read`, `write` (upload, alt text, folders, move), `delete` |
 | `users` | `manage` (Settings → Users) |
-| `settings` | `manage` (column and layout overrides in Settings) |
+| `settings` | `manage` (Settings → Site, column and layout overrides in Settings) |
+| `redirects` | `manage` (Settings → Redirects) |
 
 `*` replaces a whole segment: `news.*` is every action on `news`, `*.read` reads everything, and
 `*` alone is every permission. Every action implies `read` on the same scope (`news.update` lets

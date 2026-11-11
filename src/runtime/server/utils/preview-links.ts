@@ -29,7 +29,7 @@ import {
 import { normalizeTimestamp, nowTimestamp } from '../../shared/timestamps'
 import { customId } from './custom-id'
 import { getContentI18n, resolveTable, tableColumns } from './registry'
-import { requireAdmin } from './require-admin'
+import { assertCmsPermission, requireCmsAccess } from './permissions'
 
 type PreviewLinkRow = typeof cms_preview_links.$inferSelect
 
@@ -53,10 +53,13 @@ export interface PreviewLinkAccess {
 
 export async function requirePreviewLinkAccess(
    event: H3Event,
-   name: string
+   name: string,
+   action: 'read' | 'update'
 ): Promise<PreviewLinkAccess> {
-   const user = await requireAdmin(event)
-   return { user, name, entry: routedEntry(name) }
+   const { user, access } = await requireCmsAccess(event)
+   const entry = routedEntry(name)
+   assertCmsPermission(access, `${name}.${action}`)
+   return { user, name, entry }
 }
 
 export function createPreviewToken(): string {

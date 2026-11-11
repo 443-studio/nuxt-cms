@@ -145,18 +145,26 @@ const sections = computed<SettingsModalSection[]>(() => [
            },
         ]
       : []),
-   {
-      id: 'site',
-      label: 'Site',
-      icon: cmsIcon('globe-alt'),
-      description: 'Site name, search engines and sharing.',
-   },
-   {
-      id: 'redirects',
-      label: 'Redirects',
-      icon: cmsIcon('arrow-uturn-right'),
-      description: 'Send visitors from old paths to new ones.',
-   },
+   ...(can('settings.manage')
+      ? [
+           {
+              id: 'site',
+              label: 'Site',
+              icon: cmsIcon('globe-alt'),
+              description: 'Site name, search engines and sharing.',
+           },
+        ]
+      : []),
+   ...(can('redirects.manage')
+      ? [
+           {
+              id: 'redirects',
+              label: 'Redirects',
+              icon: cmsIcon('arrow-uturn-right'),
+              description: 'Send visitors from old paths to new ones.',
+           },
+        ]
+      : []),
    ...visibleEntries.value.map((item) => ({
       id: item.key,
       label: item.label,

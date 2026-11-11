@@ -250,3 +250,70 @@ describe('clearTranslations', () => {
       expect(clearTranslations(fields(), source, i18n, 'en')).toEqual({ values: source, count: 0 })
    })
 })
+
+describe('translatable link labels', () => {
+   const linkFields: Record<string, FieldConfig> = {
+      cta: { label: 'Button', type: 'link', withLabel: true, translatable: true },
+      plain: { label: 'Plain', type: 'link', withLabel: true },
+      body: {
+         label: 'Body',
+         type: 'blocks',
+         blocks: {
+            cta: {
+               label: 'Call to action',
+               fields: {
+                  link: { label: 'Link', type: 'link', withLabel: true, translatable: true },
+               },
+            },
+         },
+      },
+   }
+
+   function values(): Record<string, unknown> {
+      return {
+         cta: { url: '/contact', label: { en: 'Contact us', it: 'Contattaci' }, newTab: true },
+         plain: { url: '/about', label: 'About' },
+         body: [{ type: 'cta', link: { entry: 'pages', id: 'about', label: { en: 'About' } } }],
+      }
+   }
+
+   it('counts the text of translatable links, top level and inside blocks', () => {
+      expect(hasTranslatableContent({ cta: linkFields.cta! })).toBe(true)
+      expect(hasTranslatableContent({ plain: linkFields.plain! })).toBe(false)
+      const progress = translationProgress(linkFields, values(), i18n)
+      expect(progress.en).toMatchObject({ filled: 2, total: 2, state: 'complete' })
+      expect(progress.it).toMatchObject({ filled: 1, total: 2, state: 'partial' })
+      expect(progress.de).toMatchObject({ filled: 0, total: 2, state: 'missing' })
+   })
+
+   it('ignores links without a text or without a value', () => {
+      const progress = translationProgress(
+         linkFields,
+         { cta: { url: '/contact' }, plain: null, body: null },
+         i18n
+      )
+      expect(progress.it).toMatchObject({ filled: 0, total: 0, state: 'complete' })
+   })
+
+   it('copies and clears link texts and keeps the target', () => {
+      const copied = copyTranslations(linkFields, values(), i18n, { from: 'en', to: 'de' })
+      expect(copied.count).toBe(2)
+      expect(copied.values.cta).toEqual({
+         url: '/contact',
+         label: { en: 'Contact us', it: 'Contattaci', de: 'Contact us' },
+         newTab: true,
+      })
+      expect(copied.values.plain).toEqual({ url: '/about', label: 'About' })
+      const cleared = clearTranslations(linkFields, copied.values, i18n, 'it')
+      expect(cleared.count).toBe(1)
+      expect(cleared.values.cta).toEqual({
+         url: '/contact',
+         label: { en: 'Contact us', de: 'Contact us' },
+         newTab: true,
+      })
+      const onlyItalian = { cta: { url: '/x', label: { it: 'Solo' } } }
+      expect(clearTranslations(linkFields, onlyItalian, i18n, 'it').values.cta).toEqual({
+         url: '/x',
+      })
+   })
+})

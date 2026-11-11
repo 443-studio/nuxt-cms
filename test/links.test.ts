@@ -8,6 +8,7 @@ import type { CmsConfig, FieldConfig } from '../src/runtime/shared/index'
 import {
    hasTranslatableBlockFields,
    isExternalLinkUrl,
+   isFieldVisible,
    linkDisplayText,
    linkHref,
    linkLabelText,
@@ -562,5 +563,84 @@ describe('link previews, csv and usage', () => {
             field: 'related',
          },
       ])
+   })
+})
+
+describe('link fields with field options and conditions', () => {
+   function errorsFor(field: Record<string, unknown>) {
+      const config = linkConfig({ probe: field as unknown as FieldConfig })
+      return validateConfig(config, I18N).filter((error) => error.includes("'probe'"))
+   }
+
+   it('refuses default, unique, immutable, min and max on a link', () => {
+      expect(errorsFor({ label: 'P', type: 'link', default: { url: '/' } })).toEqual([
+         expect.stringContaining('default is only supported on text, richtext'),
+      ])
+      expect(errorsFor({ label: 'P', type: 'link', unique: true })).toEqual([
+         expect.stringContaining('unique is only supported on text, email, number fields'),
+      ])
+      expect(errorsFor({ label: 'P', type: 'link', immutable: true })).toEqual([
+         expect.stringContaining('immutable is only supported on'),
+      ])
+      expect(errorsFor({ label: 'P', type: 'link', min: 1, max: 2 })).toEqual([
+         expect.stringContaining('min and max are only supported on number, text, blocks and tags'),
+      ])
+   })
+
+   it('lets other fields test a link with empty only', () => {
+      const extra = (showIf: unknown) => ({
+         label: 'P',
+         type: 'text',
+         showIf: { field: 'cta', ...(showIf as object) },
+      })
+      expect(errorsFor(extra({ empty: false }))).toEqual([])
+      expect(errorsFor(extra({ eq: '/about' }))).toEqual([
+         expect.stringContaining("fields with 'eq' (got 'link')"),
+      ])
+      expect(errorsFor(extra({ has: '/about' }))).toEqual([
+         expect.stringContaining("fields with 'has' (got 'link')"),
+      ])
+   })
+
+   it('treats a link without address or target as empty, whatever its text', () => {
+      const scope = { cta: { type: 'link' as const } }
+      const visible = (cta: unknown) =>
+         isFieldVisible(
+            { label: 'P', type: 'text', showIf: { field: 'cta', empty: false } },
+            { cta },
+            scope
+         )
+      expect(visible(null)).toBe(false)
+      expect(visible({ label: { en: 'Text only' }, newTab: true })).toBe(false)
+      expect(visible({ entry: 'pages' })).toBe(false)
+      expect(visible({ url: '/about' })).toBe(true)
+      expect(visible({ entry: 'pages', id: 'about' })).toBe(true)
+   })
+
+   it('asks for a target on a required link only while it is visible', () => {
+      const config = linkConfig()
+      const schema = buildEntrySchema(
+         {
+            fields: {
+               featured: { label: 'Featured', type: 'boolean' },
+               cta: {
+                  label: 'CTA',
+                  type: 'link',
+                  withLabel: true,
+                  translatable: true,
+                  required: true,
+                  showIf: { field: 'featured', eq: true },
+               },
+            },
+            config,
+         },
+         I18N
+      )
+      expect(schema.safeParse({ featured: false, cta: null }).success).toBe(true)
+      const missing = schema.safeParse({ featured: true, cta: { label: { en: 'Go' } } })
+      expect(missing.success).toBe(false)
+      expect(
+         schema.safeParse({ featured: true, cta: { url: '/x', label: { en: 'Go' } } }).success
+      ).toBe(true)
    })
 })

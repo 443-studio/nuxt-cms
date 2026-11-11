@@ -1,8 +1,9 @@
 import { createError, defineEventHandler, getRouterParam } from 'h3'
-import { deleteRedirects, requireRedirectsAccess } from '../utils/redirects'
+import { deleteRedirects } from '../utils/redirects'
+import { requireCmsPermission } from '../utils/permissions'
 
 export default defineEventHandler(async (event) => {
-   await requireRedirectsAccess(event)
+   await requireCmsPermission(event, 'redirects.manage')
    const id = getRouterParam(event, 'id') ?? ''
    if (!(await deleteRedirects([id])))
       throw createError({ statusCode: 404, statusMessage: 'Redirect not found' })

@@ -1,8 +1,9 @@
 import { defineEventHandler, readValidatedBody } from 'h3'
 import type { CmsRedirect } from '../../shared/index'
-import { createRedirect, redirectInputSchema, requireRedirectsAccess } from '../utils/redirects'
+import { createRedirect, redirectInputSchema } from '../utils/redirects'
+import { requireCmsPermission } from '../utils/permissions'
 
 export default defineEventHandler(async (event): Promise<CmsRedirect> => {
-   await requireRedirectsAccess(event)
+   await requireCmsPermission(event, 'redirects.manage')
    return createRedirect(await readValidatedBody(event, redirectInputSchema.parse))
 })

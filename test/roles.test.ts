@@ -107,6 +107,7 @@ describe('entry permissions', () => {
             'media.delete',
             'users.manage',
             'settings.manage',
+            'redirects.manage',
          ])
       )
    })
@@ -133,6 +134,7 @@ describe('can', () => {
          const access = resolveCmsAccess(role, ROLES, config())
          expect(can(access, 'news.publish')).toBe(true)
          expect(can(access, 'settings.manage')).toBe(true)
+         expect(can(access, 'redirects.manage')).toBe(true)
          expect(can(access, 'media.delete')).toBe(true)
          expect(can(access, 'users.manage')).toBe(false)
       }
@@ -147,6 +149,7 @@ describe('can', () => {
       expect(can(editor, 'home.read')).toBe(false)
       expect(can(editor, 'media.delete')).toBe(false)
       expect(can(editor, 'settings.manage')).toBe(false)
+      expect(can(editor, 'redirects.manage')).toBe(false)
       expect(can(editor, 'users.manage')).toBe(false)
 
       const viewer = resolveCmsAccess('viewer', ROLES, config())
@@ -347,6 +350,7 @@ describe('validateRoles', () => {
                   'pages.create',
                   'media.manage',
                   'users.read',
+                  'redirects.write',
                   '*.archive',
                   'news',
                   'news.read.all',
@@ -356,13 +360,14 @@ describe('validateRoles', () => {
          config()
       )
       expect(errors).toEqual([
-         "cms.roles.editor.can: 'blog.read': unknown entry or scope 'blog' (expected an entry key, media, users, settings or '*')",
+         "cms.roles.editor.can: 'blog.read': unknown entry or scope 'blog' (expected an entry key, media, users, settings, redirects or '*')",
          "cms.roles.editor.can: 'news.archive': collection entry 'news' supports read, create, update, delete, publish, import, export",
          "cms.roles.editor.can: 'categories.publish': entry 'categories' has no drafts, so there is nothing to publish",
          "cms.roles.editor.can: 'home.delete': single entry 'home' supports read, update",
          "cms.roles.editor.can: 'pages.create': page entry 'pages' supports read, update",
          "cms.roles.editor.can: 'media.manage': 'media' supports read, write, delete",
          "cms.roles.editor.can: 'users.read': 'users' supports manage",
+         "cms.roles.editor.can: 'redirects.write': 'redirects' supports manage",
          "cms.roles.editor.can: '*.archive': unknown action 'archive' (expected one of read, create, update, delete, publish, import, export, write, manage)",
          "cms.roles.editor.can: 'news' must be '*' or '<scope>.<action>' (for example 'news.update' or 'media.write')",
          "cms.roles.editor.can: 'news.read.all' must be '*' or '<scope>.<action>' (for example 'news.update' or 'media.write')",
@@ -395,5 +400,18 @@ describe('validateRoles', () => {
          "cms.roles.writer edits entries with media fields but cannot pick media: add 'media.read'",
          "cms.roles.writer edits entries that link to 'categories' but cannot list it: add 'categories.read'",
       ])
+   })
+
+   it('warns when a role edits a link field whose declared targets it cannot read', () => {
+      const cfg = config()
+      cfg.home!.fields.cta = { label: 'Call to action', type: 'link', to: ['pages'] }
+      cfg.home!.fields.anywhere = { label: 'Anywhere', type: 'link' }
+      const { warnings } = validateRoles({ writer: { can: ['home.update'] } }, cfg)
+      expect(warnings).toEqual([
+         "cms.roles.writer edits entries that link to 'pages' but cannot list it: add 'pages.read'",
+      ])
+      expect(
+         validateRoles({ writer: { can: ['home.update', 'pages.read'] } }, cfg).warnings
+      ).toEqual([])
    })
 })

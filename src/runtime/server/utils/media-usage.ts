@@ -7,9 +7,12 @@ import { readPages } from './page-storage'
 import { decodeRows, resolveTable } from './registry'
 import { readSiteSettings } from './site'
 
-export async function usageSources(): Promise<MediaUsageSource[]> {
+export async function usageSources(
+   include: (name: string) => boolean = () => true
+): Promise<MediaUsageSource[]> {
    const sources: MediaUsageSource[] = []
    for (const [name, entry] of Object.entries(cmsConfig as Record<string, CmsEntry>)) {
+      if (!include(name)) continue
       const table = resolveTable(name)
       if (!table) continue
       const rows =

@@ -278,8 +278,10 @@ built-in `cms_preview_links` table (`id`, `token_hash`, `entry`, `item_id`, `loc
 expired rows are removed when a new link is made. The admin API is
 `GET`/`POST /api/cms/preview-links/<entry>/<id>` (`{ duration: '1h' | '1d' | '7d' | '30d', locale? }`)
 and `DELETE /api/cms/preview-links/<entry>/<id>/<linkId>`, with an admin session and the same-origin
-rule (any admin today, checked by `requirePreviewLinkAccess(event, entry)`). How the site reads the
-link is in [Querying](querying.md#preview-links).
+rule. Listing the links needs `<entry>.read`; creating and revoking them needs `<entry>.update`,
+because a link shows the saved draft to people without an account. The menu item only shows to
+roles with `<entry>.update`. How the site reads the link is in
+[Querying](querying.md#preview-links).
 
 ### Preview page
 
@@ -311,10 +313,11 @@ The account button at the bottom of the sidebar opens **Settings**:
   of the browser.
 - **Users** (super admin and roles with `users.manage`): add accounts, pick their role, set a new
   password, delete accounts.
-- **Site**: site name, title template, default description, share image and the switch that hides
-  the whole site from search engines. See [SEO](seo.md#site-settings).
-- **Redirects**: the redirects of the site, with search, import and export. Changing the slug of a
-  published item adds one. See [SEO](seo.md#redirects).
+- **Site** (roles with `settings.manage`): site name, title template, default description, share
+  image and the switch that hides the whole site from search engines. See
+  [SEO](seo.md#site-settings).
+- **Redirects** (roles with `redirects.manage`): the redirects of the site, with search, import and
+  export. Changing the slug of a published item adds one. See [SEO](seo.md#redirects).
 - **Content** (roles with `settings.manage`): one item for each entry the role can read.
   - **Table columns** (collections only): show, hide and drag the columns of the table, including
     **Status** and **Translations**.
@@ -375,6 +378,13 @@ what their `can` list grants.
   its own permission and also removes published items.
 - **Import** needs `import` and `create` (plus `update` in upsert mode). **Duplicate** needs
   `create`.
+- **SEO.** Settings → Site needs `settings.manage` (`GET` and `PUT /api/cms/site`), Settings →
+  Redirects needs `redirects.manage` (every `/api/cms/redirects` endpoint). The redirect left by a
+  slug change is part of the item save, so it only needs the permissions of the save. **Share
+  preview** needs `<entry>.update` (listing the links of an item needs `<entry>.read`).
+- **Links.** The link picker only searches the entries the role can read, and the preview only
+  resolves links to them. `POST /api/cms/link-usage` needs `read` on the entry of every target
+  and only reports the entries the role can read.
 - **Admin UI.** The sidebar only lists what the role can read, and buttons the role cannot use are
   hidden (New entry, Delete, Duplicate, Publish, Schedule, Import, Export, Upload, folder actions,
   Settings sections). A direct URL to a section the role cannot read goes back to `/cms`. The

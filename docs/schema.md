@@ -553,12 +553,19 @@ privacy: { label: 'Privacy page', type: 'link', to: ['pages'], external: false }
   and is `null` when the target is missing, a draft or scheduled.
 - **Admin**: an Internal / External switch, a search across the allowed entries (title and path,
   drafts and scheduled items marked), the URL input, the link text and an "Open in a new tab"
-  switch. A warning shows when the target is a draft, scheduled or deleted. Deleting a content item
-  that is linked somewhere lists those entries first (`POST /api/cms/link-usage`, admin session);
+  switch. A warning shows when the target is a draft, scheduled or deleted. The search only covers
+  the entries the role can read. Deleting a content item that is linked somewhere lists those
+  entries first (`POST /api/cms/link-usage`, admin session, only the entries the role can read);
   after the delete the links stay stored and their `href` is `null`.
+- With `translatable`, the link text counts in the [translation progress](admin.md#translations)
+  like a translatable text, and the copy and clear actions of the form include it.
 - The admin search finds link texts (in every locale) and addresses. CSV import and export use JSON
-  text; a plain address in a CSV cell is read as `{ url }`.
-- Not a `titleField`, not a `showIf` target, not filterable or sortable.
+  text; a plain address in a CSV cell is read as `{ url }`. Duplicate copies the value.
+- `required` asks for a target (a link text alone is not enough) and `showIf` works on the link
+  itself. Other fields can test a link with [`empty`](#conditional-fields) only: a link is empty
+  without an address or a target, whatever its text. `default`, `unique`, `immutable`, `min` and
+  `max` are refused on links at build time.
+- Not a `titleField`, not filterable or sortable.
 
 ## Blocks
 
@@ -817,7 +824,8 @@ sponsor: {
   unsavable. Treat a conditional field as optional when you read it.
 - A missing value never matches `eq`, `in`, `has` or the comparisons, and always matches `neq` and
   `notIn`. Empty means `null`, a blank string, an empty list, a translatable value with no locale
-  filled, or a `json` value of `{}` or `[]`; `0` and `false` are not empty.
+  filled, a `json` value of `{}` or `[]`, or a `link` with no address and no target; `0` and
+  `false` are not empty.
 - A translatable field can only be tested with `empty`. Every other operator is checked against the
   target type at build time: the value type (a boolean for a `boolean` field, a number for a
   `number` field, a valid date for `date` and `datetime`), select values against the `options` (so a

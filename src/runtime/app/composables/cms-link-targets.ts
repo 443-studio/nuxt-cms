@@ -1,6 +1,7 @@
 import type { CmsConfig, CmsLinkValue } from '#nuxt-cms'
 import { isScheduledContent, linkTargetKey, pageLinkPath } from '#nuxt-cms'
 import { reactive } from '#imports'
+import { useCmsPermissions } from './cms-permissions'
 
 type Row = Record<string, unknown>
 
@@ -17,10 +18,12 @@ function statusOf(error: unknown): number | undefined {
 }
 
 export function useCmsLinkTargets(config: CmsConfig) {
+   const { can } = useCmsPermissions()
+
    function load(entry: string, id: string) {
       const key = linkTargetKey(entry, id)
       if (!import.meta.client || rows.has(key) || pending.has(key)) return
-      if (config[entry]?.kind !== 'content') return
+      if (config[entry]?.kind !== 'content' || !can(`${entry}.read`)) return
       pending.add(key)
       $fetch<Row>(`/api/cms/admin/${entry}/${encodeURIComponent(id)}`)
          .then((row) => rows.set(key, row))
