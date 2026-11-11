@@ -15,6 +15,7 @@ import {
    pathAfterInsert,
    pathAfterMove,
    pathAfterRemove,
+   remapInsertionPoint,
    updateBlockAt,
 } from '../src/runtime/shared/index'
 import type { CmsBlockValue, CmsPreviewMedia } from '../src/runtime/shared/preview'
@@ -1294,16 +1295,32 @@ describe('editor shortcuts', () => {
       }
    })
 
-   it('keeps Enter for focused buttons and links', () => {
+   it('leaves block actions to focused switches, checkboxes, buttons and links', () => {
       const button = { editable: false, interactive: true, selected: true }
-      expect(shortcutApplies('insert-after', button)).toBe(false)
-      expect(shortcutApplies('insert-before', button)).toBe(false)
-      expect(shortcutApplies('remove', button)).toBe(true)
+      for (const action of [
+         'remove',
+         'duplicate',
+         'move-up',
+         'move-down',
+         'insert-after',
+         'insert-before',
+      ] as const)
+         expect(shortcutApplies(action, button)).toBe(false)
+      expect(shortcutApplies('deselect', button)).toBe(true)
+      expect(shortcutApplies('undo', button)).toBe(true)
+      expect(shortcutApplies('save', button)).toBe(true)
    })
 })
 
 describe('clipboard keys', () => {
-   const idle = { editable: false, textSelected: false, selected: false }
+   const idle = { editable: false, interactive: false, textSelected: false, selected: false }
+
+   it('does not cut the selected block from a focused control', () => {
+      const control = { ...idle, interactive: true, selected: true }
+      expect(clipboardActionApplies('cut', control)).toBe(false)
+      expect(clipboardActionApplies('copy', control)).toBe(true)
+      expect(clipboardActionApplies('paste', control)).toBe(true)
+   })
 
    it('leaves fields and selected text to the browser', () => {
       for (const action of ['copy', 'cut', 'paste'] as const)
@@ -1325,5 +1342,40 @@ describe('clipboard keys', () => {
       expect(clipboardActionApplies('copy', { ...idle, selected: true })).toBe(true)
       expect(clipboardActionApplies('cut', { ...idle, selected: true })).toBe(true)
       expect(clipboardActionApplies('paste', { ...idle, textSelected: true })).toBe(true)
+   })
+})
+
+describe('insertion points', () => {
+   const point = { list: ['body', 1, 'items'], index: 2 }
+
+   it('follows inserts, removals and moves before the point', () => {
+      expect(
+         remapInsertionPoint(point, (path) => pathAfterInsert(path, ['body', 1, 'items'], 0))
+      ).toEqual({ list: ['body', 1, 'items'], index: 3 })
+      expect(
+         remapInsertionPoint(point, (path) => pathAfterRemove(path, ['body', 1, 'items', 0]))
+      ).toEqual({ list: ['body', 1, 'items'], index: 1 })
+      expect(remapInsertionPoint(point, (path) => pathAfterInsert(path, ['body'], 0))).toEqual({
+         list: ['body', 2, 'items'],
+         index: 2,
+      })
+      expect(
+         remapInsertionPoint(point, (path) => pathAfterMove(path, ['body', 1], ['body'], 0))
+      ).toEqual({ list: ['body', 0, 'items'], index: 2 })
+   })
+
+   it('keeps the index when the item at the point is removed', () => {
+      expect(
+         remapInsertionPoint(point, (path) => pathAfterRemove(path, ['body', 1, 'items', 2]))
+      ).toEqual(point)
+      expect(
+         remapInsertionPoint({ list: ['body'], index: 1 }, (path) =>
+            pathAfterRemove(path, ['body', 1])
+         )
+      ).toEqual({ list: ['body'], index: 1 })
+   })
+
+   it('drops the point when the block that holds its list is removed', () => {
+      expect(remapInsertionPoint(point, (path) => pathAfterRemove(path, ['body', 1]))).toBeNull()
    })
 })

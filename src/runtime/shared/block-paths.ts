@@ -316,6 +316,22 @@ export function pathAfterMove(
    return pathAfterInsert(removed, blockListPath(moved), blockPathIndex(moved))
 }
 
+export interface CmsInsertionPoint {
+   list: CmsBlockPath
+   index: number
+}
+
+export function remapInsertionPoint(
+   point: CmsInsertionPoint,
+   remap: (path: CmsBlockPath) => CmsBlockPath | null
+): CmsInsertionPoint | null {
+   const slot = remap([...point.list, point.index])
+   if (slot) return { list: blockListPath(slot), index: blockPathIndex(slot) }
+   if (point.list.length <= 1) return point
+   const owner = remap(point.list.slice(0, -1))
+   return owner ? { list: [...owner, point.list.at(-1)!], index: point.index } : null
+}
+
 export function moveBlock(
    values: Values,
    from: CmsBlockPath,

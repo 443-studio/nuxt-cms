@@ -255,7 +255,7 @@
             v-model:open="drawerOpen"
             :collection="name"
             :config="config"
-            :entry-id="drawerEntryId"
+            v-model:entry-id="drawerEntryId"
             :initial="drawerInitial"
             @saved="refresh"
             @deleted="onDrawerDeleted"

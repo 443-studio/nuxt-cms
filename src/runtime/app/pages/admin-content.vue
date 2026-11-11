@@ -176,11 +176,13 @@ import {
 import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
+import { cloneState, mergeSavedState } from '../../shared/save-state'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
+import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
 import { useCmsToast } from '../composables/cms-toast'
 import { useCmsTranslationActions } from '../composables/cms-translation-actions'
 import { cmsApi } from '../utils/api'
@@ -252,6 +254,11 @@ if (sourceId) {
 }
 
 const snapshot = ref(JSON.stringify(duplicateOf ? blankState : formState.value))
+
+const handoff = useCmsSaveHandoff(name)
+const handedOver = id ? handoff.take(id) : null
+if (handedOver) formState.value = handedOver
+let leaving = false
 
 const { can, entryLock } = useCmsPermissions()
 const canPublish = computed(() => can(`${name}.publish`))
@@ -407,6 +414,7 @@ onMounted(() => {
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 onBeforeRouteLeave(async () => {
+   if (leaving) return
    if (dirty.value && !(await confirmAction('You have unsaved changes. Leave anyway?')))
       return false
 })
@@ -414,6 +422,8 @@ onBeforeRouteLeave(async () => {
 function goBack() {
    navigateTo(`/cms/${name}`)
 }
+
+const LATER_CHANGES = 'Changes made while saving are not saved yet.'
 
 const SUCCESS: Record<string, string> = {
    save: 'Saved',
@@ -435,17 +445,28 @@ async function save(status?: Status, changes: Record<string, unknown> = {}, noti
       return false
    }
    saving.value = true
+   const submitted = cloneState(formState.value)
    try {
       const row = await (isNew
-         ? cmsApi<Record<string, unknown>>(endpoint, { method: 'POST', body: formState.value })
+         ? cmsApi<Record<string, unknown>>(endpoint, { method: 'POST', body: submitted })
          : cmsApi<Record<string, unknown>>(`${endpoint}/${id}`, {
               method: 'PUT',
-              body: formState.value,
+              body: submitted,
            }))
-      formState.value = pickFields(row)
-      snapshot.value = JSON.stringify(formState.value)
-      toast.add({ title: SUCCESS[notice ?? status ?? 'save'] ?? 'Saved', color: 'success' })
-      if (isNew && row.id) await navigateTo(`/cms/${name}/${row.id}`, { replace: true })
+      const saved = pickFields(row)
+      const merged = mergeSavedState(submitted, formState.value, saved)
+      formState.value = merged.state
+      snapshot.value = JSON.stringify(saved)
+      toast.add({
+         title: SUCCESS[notice ?? status ?? 'save'] ?? 'Saved',
+         description: merged.clean ? undefined : LATER_CHANGES,
+         color: 'success',
+      })
+      if (isNew && row.id) {
+         if (!merged.clean) handoff.stash(String(row.id), merged.state)
+         leaving = true
+         await navigateTo(`/cms/${name}/${row.id}`, { replace: true })
+      }
       return true
    } catch (error) {
       formState.value = {

@@ -336,6 +336,8 @@ field (where the browser keeps its own undo) or in a dialog. ⌘ is Ctrl outside
 | ⌘ C, ⌘ X | copy or cut the selected block |
 | ⌘ V | paste after the selected block, or at the end |
 
+While a button, a link, a switch or a checkbox has the focus, Delete, Backspace, ⌘ D, ⌘ ↑, ⌘ ↓,
+Enter and ⌘ X are left to that control and do not touch the selected block.
 Duplicate and add do nothing once the field holds `max` blocks. In the canvas you can also focus the
 drag handle of a block and press the arrow keys to move it (left and right work too, for blocks
 side by side). In the block tree, Alt with the
@@ -349,7 +351,9 @@ the default language when the field is translatable. A count marks every tab wit
 red dot every block with one in the tree. An error or a warning that names no field shows at the
 top of the inspector, an error of the body itself (for example too few blocks)
 shows at the top of the block tree, and one that names a block shows above the fields of that
-block. Leaving with unsaved changes asks for a confirmation.
+block. Leaving with unsaved changes asks for a confirmation. Edits you make while a save is
+running are kept: the item stays marked as unsaved and a toast says so (the entry form and the
+drawer do the same and stay open).
 
 ### Nested blocks in the visual editor
 

@@ -47,6 +47,7 @@ export function clipboardTarget(event: Event, selected: boolean): CmsClipboardTa
    const selection = typeof window === 'undefined' ? null : window.getSelection()
    return {
       editable: isEditableTarget(event.target),
+      interactive: !!elementOf(event.target)?.closest(INTERACTIVE_SELECTOR),
       textSelected: !!selection && !selection.isCollapsed && selection.toString().trim() !== '',
       selected,
    }

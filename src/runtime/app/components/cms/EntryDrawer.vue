@@ -100,6 +100,7 @@ import {
 import { computed, ref, watch } from '#imports'
 import { duplicateEntryValues } from '../../../shared/duplicate'
 import { entryDefaults, lockedFieldKeys } from '../../../shared/field-options'
+import { cloneState, mergeSavedState } from '../../../shared/save-state'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsRuntime } from '../../composables/cms-runtime'
@@ -113,11 +114,12 @@ const FORM_ID = 'cms-entry-drawer-form'
 const props = defineProps<{
    collection: string
    config: CmsEntry
-   entryId: string | null
    initial?: Record<string, unknown> | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
+
+const entryId = defineModel<string | null>('entryId', { default: null })
 
 const emit = defineEmits<{
    saved: []
@@ -129,7 +131,7 @@ const toast = useCmsToast()
 const confirmAction = useCmsConfirm()
 
 const endpoint = computed(() => `/api/cms/admin/${props.collection}`)
-const isNew = computed(() => props.entryId === null)
+const isNew = computed(() => entryId.value === null)
 const drafts = computed(() => !!props.config.drafts)
 const formKeys = computed(() =>
    drafts.value ? [...Object.keys(props.config.fields), 'status'] : Object.keys(props.config.fields)
@@ -219,22 +221,25 @@ function revertStatus() {
 }
 
 let loadRequest = 0
+let carried: Record<string, unknown> | null = null
 
 async function load() {
    const request = ++loadRequest
-   const id = props.entryId
+   const id = entryId.value
    if (id === null) {
       loading.value = false
       setState(props.initial ? emptyState() : newState())
       if (props.initial) formState.value = { ...emptyState(), ...pickFields(props.initial) }
       return
    }
-   const isStale = () => request !== loadRequest || props.entryId !== id || !open.value
+   const isStale = () => request !== loadRequest || entryId.value !== id || !open.value
    loading.value = true
    try {
       const entry = await cmsApi<Record<string, unknown>>(`${endpoint.value}/${id}`)
       if (isStale()) return
       setState(pickFields(entry))
+      if (carried) formState.value = carried
+      carried = null
    } catch (error) {
       if (isStale()) return
       toast.add({
@@ -249,7 +254,7 @@ async function load() {
 }
 
 watch(
-   () => [open.value, props.entryId, props.initial] as const,
+   () => [open.value, entryId.value, props.initial] as const,
    ([isOpen]) => {
       if (isOpen) load()
    },
@@ -263,17 +268,33 @@ function confirmClose() {
 async function save() {
    if (saving.value) return
    saving.value = true
+   const submitted = cloneState(formState.value)
    try {
-      await (isNew.value
-         ? cmsApi(endpoint.value, { method: 'POST', body: formState.value })
-         : cmsApi(`${endpoint.value}/${props.entryId}`, {
+      const row = await (isNew.value
+         ? cmsApi<Record<string, unknown>>(endpoint.value, { method: 'POST', body: submitted })
+         : cmsApi<Record<string, unknown>>(`${endpoint.value}/${entryId.value}`, {
               method: 'PUT',
-              body: formState.value,
+              body: submitted,
            }))
-      snapshot.value = JSON.stringify(formState.value)
-      toast.add({ title: 'Saved', color: 'success' })
+      const saved = pickFields(row ?? submitted)
+      const merged = mergeSavedState(submitted, formState.value, saved)
+      snapshot.value = JSON.stringify(saved)
+      formState.value = merged.state
       emit('saved')
-      open.value = false
+      if (merged.clean) {
+         toast.add({ title: 'Saved', color: 'success' })
+         open.value = false
+         return
+      }
+      toast.add({
+         title: 'Saved',
+         description: 'Changes made while saving are not saved yet.',
+         color: 'success',
+      })
+      if (isNew.value && row?.id) {
+         carried = merged.state
+         entryId.value = String(row.id)
+      }
    } catch (error) {
       revertStatus()
       formRef.value?.setIssues(errorIssues(error))
@@ -300,7 +321,7 @@ async function remove() {
    if (!(await confirmAction('Delete this row?'))) return
    saving.value = true
    try {
-      await cmsApi(`${endpoint.value}/${props.entryId}`, { method: 'DELETE' })
+      await cmsApi(`${endpoint.value}/${entryId.value}`, { method: 'DELETE' })
       snapshot.value = JSON.stringify(formState.value)
       emit('deleted')
       open.value = false

@@ -64,10 +64,12 @@ import {
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
+import { cloneState, mergeSavedState } from '../../shared/save-state'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsRuntime } from '../composables/cms-runtime'
+import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
 import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
 import type { CmsResponseIssue } from '../utils/ui'
@@ -156,6 +158,11 @@ const saving = ref(false)
 
 const snapshot = ref(JSON.stringify(formState.value))
 
+const handoff = useCmsSaveHandoff(name)
+const handedOver = id && !isNew ? handoff.take(id) : null
+if (handedOver) formState.value = handedOver
+let leaving = false
+
 const { can, entryLock } = useCmsPermissions()
 const canPublish = computed(() => can(`${name}.publish`))
 const lock = computed(() =>
@@ -187,6 +194,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
 const confirmAction = useCmsConfirm()
 
 onBeforeRouteLeave(async () => {
+   if (leaving) return
    if (dirty.value && !(await confirmAction('You have unsaved changes. Leave anyway?')))
       return false
 })
@@ -213,13 +221,35 @@ function goBack() {
 
 async function save() {
    saving.value = true
+   const submitted = cloneState(formState.value)
    try {
-      await (isNew
-         ? cmsApi(endpoint, { method: 'POST', body: formState.value })
-         : cmsApi(`${endpoint}/${id}`, { method: 'PUT', body: formState.value }))
-      snapshot.value = JSON.stringify(formState.value)
-      toast.add({ title: 'Saved', color: 'success' })
-      goBack()
+      const row = await (isNew
+         ? cmsApi<Record<string, unknown>>(endpoint, { method: 'POST', body: submitted })
+         : cmsApi<Record<string, unknown>>(`${endpoint}/${id}`, {
+              method: 'PUT',
+              body: submitted,
+           }))
+      const saved = pickFields(row ?? submitted)
+      const merged = mergeSavedState(submitted, formState.value, saved)
+      snapshot.value = JSON.stringify(saved)
+      if (merged.clean) {
+         formState.value = merged.state
+         toast.add({ title: 'Saved', color: 'success' })
+         goBack()
+         return
+      }
+      formState.value = merged.state
+      toast.add({
+         title: 'Saved',
+         description: 'Changes made while saving are not saved yet.',
+         color: 'success',
+      })
+      const createdId = isNew && row?.id ? String(row.id) : null
+      if (createdId) {
+         handoff.stash(createdId, merged.state)
+         leaving = true
+         await navigateTo(`/cms/${name}/${createdId}`, { replace: true })
+      }
    } catch (error) {
       revertStatus()
       formRef.value?.setIssues(errorIssues(error))

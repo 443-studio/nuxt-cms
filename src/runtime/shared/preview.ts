@@ -363,14 +363,15 @@ export function shortcutApplies(action: CmsEditorShortcut, target: CmsShortcutTa
    if (target.editable) return false
    if (action === 'undo' || action === 'redo') return true
    if (!target.selected) return false
-   if (action === 'insert-after' || action === 'insert-before') return !target.interactive
-   return true
+   if (action === 'deselect') return true
+   return !target.interactive
 }
 
 export type CmsClipboardAction = 'copy' | 'cut' | 'paste'
 
 export interface CmsClipboardTarget {
    editable: boolean
+   interactive: boolean
    textSelected: boolean
    selected: boolean
 }
@@ -381,6 +382,7 @@ export function clipboardActionApplies(
 ): boolean {
    if (target.editable) return false
    if (action === 'paste') return true
+   if (action === 'cut' && target.interactive) return false
    return target.selected && !target.textSelected
 }
 

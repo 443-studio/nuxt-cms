@@ -894,7 +894,8 @@ function onClipboard(event: ClipboardEvent) {
    const action = event.type as CmsClipboardAction
    if (disabled.value && action !== 'copy') return
    const index = tileIndexOf(event.target)
-   if (!clipboardActionApplies(action, clipboardTarget(event, index !== null))) return
+   const target = { ...clipboardTarget(event, index !== null), interactive: false }
+   if (!clipboardActionApplies(action, target)) return
    if (action === 'paste') {
       event.preventDefault()
       void paste(

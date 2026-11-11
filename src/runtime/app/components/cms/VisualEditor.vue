@@ -383,7 +383,14 @@
 </template>
 
 <script setup lang="ts">
-import type { CmsBlockPath, CmsConfig, CmsFormLayout, FieldConfig, MediaItem } from '#nuxt-cms'
+import type {
+   CmsBlockPath,
+   CmsConfig,
+   CmsFormLayout,
+   CmsInsertionPoint,
+   FieldConfig,
+   MediaItem,
+} from '#nuxt-cms'
 import {
    blockAt,
    blockFormLayout,
@@ -405,6 +412,7 @@ import {
    pathAfterInsert,
    pathAfterMove,
    pathAfterRemove,
+   remapInsertionPoint,
    removeBlock,
    resolveBlockPath,
    slugSourceValue,
@@ -745,29 +753,45 @@ function revealInPanel(key: string) {
 
 const translations = computed(() => translationProgress(props.fields, state.value, i18n))
 
+let ownBlocks: unknown = state.value[props.fieldKey]
+
+const pendingPastes = new Set<CmsInsertionPoint>()
+
 function setValue(key: string, value: unknown, coalesce?: string, hold = false) {
    if (props.readonly) return
    change(coalesce, hold)
-   state.value = { ...state.value, [key]: value }
+   const next = { ...state.value, [key]: value }
+   ownBlocks = next[props.fieldKey]
+   state.value = next
 }
 
 function commitValues(next: Values, coalesce?: string, hold = false) {
    if (props.readonly || next === state.value) return false
    change(coalesce, hold)
+   ownBlocks = next[props.fieldKey]
    state.value = next
    return true
+}
+
+function dropInsertionPoints() {
+   paletteOpen.value = false
+   picker.value = { list: [props.fieldKey], index: 0 }
+   pendingPastes.clear()
 }
 
 function remapPaths(remap: (path: CmsBlockPath) => CmsBlockPath | null) {
    if (selected.value) selected.value = remap(selected.value)
    canvasHover.value = null
-   const target = picker.value
-   if (target.list.length > 1) {
-      const owner = remap(target.list.slice(0, -1))
-      if (!owner) {
-         paletteOpen.value = false
-         picker.value = { list: [props.fieldKey], index: 0 }
-      } else picker.value = { list: [...owner, target.list.at(-1)!], index: target.index }
+   const target = remapInsertionPoint(picker.value, remap)
+   if (target) picker.value = target
+   else {
+      paletteOpen.value = false
+      picker.value = { list: [props.fieldKey], index: 0 }
+   }
+   for (const point of [...pendingPastes]) {
+      pendingPastes.delete(point)
+      const next = remapInsertionPoint(point, remap)
+      if (next) pendingPastes.add(Object.assign(point, next))
    }
 }
 
@@ -912,6 +936,12 @@ function childInvalid(key: string, index: number) {
 
 const clipboard = useCmsClipboard()
 
+const PASTE_CANCELLED = {
+   title: 'Nothing pasted',
+   description: 'The blocks changed while the clipboard was read. Paste again.',
+   color: 'error',
+} as const
+
 const pasteCount = computed(() =>
    pickerField.value ? pasteableCount(clipboard.items.value, pickerField.value) : 0
 )
@@ -945,10 +975,22 @@ function insertItems(list: CmsBlockPath, index: number, items: readonly CmsBlock
 }
 
 async function paste(list: CmsBlockPath, index: number, text?: string | null) {
-   const field = listField(list)
-   if (props.readonly || !field) return
-   const items = await clipboard.read(text)
-   const result = items ? insertItems(list, index, items) : null
+   if (props.readonly || !listField(list)) return
+   const point: CmsInsertionPoint = { list, index }
+   pendingPastes.add(point)
+   let cancelled = false
+   let items: CmsBlockValue[] | null
+   try {
+      items = await clipboard.read(text)
+   } finally {
+      cancelled = !pendingPastes.delete(point)
+   }
+   const field = listField(point.list)
+   if (cancelled || !field) {
+      clipboard.notify(PASTE_CANCELLED)
+      return
+   }
+   const result = items ? insertItems(point.list, point.index, items) : null
    clipboard.notify(pasteNotice(result, field))
 }
 
@@ -1391,13 +1433,19 @@ function focusField(path: CmsBlockPath | null, key: string) {
 }
 
 function inlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-input' }>) {
+   if (!applyInlineInput(message)) sendState()
+}
+
+function applyInlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-input' }>) {
    const { path, key, locale: code } = message
-   const field = fieldAt(path, key)
-   if (props.readonly || !isInlineTextField(field)) return
-   if (previewState.value.lockedFields.includes(inlineFieldPath(path, key))) return
-   if (isTranslatableField(field) && !i18n.locales.includes(code)) return
+   const declared = fieldAt(path, key)
+   if (props.readonly || !isInlineTextField(declared)) return false
+   if (previewState.value.lockedFields.includes(inlineFieldPath(path, key))) return false
+   const localized = isTranslatableField(declared) && i18n.locales.length > 0
+   if (localized && !i18n.locales.includes(code)) return false
+   const field = localized ? declared : { ...declared, translatable: false }
    const item = path ? blockAt(state.value, path) : null
-   if (path && !item) return
+   if (path && !item) return false
    const text = clampInlineText(
       normalizeInlineText(message.value, !!field.textarea),
       inlineTextLimit(field)
@@ -1418,6 +1466,7 @@ function inlineInput(message: Extract<CmsPreviewFrameMessage, { type: 'field-inp
          true
       )
    if (message.commit) void nextTick(release)
+   return true
 }
 
 function applyFocus(focus: CmsSearchFocus) {
@@ -1552,6 +1601,10 @@ function setIssues(issues: CmsResponseIssue[]) {
 }
 
 watch(state, (values) => {
+   if (values[props.fieldKey] !== ownBlocks) {
+      ownBlocks = values[props.fieldKey]
+      dropInsertionPoints()
+   }
    if (selected.value && !blockAt(values, selected.value)) selected.value = null
 })
 
