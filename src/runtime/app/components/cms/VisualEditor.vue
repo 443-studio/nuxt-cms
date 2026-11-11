@@ -77,25 +77,33 @@
                   :highlighted="canvasHover"
                   :errors="blockErrors"
                   :can-add="canAdd"
+                  :paste-count="pasteCount"
                   :label="blocksField.label"
                   :menu="blockMenu"
                   @select="selectFromTree"
                   @move="move"
                   @hover="highlight"
-                  @insert="openPalette"
+                  @pick="insert"
+                  @paste="(index: number) => paste(index, null)"
                />
             </div>
             <div v-if="blocks.length" class="cms-editor-side-foot">
-               <KButton
+               <CmsBlockPickerPopover
                   v-if="canAdd"
-                  :icon="cmsIcon('plus')"
-                  label="Add a block"
-                  size="sm"
-                  variant="soft"
-                  tone="neutral"
-                  block
-                  @click="openPalette(blocks.length)"
-               />
+                  :blocks="blocksField.blocks ?? {}"
+                  :paste-count="pasteCount"
+                  @pick="(type: string) => insert(blocks.length, type)"
+                  @paste="paste(blocks.length, null)"
+               >
+                  <KButton
+                     :icon="cmsIcon('plus')"
+                     label="Add a block"
+                     size="sm"
+                     variant="soft"
+                     tone="neutral"
+                     block
+                  />
+               </CmsBlockPickerPopover>
                <p v-else class="cms-field-hint">{{ maxReached }}</p>
             </div>
          </aside>
@@ -330,7 +338,14 @@
       </div>
 
       <KModal v-model:open="paletteOpen" title="Insert a block">
-         <CmsBlockPalette :blocks="blocksField.blocks ?? {}" @pick="insertFromPalette" />
+         <CmsBlockPicker
+            v-if="paletteOpen"
+            :blocks="blocksField.blocks ?? {}"
+            :disabled-reason="canAdd ? undefined : maxReached"
+            :paste-count="pasteCount"
+            @pick="insertFromPalette"
+            @paste="pasteFromPalette"
+         />
       </KModal>
    </div>
 </template>
@@ -368,7 +383,7 @@ import type { CmsPreviewDevice } from '../../../shared/editor-layout'
 import { CMS_EDITOR_PANEL_LIMITS, CMS_PREVIEW_DEVICE_WIDTHS } from '../../../shared/editor-layout'
 import type { CmsSearchFocus } from '../../../shared/search'
 import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
-import { copyNotice, pasteBlocks, pasteNotice } from '../../../shared/clipboard'
+import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
 import type {
    CmsBlockValue,
    CmsClipboardAction,
@@ -638,6 +653,11 @@ function insertFromPalette(type: string) {
    insert(paletteIndex.value, type)
 }
 
+function pasteFromPalette() {
+   paletteOpen.value = false
+   void paste(paletteIndex.value, null)
+}
+
 function openPalette(index: number) {
    if (!canAdd.value) return
    paletteIndex.value = index
@@ -672,6 +692,8 @@ function remove(index: number) {
 }
 
 const clipboard = useCmsClipboard()
+
+const pasteCount = computed(() => pasteableCount(clipboard.items.value, blocksField.value))
 
 function copy(index: number, event?: ClipboardEvent) {
    const item = blocks.value[index]

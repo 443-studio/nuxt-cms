@@ -620,7 +620,8 @@ declares its own `hidden` field keeps the old behavior: the value is returned an
 
 ### Block components
 
-A block can name the site component that renders it, plus an icon and a help text for the admin:
+A block can name the site component that renders it, plus an icon, a help text, a group and search
+tags for the admin:
 
 ```ts
 blocks: {
@@ -629,6 +630,8 @@ blocks: {
       component: 'SectionHero',
       icon: 'photo',
       description: 'Full-width image with a heading.',
+      group: 'Headers',
+      tags: ['banner', 'cover'],
       fields: { ... },
    },
 }
@@ -637,6 +640,10 @@ blocks: {
 - `component` is the name of a component of the site as Nuxt auto-imports it (`SectionHero`, or
   `section-hero`). The build fails when no such component is registered.
 - `icon` is a Heroicons outline name; `description` is a short help text.
+- `group` puts the block under a heading in the [block picker](admin.md#block-picker). Groups follow
+  the order of their first block in the config; blocks without a group come last, under **Other**.
+- `tags` are extra words the search of the picker matches, next to the label, the description and
+  the group.
 - These keys work in every `blocks` field: collections, singles, pages and content.
 - A block with a `component` cannot have fields named `key`, `ref`, `class` or `style`.
 - When every block of a field has a `component`, the admin edits that field in the
@@ -1048,8 +1055,8 @@ export default defineCmsConfig({
   option.
 - A content entry needs a non-empty `blocks` map and cannot declare a system field, `titleField`,
   `columns`, `routes`, `overrides` or a custom table; `labels` may only name system fields.
-- A block `component` must be a non-empty string naming a registered Nuxt component; `icon` must be
-  a non-empty string.
+- A block `component` must be a non-empty string naming a registered Nuxt component; `icon` and
+  `group` must be non-empty strings; `tags` must be an array of non-empty strings.
 - `titleField` is required on collections, must reference a declared field, and that field must be a
   `text`, `slug`, `email`, `number`, `date`, `datetime` or single `select`.
 - `select` needs a non-empty array of `options`: non-empty strings or `{ value, label }` objects

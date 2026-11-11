@@ -48,7 +48,7 @@ An empty one is a dashed box that opens the media library.
 
 **Number of blocks.** On a field with [`min` or `max`](schema.md#number-of-blocks) the grid shows
 the allowed count under it. Once the field holds `max` blocks, the add tile and **Duplicate** are
-disabled, and so are the palette, the `+` buttons and **Duplicate** of the visual editor.
+disabled, and so are the block picker, the `+` buttons and **Duplicate** of the visual editor.
 
 **Order.** Drag a tile onto another one to move it there. The target tile is outlined while you
 drag. For a keyboard, focus the grip at the bottom left of a tile and press the left or right arrow
@@ -272,8 +272,8 @@ count of errors on Blocks and Fields; picking a block in the tree opens Fields.
 
 In the canvas, hover a block to outline it with its label; click it to select it and open its
 fields. The toolbar of a block has a drag handle, move up and down, **Duplicate**, **Hide** and
-delete. A **+** between two blocks, and before the first and after the last, opens the palette
-(label, icon and description of each block type) and inserts the block there. A hidden block is not
+delete. A **+** between two blocks, and before the first and after the last, opens the
+[block picker](#block-picker) and inserts the block there. A hidden block is not
 drawn in the canvas: it stays in the block tree, where **Show** brings it back. Deleting a block
 asks for no confirmation: undo brings it back. Deleting the whole item still asks.
 
@@ -296,15 +296,16 @@ field (where the browser keeps its own undo) or in a dialog. ⌘ is Ctrl outside
 | Delete, Backspace | delete the selected block |
 | ⌘ D | duplicate the selected block |
 | ⌘ ↑, ⌘ ↓ | move the selected block up or down |
-| Enter, ⇧ Enter | open the palette to add a block after or before the selected one |
+| Enter, ⇧ Enter | open the block picker to add a block after or before the selected one |
 | Escape | clear the selection |
 | ⌘ C, ⌘ X | copy or cut the selected block |
 | ⌘ V | paste after the selected block, or at the end |
 
 Duplicate and add do nothing once the field holds `max` blocks. In the canvas you can also focus the
 drag handle of a block and press the up or down arrow to move it. In the block tree, Alt with the
-up or down arrow moves the focused block. Every action is also a button or a menu item, and every
-change from the tree, the menus and the canvas is one undo step.
+up or down arrow moves the focused block. In the [block picker](#block-picker), ↑ and ↓ move
+through the results, Enter picks and Escape closes. Every action is also a button or a menu item,
+and every change from the tree, the menus and the canvas is one undo step.
 
 **Validation.** Save and Publish check the whole item first, `validate` hooks included. The first
 error selects the block that holds it, or opens its tab, shows the panel it is in and switches to
@@ -313,6 +314,17 @@ red dot every block with one in the tree. An error or a warning that names no fi
 top of the inspector, an error of the body itself (for example too few blocks)
 shows at the top of the block tree, and one that names a block shows above the fields of that
 block. Leaving with unsaved changes asks for a confirmation.
+
+### Block picker
+
+The **+** of a row in the block tree, **Add a block** and the add tile of a `blocks` field open the
+block picker under the button; the **+** of the canvas, the menus and Enter open it as a dialog, and
+so does every button on a screen narrower than 640 px. The search box has the focus: type to filter
+by label, description, [group and tags](schema.md#block-components) (case and accents do not
+matter), move with ↑ and ↓, pick with Enter or a click, close with Escape. Blocks with a `group`
+are listed under its heading. Each block shows its icon, label and description. When the field is
+full the blocks are disabled. After you copy or cut blocks that the field accepts, the first row is
+**Paste N blocks**.
 
 ### Copy and paste
 

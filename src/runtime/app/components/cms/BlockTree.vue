@@ -31,16 +31,22 @@
          <template #meta="{ node }">
             <span class="cms-tree-meta" @click.stop>
                <span class="cms-tree-actions">
-                  <KButton
+                  <CmsBlockPickerPopover
                      v-if="canAdd"
-                     :icon="cmsIcon('plus')"
-                     size="xs"
-                     variant="ghost"
-                     tone="neutral"
-                     tabindex="-1"
-                     :aria-label="`Add a block after ${node.label}`"
-                     @click="emit('insert', (rowOf(node)?.index ?? 0) + 1)"
-                  />
+                     :blocks="field.blocks ?? {}"
+                     :paste-count="pasteCount"
+                     @pick="(type: string) => emit('pick', (rowOf(node)?.index ?? 0) + 1, type)"
+                     @paste="emit('paste', (rowOf(node)?.index ?? 0) + 1)"
+                  >
+                     <KButton
+                        :icon="cmsIcon('plus')"
+                        size="xs"
+                        variant="ghost"
+                        tone="neutral"
+                        tabindex="-1"
+                        :aria-label="`Add a block after ${node.label}`"
+                     />
+                  </CmsBlockPickerPopover>
                   <KDropdownMenu :items="menu(rowOf(node)?.index ?? 0)" placement="bottom-end">
                      <KButton
                         :icon="cmsIcon('ellipsis-horizontal')"
@@ -63,14 +69,20 @@
             </span>
          </template>
          <template v-if="canAdd" #empty-actions>
-            <KButton
-               :icon="cmsIcon('plus')"
-               label="Add a block"
-               size="sm"
-               variant="soft"
-               tone="neutral"
-               @click="emit('insert', 0)"
-            />
+            <CmsBlockPickerPopover
+               :blocks="field.blocks ?? {}"
+               :paste-count="pasteCount"
+               @pick="(type: string) => emit('pick', 0, type)"
+               @paste="emit('paste', 0)"
+            >
+               <KButton
+                  :icon="cmsIcon('plus')"
+                  label="Add a block"
+                  size="sm"
+                  variant="soft"
+                  tone="neutral"
+               />
+            </CmsBlockPickerPopover>
          </template>
       </KTree>
    </div>
@@ -107,6 +119,7 @@ const props = defineProps<{
    highlighted: number | null
    errors: ReadonlySet<number>
    canAdd: boolean
+   pasteCount: number
    label: string
    menu: (index: number) => MenuItems
 }>()
@@ -115,7 +128,8 @@ const emit = defineEmits<{
    select: [index: number]
    move: [from: number, to: number]
    hover: [index: number | null]
-   insert: [index: number]
+   pick: [index: number, type: string]
+   paste: [index: number]
 }>()
 
 const { i18n } = useCmsRuntime()

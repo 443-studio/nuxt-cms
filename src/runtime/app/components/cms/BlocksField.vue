@@ -116,12 +116,18 @@
             </div>
          </div>
 
-         <KDropdownMenu v-if="canAdd && !disabled && addItems.length > 1" :items="addItems">
+         <CmsBlockPickerPopover
+            v-if="canAdd && !disabled && Object.keys(blocks).length > 1"
+            :blocks="blocks"
+            :paste-count="pasteCount"
+            @pick="add"
+            @paste="paste(items.length, null)"
+         >
             <button type="button" class="cms-block-add">
                <KIcon name="plus" />
                <span>Add</span>
             </button>
-         </KDropdownMenu>
+         </CmsBlockPickerPopover>
          <button
             v-else
             type="button"
@@ -298,7 +304,7 @@ import {
    useFieldControl,
 } from '@xleddyl/443-components-vue'
 import { computed, ref, useState } from '#imports'
-import { copyNotice, pasteBlocks, pasteNotice } from '../../../shared/clipboard'
+import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
 import type { CmsBlockValue, CmsClipboardAction } from '../../../shared/preview'
 import { clipboardActionApplies } from '../../../shared/preview'
 import { useCmsClipboard } from '../../composables/cms-clipboard'
@@ -573,13 +579,6 @@ function onDragEnd() {
    dropIndex.value = null
 }
 
-const addItems = computed(() =>
-   Object.entries(blocks.value).map(([type, block]) => ({
-      label: block.label,
-      onSelect: () => add(type),
-   }))
-)
-
 const editorIndex = ref<number | null>(null)
 
 const editorOpen = computed({
@@ -643,6 +642,8 @@ function duplicateCurrent() {
 }
 
 const clipboard = useCmsClipboard()
+
+const pasteCount = computed(() => pasteableCount(clipboard.items.value, props.field))
 
 function copy(index: number, event?: ClipboardEvent) {
    const item = items.value[index]

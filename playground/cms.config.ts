@@ -7,6 +7,8 @@ const sections = defineCmsBlocks({
       component: 'SectionText',
       icon: 'bars-3-bottom-left',
       description: 'A heading and a paragraph of rich text.',
+      group: 'Text',
+      tags: ['paragraph', 'heading'],
       fields: {
          heading: { label: 'Heading', type: 'text', translatable: true },
          body: { label: 'Body', type: 'richtext', translatable: true, required: true },
@@ -17,6 +19,8 @@ const sections = defineCmsBlocks({
       component: 'SectionImage',
       icon: 'photo',
       description: 'A full-width image with an optional caption.',
+      group: 'Media',
+      tags: ['photo', 'picture'],
       fields: {
          image: { label: 'Image', type: 'media', mediaType: 'image', required: true },
          caption: { label: 'Caption', type: 'text', translatable: true },
@@ -27,6 +31,8 @@ const sections = defineCmsBlocks({
       component: 'SectionQuote',
       icon: 'chat-bubble-bottom-center-text',
       description: 'A highlighted quote with its author.',
+      group: 'Text',
+      tags: ['citation', 'testimonial'],
       fields: {
          text: { label: 'Text', type: 'text', textarea: true, translatable: true, required: true },
          author: { label: 'Author', type: 'text' },

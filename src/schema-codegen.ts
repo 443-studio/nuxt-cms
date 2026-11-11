@@ -897,6 +897,16 @@ function blockMetaErrors(at: string, block: BlockConfig): string[] {
       errors.push(`${at}: icon must be a non-empty string`)
    if (block.description !== undefined && typeof block.description !== 'string')
       errors.push(`${at}: description must be a string`)
+   if (block.group !== undefined && (typeof block.group !== 'string' || !block.group.trim()))
+      errors.push(`${at}: group must be a non-empty string`)
+   if (
+      block.tags !== undefined &&
+      !(
+         Array.isArray(block.tags) &&
+         block.tags.every((tag: unknown) => typeof tag === 'string' && !!tag.trim())
+      )
+   )
+      errors.push(`${at}: tags must be an array of non-empty strings`)
    return errors
 }
 

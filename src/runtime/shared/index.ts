@@ -256,6 +256,8 @@ export interface BlockConfig {
    component?: string
    icon?: string
    description?: string
+   group?: string
+   tags?: readonly string[]
    fields: Record<string, FieldConfig>
    validate?: CmsBlockValidate
 }
@@ -1156,6 +1158,8 @@ export interface BlockInput {
    component?: string
    icon?: string
    description?: string
+   group?: string
+   tags?: readonly string[]
    fields: Record<string, BlockFieldInput>
    validate?: CmsBlockValidate
 }
