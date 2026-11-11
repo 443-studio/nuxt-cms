@@ -230,7 +230,7 @@ describe('validateConfig', () => {
       const errors = validateConfig(config, I18N)
       expect(
          errors.some((e) =>
-            e.includes('translatable is only supported on text, richtext and media')
+            e.includes('translatable is only supported on text, richtext, media and link')
          )
       ).toBe(true)
    })
@@ -263,7 +263,7 @@ describe('validateConfig', () => {
          errors.some(
             (e) =>
                e.includes("field 'count'") &&
-               e.includes('translatable is only supported on text, richtext and media')
+               e.includes('translatable is only supported on text, richtext, media and link')
          )
       ).toBe(true)
    })

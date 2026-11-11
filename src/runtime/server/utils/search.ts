@@ -6,12 +6,14 @@ import {
    decodeTranslatableValue,
    isMultiSelect,
    isTranslatableField,
+   linkLabelTexts,
    mediaFilename,
    pageColumnFields,
    pageFields,
    pageFieldsTableName,
    pageMediaTableName,
    pageRouteOf,
+   readLinkValue,
    selectOptionLabel,
    selectValuesMatching,
 } from '../../shared/index'
@@ -77,6 +79,7 @@ const VALUE_TYPES = new Set([
    'select',
    'tags',
    'json',
+   'link',
    'blocks',
 ])
 
@@ -122,6 +125,13 @@ function fieldTexts(field: FieldConfig, value: unknown, defaultLocale: string): 
          })
          .join(', ')
       return [{ locale: null, text }]
+   }
+   if (field.type === 'link') {
+      const link = readLinkValue(value)
+      if (!link) return []
+      const texts: FieldText[] = linkLabelTexts(link.label)
+      if (link.url) texts.push({ locale: null, text: link.url })
+      return texts
    }
    if (field.type === 'tags' && Array.isArray(value))
       return value.length ? [{ locale: null, text: value.map(String).join(', ') }] : []

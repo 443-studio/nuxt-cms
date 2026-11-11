@@ -230,7 +230,8 @@ export function csvCellValue(field: FieldConfig, text: string): CellResult {
       return { error: 'Not a boolean (true or false)' }
    }
    if (field.type === 'tags' && !text.trim().startsWith('[')) return { value: text.split(',') }
-   if (field.type === 'json' || isStringListField(field)) {
+   if (field.type === 'link' && !text.trim().startsWith('{')) return { value: { url: text.trim() } }
+   if (field.type === 'json' || field.type === 'link' || isStringListField(field)) {
       try {
          return { value: JSON.parse(text) }
       } catch {

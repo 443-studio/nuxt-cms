@@ -598,7 +598,12 @@ const validateHook = computed(() =>
 
 const schema = computed(() =>
    buildEntrySchema(
-      { fields: props.fields, drafts: props.content, validate: validateHook.value },
+      {
+         fields: props.fields,
+         drafts: props.content,
+         validate: validateHook.value,
+         config: cmsConfig as CmsConfig,
+      },
       i18n
    )
 )

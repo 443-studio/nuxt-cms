@@ -1,5 +1,5 @@
 import type { CmsConfig, CmsEntry, FieldConfig } from './index'
-import { entryFieldsFor, isCollectionKind } from './index'
+import { entryFieldsFor, isCollectionKind, relationTarget } from './index'
 
 export const CMS_ADMIN_ROLE = 'admin'
 export const CMS_SUPERADMIN_ROLE = 'superadmin'
@@ -297,7 +297,8 @@ function accessWarnings(key: string, permissions: string[], config: CmsConfig): 
       if (!granted.has(`${name}.create`) && !granted.has(`${name}.update`)) continue
       for (const field of collectFields(entryFieldsFor(entry))) {
          if (field.type === 'media') needsMedia = true
-         if (field.type === 'relation' && field.to) relationTargets.add(field.to)
+         if (field.type === 'relation' && relationTarget(field))
+            relationTargets.add(relationTarget(field))
       }
    }
    if (needsMedia && !granted.has('media.read')) {

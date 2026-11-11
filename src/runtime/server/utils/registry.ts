@@ -5,7 +5,7 @@ import { z } from 'zod'
 import cmsConfig from '#cms-config'
 import * as cmsTables from '#cms-tables'
 import { useRuntimeConfig } from '#imports'
-import type { CmsEntry, CmsI18n, CmsPageRoute } from '../../shared/index'
+import type { CmsConfig, CmsEntry, CmsI18n, CmsPageRoute } from '../../shared/index'
 import {
    CONTENT_PUBLISHED_AT_FIELD,
    decodeEntryTranslatableMedia,
@@ -72,7 +72,10 @@ export function getRegistryEntry(event: H3Event): {
 
 export function buildValidator(entry: CmsEntry, path?: string) {
    const fields = path ? pageFields(entry, path) : entry.fields
-   return buildEntrySchema({ ...entry, fields, path }, getContentI18n())
+   return buildEntrySchema(
+      { ...entry, fields, path, config: cmsConfig as CmsConfig },
+      getContentI18n()
+   )
 }
 
 export function requirePageRoute(entry: CmsEntry, key: string): CmsPageRoute {

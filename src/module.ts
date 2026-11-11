@@ -531,6 +531,10 @@ function addCmsBlocks(
       name: 'CmsBlocks',
       filePath: resolver.resolve('./runtime/app/blocks/CmsBlocks.vue'),
    })
+   addComponent({
+      name: 'CmsLink',
+      filePath: resolver.resolve('./runtime/app/links/CmsLink.vue'),
+   })
    if (!refs.length && !previews.length) return
    nuxt.hook('components:extend', (components) => {
       const names = components.map((component) => component.pascalName)
@@ -1299,6 +1303,11 @@ export default defineNuxtModule<ModuleOptions>({
          })
       }
 
+      addServerHandler({
+         route: '/api/cms/link-usage',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/link-usage.post'),
+      })
       addServerHandler({
          route: '/api/cms/search',
          method: 'get',

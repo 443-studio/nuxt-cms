@@ -296,6 +296,35 @@ To render an image, use `<CmsImage>` (see [Media → Rendering images](media.md#
 <CmsImage :media="event.poster" sizes="sm:100vw md:50vw" class="aspect-video w-full object-cover" />
 ```
 
+## Links
+
+`link` fields resolve to a `CmsLink` object (typed `CmsLink` in `#cms-types`, selected in full by
+the generated queries):
+
+```graphql
+cta { href label newTab external entry id }
+```
+
+- **`href`**: the address to render. For an address it is the stored URL. For a page it is the page
+  path. For a content item it is the item path in the requested `locale` (from the entry
+  `route`). It is `null` when the target was deleted, is a draft or is scheduled, so the site never
+  links to an item it cannot show.
+- **`label`**: the link text in the requested locale (falls back to the default locale), or `null`.
+- **`newTab`**: open in a new tab. **`external`**: the address has a scheme (`https:`, `mailto:`,
+  `tel:`), as opposed to a site path or anchor.
+- **`entry`** / **`id`**: the internal target, `null` for addresses.
+
+Internal targets of one request are loaded in one query per entry, whatever the number of links.
+
+Render it with `<CmsLink>` (auto-imported). It renders a `<NuxtLink>` to `href` with
+`target="_blank"` and `rel="noopener noreferrer"` when `newTab` is set, shows `label` (or the href)
+unless you pass slot content, and renders nothing when `href` is `null`:
+
+```vue
+<CmsLink :link="block.cta" class="button" />
+<CmsLink :link="footer.privacy">Privacy</CmsLink>
+```
+
 ## Blocks
 
 Each `blocks` field has a GraphQL interface named `<Entry><Field>Block`, and every block type of

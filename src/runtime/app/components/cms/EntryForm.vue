@@ -88,6 +88,7 @@ import {
    fieldTab,
    hasTranslatableBlockFields,
    isFieldVisible,
+   isLocalizedLinkField,
    isTranslatableField,
    resolveFormLayout,
    slugSourceValue,
@@ -248,7 +249,9 @@ function slugSource(field: FieldConfig) {
 }
 
 function hasLocaleSwitch(field: FieldConfig) {
-   return isTranslatableField(field) || hasTranslatableBlockFields(field)
+   return (
+      isTranslatableField(field) || isLocalizedLinkField(field) || hasTranslatableBlockFields(field)
+   )
 }
 
 function fieldProgress(key: string) {
@@ -269,7 +272,13 @@ const validate = computed(() =>
 
 const schema = computed(() =>
    buildEntrySchema(
-      { fields: props.fields, drafts: props.drafts, validate: validate.value, path: props.path },
+      {
+         fields: props.fields,
+         drafts: props.drafts,
+         validate: validate.value,
+         path: props.path,
+         config: cmsConfig as CmsConfig,
+      },
       i18n
    )
 )

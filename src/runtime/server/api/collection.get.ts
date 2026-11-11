@@ -2,7 +2,7 @@ import { count } from 'drizzle-orm'
 import { defineEventHandler, getValidatedQuery } from 'h3'
 import { z } from 'zod'
 import { cmsDialect, useDb } from '#cms-db'
-import { pageRoutes } from '../../shared/index'
+import { CONTENT_PUBLISHED_AT_FIELD, CONTENT_SLUG_FIELD, pageRoutes } from '../../shared/index'
 import { decodeRows, getRegistryEntry, idColumn, tableColumns } from '../utils/registry'
 import { listOrderBy, listWhere, readListFilters } from '../utils/list-query'
 import { readPages } from '../utils/page-storage'
@@ -73,6 +73,11 @@ export default defineEventHandler(async (event) => {
            ...(entry.titleField && titleColumn ? [[entry.titleField, titleColumn]] : []),
            ...(entry.drafts && Object.hasOwn(columns, 'status')
               ? [['status', columns.status]]
+              : []),
+           ...(entry.kind === 'content'
+              ? [CONTENT_SLUG_FIELD, CONTENT_PUBLISHED_AT_FIELD]
+                   .filter((key) => Object.hasOwn(columns, key))
+                   .map((key) => [key, columns[key]])
               : []),
         ])
       : undefined

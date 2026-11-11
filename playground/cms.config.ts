@@ -32,6 +32,23 @@ const sections = defineCmsBlocks({
          author: { label: 'Author', type: 'text' },
       },
    },
+   cta: {
+      label: 'Call to action',
+      component: 'SectionCta',
+      icon: 'cursor-arrow-rays',
+      description: 'A short pitch with a button to a page, an article or another site.',
+      fields: {
+         heading: { label: 'Heading', type: 'text', translatable: true, required: true },
+         text: { label: 'Text', type: 'text', textarea: true, translatable: true },
+         link: {
+            label: 'Button',
+            type: 'link',
+            withLabel: true,
+            translatable: true,
+            required: true,
+         },
+      },
+   },
 })
 
 export default defineCmsConfig({
@@ -218,6 +235,42 @@ export default defineCmsConfig({
          },
       },
       layout: [['email', 'phone'], 'address', ['bookingOpen', 'bookingUrl'], 'socials'],
+   },
+
+   footer: {
+      id: 'footer',
+      label: 'Footer',
+      kind: 'single',
+      icon: 'bars-3',
+      fields: {
+         menu: {
+            label: 'Menu',
+            type: 'blocks',
+            description: 'Links in the footer of every page.',
+            max: 8,
+            blocks: {
+               item: {
+                  label: 'Link',
+                  fields: {
+                     link: {
+                        label: 'Link',
+                        type: 'link',
+                        withLabel: true,
+                        translatable: true,
+                        required: true,
+                     },
+                  },
+               },
+            },
+         },
+         privacy: {
+            label: 'Privacy page',
+            type: 'link',
+            to: ['pages'],
+            external: false,
+            description: 'Only pages of the site.',
+         },
+      },
    },
 
    events: {

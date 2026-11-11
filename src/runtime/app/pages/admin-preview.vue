@@ -52,6 +52,8 @@ import {
    entryFieldsFor,
    isHiddenBlock,
    isRoutedContent,
+   readLinkValue,
+   resolveCmsLink,
 } from '#nuxt-cms'
 import {
    computed,
@@ -74,6 +76,7 @@ import {
    previewItem,
 } from '../../shared/preview'
 import type { CmsBlockItem } from '../blocks/resolve'
+import { useCmsLinkTargets } from '../composables/cms-link-targets'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import PreviewOverlay from '../preview/PreviewOverlay.vue'
 
@@ -104,6 +107,18 @@ const field = computed(() => {
    return candidate?.type === 'blocks' ? candidate : undefined
 })
 
+const linkTargets = useCmsLinkTargets(cmsConfig as CmsConfig)
+
+function resolveLink(value: unknown) {
+   const locale = state.value?.locale ?? i18n.defaultLocale
+   const link = readLinkValue(value)
+   const target = link?.entry && link.id && !link.url ? link : null
+   if (target) linkTargets.load(target.entry!, target.id!)
+   const live = target && linkTargets.state(target) === 'live'
+   const row = live ? linkTargets.target(target.entry!, target.id!) : null
+   return resolveCmsLink(cmsConfig as CmsConfig, value, locale, i18n.defaultLocale, row)
+}
+
 const blocks = computed<CmsBlockItem[]>(() =>
    state.value && field.value
       ? (previewBlocks(
@@ -111,7 +126,8 @@ const blocks = computed<CmsBlockItem[]>(() =>
            state.value.blocks,
            state.value.locale,
            i18n.defaultLocale,
-           state.value.media
+           state.value.media,
+           resolveLink
         ) as unknown as CmsBlockItem[])
       : []
 )
@@ -129,7 +145,8 @@ const item = computed(() => {
       state.value.item,
       state.value.locale,
       i18n.defaultLocale,
-      state.value.media
+      state.value.media,
+      resolveLink
    )
    if (!isRoutedContent(entry.value)) return preview
    return { ...preview, path: contentItemPath(entry.value, state.value.item, state.value.locale) }

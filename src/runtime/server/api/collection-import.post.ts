@@ -6,7 +6,9 @@ import {
    readRawBody,
 } from 'h3'
 import { z } from 'zod'
+import cmsConfig from '#cms-config'
 import { runBatch, useDb } from '#cms-db'
+import type { CmsConfig } from '../../shared/index'
 import { isCollectionKind } from '../../shared/index'
 import {
    canTransferCsv,
@@ -69,15 +71,18 @@ export default defineEventHandler(async (event) => {
    const db = useDb()
    const existing = mode === 'upsert' ? await existingImportIds(db, table, source.rows) : null
    const isCreate = (id: string | null) => !existing || !id || !existing.has(id)
-   const rows = await checkImportRows(validateImportRows(entry, source.rows, i18n, isCreate), {
-      db,
-      name,
-      entry,
-      table,
-      mode,
-      media: source.errors.length ? null : await mediaLookup(),
-      canPublish: can(access, `${name}.publish`),
-   })
+   const rows = await checkImportRows(
+      validateImportRows(entry, source.rows, i18n, isCreate, cmsConfig as CmsConfig),
+      {
+         db,
+         name,
+         entry,
+         table,
+         mode,
+         media: source.errors.length ? null : await mediaLookup(),
+         canPublish: can(access, `${name}.publish`),
+      }
+   )
    const preview = importPreview(entry, rows, {
       format,
       mode,

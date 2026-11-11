@@ -270,6 +270,7 @@ import {
    isFieldVisible,
    isHiddenBlock,
    isTranslatableMediaField,
+   linkDisplayText,
    mediaFilename,
    mediaIconFor,
    mediaPublicUrl,
@@ -433,13 +434,17 @@ function iconOf(item: Record<string, unknown>) {
 }
 
 function summaryOf(item: Record<string, unknown>) {
+   const locale = props.locale ?? i18n.defaultLocale
    for (const [key, field] of Object.entries(blockOf(item)?.fields ?? {})) {
+      if (field.type === 'link') {
+         const text = linkDisplayText(item[key], locale, i18n.defaultLocale)
+         if (text) return text.length > 80 ? `${text.slice(0, 77)}…` : text
+         continue
+      }
       if (field.type !== 'text' && field.type !== 'richtext') continue
       const raw = item[key]
       const value =
-         typeof raw === 'string'
-            ? raw
-            : (raw as Record<string, string> | null)?.[props.locale ?? i18n.defaultLocale] ?? ''
+         typeof raw === 'string' ? raw : (raw as Record<string, string> | null)?.[locale] ?? ''
       const text = value.replace(/<[^>]*>/g, ' ').trim()
       if (text) return text.length > 80 ? `${text.slice(0, 77)}…` : text
    }

@@ -43,6 +43,7 @@ const FIELD_ICONS: Record<FieldType, string> = {
    json: 'code-bracket',
    media: 'photo',
    relation: 'arrows-right-left',
+   link: 'arrow-top-right-on-square',
    blocks: 'squares-2x2',
 }
 

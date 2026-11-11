@@ -25,6 +25,7 @@ import { useRuntimeConfig } from '#imports'
 import type {
    CmsConfig,
    CmsEntry,
+   CmsLinkValue,
    CmsPreviewGrant,
    FieldConfig,
    MediaStorageMode,
@@ -38,10 +39,13 @@ import {
    decodeTranslatableMedia,
    entryFieldsFor,
    hasTranslatableBlockFields,
+   isExternalLinkUrl,
    isMultiValueField,
    isPrivateField,
    isRoutedContent,
    isTranslatableMediaField,
+   linkHref,
+   linkLabelText,
    localeText,
    localizeBlocks,
    mediaPublicUrl,
@@ -49,6 +53,8 @@ import {
    pickTranslatedMedia,
    previewGrantAllows,
    publicBlocks,
+   readLinkValue,
+   relationTarget,
    translatableFieldKeys,
 } from '../../shared/index'
 import {
@@ -167,6 +173,38 @@ function resolveLocaleArg(locale: unknown): string {
    return String(locale)
 }
 
+interface LinkSource {
+   link: CmsLinkValue
+   locale: string
+}
+
+function linkSource(value: unknown, locale: string): LinkSource | null {
+   const link = readLinkValue(value)
+   if (!link || (!link.url && !(link.entry && link.id))) return null
+   return { link, locale }
+}
+
+function blockLinks(field: FieldConfig, value: unknown, locale: string): unknown {
+   if (!Array.isArray(value)) return value
+   return value.map((item) => {
+      if (!item || typeof item !== 'object') return item
+      const block = field.blocks?.[String((item as Record<string, unknown>).type)]
+      const keys = Object.entries(block?.fields ?? {})
+         .filter(([, blockField]) => blockField.type === 'link')
+         .map(([key]) => key)
+      if (!keys.length) return item
+      const resolved: Record<string, unknown> = { ...(item as Record<string, unknown>) }
+      for (const key of keys) resolved[key] = linkSource(resolved[key], locale)
+      return resolved
+   })
+}
+
+function hasBlockLinks(field: FieldConfig): boolean {
+   return Object.values(field.blocks ?? {}).some((block) =>
+      Object.values(block.fields).some((blockField) => blockField.type === 'link')
+   )
+}
+
 function localizeRow(entry: CmsEntry, row: Record<string, unknown>, locale: string): Row {
    const { defaultLocale } = getContentI18n()
    const result: Row = normalizeTimestampFields({ ...row, [LOCALE]: locale })
@@ -181,11 +219,17 @@ function localizeRow(entry: CmsEntry, row: Record<string, unknown>, locale: stri
       result[key] = value?.[locale] ?? value?.[defaultLocale] ?? null
    }
    for (const [key, field] of Object.entries(fields)) {
-      if (isPrivateField(field) || field.type !== 'blocks') continue
+      if (isPrivateField(field)) continue
+      if (field.type === 'link') {
+         result[key] = linkSource(result[key], locale)
+         continue
+      }
+      if (field.type !== 'blocks') continue
       const visible = publicBlocks(field, result[key])
-      result[key] = hasTranslatableBlockFields(field)
+      const localized = hasTranslatableBlockFields(field)
          ? localizeBlocks(field, visible, locale, defaultLocale)
          : visible
+      result[key] = hasBlockLinks(field) ? blockLinks(field, localized, locale) : localized
    }
    return result
 }
@@ -357,9 +401,9 @@ function loadManyToMany(ctx: Ctx, name: string, key: string, field: FieldConfig)
       `m2m:${name}:${key}`,
       async (sourceIds) => {
          const config = cmsConfig as CmsConfig
-         const targetEntry = config[field.to!]!
+         const targetEntry = config[relationTarget(field)]!
          const join = (cmsTables as Record<string, unknown>)[`${name}_${key}`] as SQLiteTable
-         const target = tableFor(field.to!)
+         const target = tableFor(relationTarget(field))
          const joinCols = tableColumns(join)
          const rows = await useDb()
             .select({ sourceId: joinCols.sourceId!, target })
@@ -428,6 +472,28 @@ function loadMediaMeta(ctx: Ctx) {
    })
 }
 
+async function resolveLinkHref(ctx: Ctx, source: LinkSource): Promise<string | null> {
+   const config = cmsConfig as CmsConfig
+   const { link, locale } = source
+   const entry = link.entry ? config[link.entry] : undefined
+   if (link.url || !link.entry || !link.id || !isRoutedContent(entry))
+      return linkHref(config, link, locale)
+   const target = await loadById(ctx, link.entry).load(link.id)
+   return target ? linkHref(config, link, locale, target) : null
+}
+
+function linkResolvers() {
+   return {
+      href: (source: LinkSource, _args: unknown, ctx: Ctx) => resolveLinkHref(ctx, source),
+      label: (source: LinkSource) =>
+         linkLabelText(source.link.label, source.locale, getContentI18n().defaultLocale),
+      newTab: (source: LinkSource) => !!source.link.newTab,
+      external: (source: LinkSource) => isExternalLinkUrl(source.link.url),
+      entry: (source: LinkSource) => (source.link.url ? null : source.link.entry ?? null),
+      id: (source: LinkSource) => (source.link.url ? null : source.link.id ?? null),
+   }
+}
+
 function mediaObject(key: string, row: Record<string, unknown> | undefined) {
    return {
       key,
@@ -451,14 +517,16 @@ function entryResolvers(config: CmsConfig, name: string, entry: CmsEntry) {
       if (field.type === 'relation' && field.cardinality === 'many-to-many') {
          resolvers[key] = async (parent: Row, _args: unknown, ctx: Ctx) => {
             const rows = await loadManyToMany(ctx, name, key, field).load(parent.id as string)
-            return (rows ?? []).map((row) => localizeRow(config[field.to!]!, row, localeOf(parent)))
+            return (rows ?? []).map((row) =>
+               localizeRow(config[relationTarget(field)]!, row, localeOf(parent))
+            )
          }
       } else if (field.type === 'relation') {
          resolvers[key] = async (parent: Row, _args: unknown, ctx: Ctx) => {
             const id = parent[key]
             if (id == null) return null
-            const row = await loadById(ctx, field.to!).load(id as string)
-            return row ? localizeRow(config[field.to!]!, row, localeOf(parent)) : null
+            const row = await loadById(ctx, relationTarget(field)).load(id as string)
+            return row ? localizeRow(config[relationTarget(field)]!, row, localeOf(parent)) : null
          }
       } else if (field.type === 'media') {
          resolvers[key] = (parent: Row, _args: unknown, ctx: Ctx) => resolveMedia(ctx, parent[key])
@@ -661,6 +729,7 @@ export function buildCmsSchema() {
       typeDefs: renderGraphqlSdl(config),
       resolvers: {
          JSON: jsonScalar,
+         CmsLink: linkResolvers(),
          Query: queryResolvers,
          ...typeResolvers,
       },

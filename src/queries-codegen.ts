@@ -7,16 +7,25 @@ import {
    isRoutedContent,
    pageFields,
    pageRoutes,
+   relationTarget,
    routedContentNames,
 } from './runtime/shared/index'
 
 const MEDIA_SELECTION = 'key url type alt folder mime size width height focalX focalY'
 
+const LINK_SELECTION = 'href label newTab external entry id'
+
+function fieldSelection(key: string, field: FieldConfig): string {
+   if (field.type === 'media') return `${key} { ${MEDIA_SELECTION} }`
+   if (field.type === 'link') return `${key} { ${LINK_SELECTION} }`
+   return key
+}
+
 function blocksSelection(entryName: string, key: string, field: FieldConfig): string {
    const parts = ['__typename type']
    for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
       const fields = Object.entries(block.fields).map(([blockFieldKey, blockField]) =>
-         blockField.type === 'media' ? `${blockFieldKey} { ${MEDIA_SELECTION} }` : blockFieldKey
+         fieldSelection(blockFieldKey, blockField)
       )
       if (!fields.length) continue
       parts.push(`... on ${blockTypeName(entryName, key, blockName)} { ${fields.join(' ')} }`)
@@ -37,20 +46,16 @@ function entrySelection(
    for (const [key, field] of Object.entries(fields)) {
       if (isPrivateField(field)) continue
       if (field.type === 'relation') {
-         const target = config[field.to!]
+         const target = config[relationTarget(field)]
          if (!withRelations || !target) continue
-         parts.push(`${key} { ${entrySelection(config, field.to!, target, false)} }`)
-         continue
-      }
-      if (field.type === 'media') {
-         parts.push(`${key} { ${MEDIA_SELECTION} }`)
+         parts.push(`${key} { ${entrySelection(config, relationTarget(field), target, false)} }`)
          continue
       }
       if (field.type === 'blocks') {
          parts.push(`${key} { ${blocksSelection(name, key, field)} }`)
          continue
       }
-      parts.push(key)
+      parts.push(fieldSelection(key, field))
    }
    if (isCollectionKind(entry)) parts.push('createdAt')
    parts.push('updatedAt')

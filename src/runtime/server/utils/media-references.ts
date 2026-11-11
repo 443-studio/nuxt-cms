@@ -58,7 +58,7 @@ export interface MediaUsageSource {
    rows: Record<string, unknown>[]
 }
 
-function titleOf(entry: CmsEntry, row: Record<string, unknown>): string | null {
+export function usageTitle(entry: CmsEntry, row: Record<string, unknown>): string | null {
    if (entry.kind === 'page') {
       const path = row[PAGE_PATH_FIELD]
       return pageRouteOf(entry, String(row.id))?.label ?? (typeof path === 'string' ? path : null)
@@ -77,7 +77,7 @@ function titleOf(entry: CmsEntry, row: Record<string, unknown>): string | null {
    return null
 }
 
-function fieldsOf(entry: CmsEntry, row: Record<string, unknown>) {
+export function usageFields(entry: CmsEntry, row: Record<string, unknown>) {
    const path = row[PAGE_PATH_FIELD]
    return entry.kind === 'page' && typeof path === 'string' ? pageFields(entry, path) : entry.fields
 }
@@ -89,7 +89,7 @@ export function collectMediaUsage(
    const usage: Record<string, MediaUsage[]> = Object.fromEntries(keys.map((key) => [key, []]))
    for (const { name, entry, rows } of sources) {
       for (const row of rows) {
-         for (const reference of mediaReferences(fieldsOf(entry, row), row)) {
+         for (const reference of mediaReferences(usageFields(entry, row), row)) {
             const list = usage[reference.key]
             if (!list) continue
             list.push({
@@ -97,7 +97,7 @@ export function collectMediaUsage(
                label: entry.label,
                kind: entry.kind,
                id: entry.kind === 'single' ? null : String(row.id),
-               title: titleOf(entry, row),
+               title: usageTitle(entry, row),
                field: reference.field,
             })
          }

@@ -1,7 +1,8 @@
 import { eq, inArray } from 'drizzle-orm'
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { CmsDb } from '#cms-db'
-import type { CmsEntry, CmsI18n } from '../../shared/index'
+import type { CmsConfig, CmsEntry, CmsI18n } from '../../shared/index'
+import { relationTarget } from '../../shared/index'
 import { uniqueFieldKeys } from '../../shared/duplicate'
 import {
    changedImmutableKeys,
@@ -72,9 +73,10 @@ export function validateImportRows(
    entry: CmsEntry,
    rows: CmsImportSourceRow[],
    i18n: CmsI18n,
-   isCreate: (id: string | null) => boolean = () => true
+   isCreate: (id: string | null) => boolean = () => true,
+   config?: CmsConfig
 ): PreparedImportRow[] {
-   const schema = buildEntrySchema(entry, i18n)
+   const schema = buildEntrySchema({ ...entry, config }, i18n)
    return rows.map((row) => {
       const errors = [...row.errors]
       const rawId = row.values.id
@@ -149,16 +151,17 @@ async function checkIds(rows: PreparedImportRow[], context: ImportContext) {
 async function checkRelations(rows: PreparedImportRow[], context: ImportContext) {
    const fileIds = new Set(rows.flatMap((row) => (row.id ? [row.id] : [])))
    for (const [key, field] of Object.entries(context.entry.fields)) {
-      if (field.type !== 'relation' || !field.to) continue
-      const target = resolveTable(field.to)
+      const to = relationTarget(field)
+      if (field.type !== 'relation' || !to) continue
+      const target = resolveTable(to)
       if (!target) continue
       const wanted = rows.flatMap((row) => relationIds(row.values?.[key]))
       if (!wanted.length) continue
       const found = await existingIds(context.db, target, wanted)
-      if (field.to === context.name) for (const id of fileIds) found.add(id)
+      if (to === context.name) for (const id of fileIds) found.add(id)
       for (const row of rows) {
          const missing = relationIds(row.values?.[key]).filter((id) => !found.has(id))
-         if (missing.length) addError(row, key, `Unknown ${field.to} id: ${missing.join(', ')}`)
+         if (missing.length) addError(row, key, `Unknown ${to} id: ${missing.join(', ')}`)
       }
    }
 }

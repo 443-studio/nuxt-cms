@@ -371,6 +371,7 @@ Every field has `label: string` and optional `required?: boolean` and `private?:
 | `json`     | none                                                                               | JSON                |
 | `media`    | `mediaType?: T \| T[]` where `T` is `'image' \| 'video' \| 'file'`, `accept?: string[]`, `translatable?: boolean`, `mobile?: boolean` | CmsMedia object     |
 | `relation` | see [Relations](#relations)                                                         | related entry / list |
+| `link`     | `to?: string[]`, `external?: boolean` (default `true`), `withLabel?: boolean`, `translatable?: boolean`; see [Links](#links) | CmsLink object      |
 | `blocks`   | `blocks: Record<name, { label, fields, validate? }>` (required), `min?: number`, `max?: number` | array of typed blocks |
 
 A `datetime` field stores an instant as an ISO 8601 string in UTC (`2026-05-01T08:30:00.000Z`). The
@@ -526,6 +527,38 @@ category: {
   join table (`<entry>_<field>`).
 - A `required` relation cannot use `onDelete: 'set null'`.
 - Custom-table entries cannot be the source of `many-to-many` relations.
+
+## Links
+
+A `link` field points either at an address or at a page or content item of the site. Menus and
+calls to action are the main use, so it is allowed inside `blocks` too.
+
+```ts
+cta: { label: 'Button', type: 'link', withLabel: true, translatable: true },
+privacy: { label: 'Privacy page', type: 'link', to: ['pages'], external: false },
+```
+
+- **Value**, stored as JSON: `{ url }` for an address, or `{ entry, id }` for an internal target,
+  plus an optional `label` and `newTab: true`. Internal targets are the rows of the page entry (`id`
+  is the page key, `about` for `/about`) and the items of [content entries with a
+  `route`](#routes). Links store ids, so a slug change or a moved item never breaks them.
+- **Options**: `to` lists the entries an internal link may target (default: the page entry and
+  every routed content entry; each must be one of those); `external: false` refuses addresses;
+  `withLabel: true` asks for a link text; `translatable: true` (needs `withLabel` and
+  `cms.i18n.locales`) keeps the link text per locale while the target stays the same.
+- **Addresses** must be `http(s)://` URLs, `mailto:`, `tel:`, a root-relative path (`/contact`) or
+  an anchor (`#team`). `javascript:`, `data:`, other schemes, protocol-relative `//host` URLs,
+  spaces and control characters are refused by the admin form and the admin API.
+- **Queried** as [`CmsLink`](querying.md#links), whose `href` is resolved for the requested locale
+  and is `null` when the target is missing, a draft or scheduled.
+- **Admin**: an Internal / External switch, a search across the allowed entries (title and path,
+  drafts and scheduled items marked), the URL input, the link text and an "Open in a new tab"
+  switch. A warning shows when the target is a draft, scheduled or deleted. Deleting a content item
+  that is linked somewhere lists those entries first (`POST /api/cms/link-usage`, admin session);
+  after the delete the links stay stored and their `href` is `null`.
+- The admin search finds link texts (in every locale) and addresses. CSV import and export use JSON
+  text; a plain address in a CSV cell is read as `{ url }`.
+- Not a `titleField`, not a `showIf` target, not filterable or sortable.
 
 ## Blocks
 
@@ -1025,13 +1058,16 @@ export default defineCmsConfig({
   `blocks`, many-to-many and translatable fields, inside `blocks` or on pages.
 - `validate` on an entry or a block must be a function.
 - Multi-select (`select` with `multiple: true`) and `tags` are not allowed inside `blocks` and are excluded from sorting.
-- `translatable` is only valid on `text`, `richtext` and `media`, at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
+- `translatable` is only valid on `text`, `richtext`, `media` and `link` (with `withLabel`), at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
 - `showIf` must reference another declared field (a sibling field inside `blocks`) with an operator that fits its type and a value of the right type (see [Conditional fields](#conditional-fields)); groups take only `all`, `any` or `not`; the `titleField` cannot be conditional.
 - `tab` must name a tab declared by the same entry; tab ids must be unique and every tab needs a label.
 - `slug.from` must point to a `text` field. When that field is translatable, the slug is generated
   from its value in the default locale (as the `slug` of a content entry is from the title).
 - `private` is not allowed inside `blocks`.
 - A relation `to` must reference an existing collection or content entry.
+- A link `to` must be a list of distinct entries, each the page entry or a content entry with a
+  `route`; `external` and `withLabel` are booleans valid only on links; a link with no allowed
+  target (`external: false` and no internal entry) is refused.
 - `list.filters` may only name single `select`, `boolean` and single `relation` fields, plus
   `status` on an entry with drafts.
 - `columns` is only valid on the page entry and may only list fields that every page has;

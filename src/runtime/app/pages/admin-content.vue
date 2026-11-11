@@ -177,6 +177,7 @@ import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
+import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsToast } from '../composables/cms-toast'
 import { useCmsTranslationActions } from '../composables/cms-translation-actions'
@@ -195,6 +196,7 @@ type Status = 'draft' | 'published'
 const route = useRoute()
 const toast = useCmsToast()
 const confirmAction = useCmsConfirm()
+const confirmLinkedDelete = useCmsLinkedDelete()
 const focus = readSearchFocus(route.query)
 const { i18n } = useCmsRuntime()
 
@@ -456,7 +458,7 @@ function duplicate() {
 }
 
 async function remove() {
-   if (!(await confirmAction('Delete this item?'))) return
+   if (!(await confirmLinkedDelete(name, id ? [id] : [], 'Delete this item?'))) return
    saving.value = true
    try {
       await cmsApi(`${endpoint}/${id}`, { method: 'DELETE' })

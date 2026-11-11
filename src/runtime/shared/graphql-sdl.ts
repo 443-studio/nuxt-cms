@@ -10,6 +10,7 @@ import {
    isRoutedContent,
    isTranslatableField,
    pageAllFields,
+   relationTarget,
    typeName,
 } from './index'
 
@@ -39,6 +40,7 @@ function filterScalarFor(field: FieldConfig): string | null {
    if (isMultiValueField(field)) return LIST_FILTER
    switch (field.type) {
       case 'json':
+      case 'link':
          return null
       case 'blocks':
          return null
@@ -63,12 +65,13 @@ function filterableKeys(entry: CmsEntry): [string, string][] {
 
 function fieldSdl(config: CmsConfig, entryName: string, key: string, field: FieldConfig): string {
    if (field.type === 'relation') {
-      const target = typeName(field.to!)
+      const target = typeName(relationTarget(field))
       if (field.cardinality === 'many-to-many') return `  ${key}: [${target}!]!`
-      const nonNull = isRequiredField(field) && !config[field.to!]?.drafts
+      const nonNull = isRequiredField(field) && !config[relationTarget(field)]?.drafts
       return `  ${key}: ${target}${nonNull ? '!' : ''}`
    }
    if (field.type === 'media') return `  ${key}: CmsMedia`
+   if (field.type === 'link') return `  ${key}: CmsLink`
    if (field.type === 'tags' || (field.type === 'select' && field.multiple))
       return `  ${key}: [String!]!`
    if (field.type === 'blocks')
@@ -92,7 +95,9 @@ function entrySdl(config: CmsConfig, name: string, entry: CmsEntry): string {
 }
 
 function blockFieldSdl(field: FieldConfig): string {
-   return field.type === 'media' ? 'CmsMedia' : scalarFor(field)
+   if (field.type === 'media') return 'CmsMedia'
+   if (field.type === 'link') return 'CmsLink'
+   return scalarFor(field)
 }
 
 function sharedBlockFieldsSdl(field: FieldConfig): string[] {
@@ -152,6 +157,7 @@ const COMMON_SDL = [
    `input ${LIST_FILTER} {\n  hasAny: [String!]\n  hasAll: [String!]\n  isEmpty: Boolean\n}`,
    'enum CmsMediaType {\n  image\n  video\n  file\n}',
    'type CmsMedia {\n  key: String!\n  url: String\n  type: CmsMediaType!\n  alt: String\n  folder: String\n  mime: String\n  size: Int\n  width: Int\n  height: Int\n  focalX: Float\n  focalY: Float\n}',
+   'type CmsLink {\n  href: String\n  label: String\n  newTab: Boolean!\n  external: Boolean!\n  entry: String\n  id: String\n}',
    'type CmsSite {\n  name: String\n  titleTemplate: String\n  description: String\n  image: CmsMedia\n  hidden: Boolean!\n}',
 ]
 

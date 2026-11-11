@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type {
    BlockConfig,
+   CmsConfig,
    CmsEntry,
    CmsI18n,
    CmsValidateContext,
@@ -12,11 +13,17 @@ import {
    BLOCK_HIDDEN_KEY,
    declaresHiddenField,
    focalPointIssue,
+   allowsExternalLinks,
+   declaredLinkTargets,
    isFieldVisible,
    isTranslatableField,
+   linkTargetNames,
+   linkUrlError,
    normalizeTags,
+   pageLinkPath,
    selectOptionValues,
 } from './index'
+import type { CmsLinkValue } from './links'
 
 export const objectKeySchema = z
    .string()
@@ -56,6 +63,12 @@ export interface ValidationMessages {
    maxLength: (max: number) => string
    unique: string
    immutable: string
+   linkTarget: string
+   linkUrlAndTarget: string
+   linkExternal: string
+   linkEntry: (entry: string) => string
+   linkUnknownPage: string
+   invalidLinkLabel: string
 }
 
 const DEFAULT_MESSAGES: ValidationMessages = {
@@ -75,6 +88,12 @@ const DEFAULT_MESSAGES: ValidationMessages = {
    maxLength: (max) => `Use at most ${max} ${max === 1 ? 'character' : 'characters'}`,
    unique: 'This value is already used by another entry',
    immutable: 'This value cannot be changed once saved',
+   linkTarget: 'Choose a page or enter a URL',
+   linkUrlAndTarget: 'A link has either a URL or a target, not both',
+   linkExternal: 'This link cannot point to an external URL',
+   linkEntry: (entry) => `This link cannot point to '${entry}'`,
+   linkUnknownPage: 'Unknown page',
+   invalidLinkLabel: 'Invalid link text',
 }
 
 export function validationMessages(messages?: Partial<ValidationMessages>): ValidationMessages {
@@ -144,11 +163,93 @@ function translatableSchema(field: FieldConfig, i18n: CmsI18n, m: ValidationMess
       : record.nullish().transform((v) => v ?? null)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function trimmed(value: unknown): string {
+   return typeof value === 'string' ? value.trim() : ''
+}
+
+function linkLabelValue(
+   field: FieldConfig,
+   raw: unknown,
+   i18n: CmsI18n,
+   m: ValidationMessages
+): { label?: string | Record<string, string>; error?: string } {
+   if (!field.withLabel || raw == null) return {}
+   if (field.translatable && i18n.locales.length) {
+      const entries = isRecord(raw)
+         ? Object.entries(raw)
+         : typeof raw === 'string'
+           ? [[i18n.defaultLocale, raw] as const]
+           : null
+      if (!entries) return { error: m.invalidLinkLabel }
+      if (entries.some(([locale]) => !i18n.locales.includes(locale)))
+         return { error: m.unknownLocale }
+      const label = Object.fromEntries(
+         entries
+            .map(([locale, text]) => [locale, trimmed(text)] as const)
+            .filter(([, text]) => !!text)
+      )
+      return Object.keys(label).length ? { label } : {}
+   }
+   if (typeof raw !== 'string') return { error: m.invalidLinkLabel }
+   const label = raw.trim()
+   return label ? { label } : {}
+}
+
+function linkSchema(
+   field: FieldConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages,
+   config?: CmsConfig
+): z.ZodType {
+   const targets = config ? linkTargetNames(config, field) : declaredLinkTargets(field)
+   const parse = z
+      .unknown()
+      .nullish()
+      .transform((input, ctx): CmsLinkValue | null => {
+         const fail = (message: string) => {
+            ctx.addIssue({ code: 'custom', message })
+            return z.NEVER
+         }
+         if (input == null) return null
+         if (!isRecord(input)) return fail(m.linkTarget)
+         const url = trimmed(input.url)
+         const entry = trimmed(input.entry)
+         const id = trimmed(input.id)
+         const { label, error } = linkLabelValue(field, input.label, i18n, m)
+         if (error) return fail(error)
+         if (url && (entry || id)) return fail(m.linkUrlAndTarget)
+         const extra: CmsLinkValue = {
+            ...(label !== undefined ? { label } : {}),
+            ...(input.newTab === true ? { newTab: true } : {}),
+         }
+         if (url) {
+            if (!allowsExternalLinks(field)) return fail(m.linkExternal)
+            const urlError = linkUrlError(url)
+            if (urlError) return fail(urlError)
+            return { url, ...extra }
+         }
+         if (!entry && !id) return label !== undefined ? fail(m.linkTarget) : null
+         if (!entry || !id) return fail(m.linkTarget)
+         if (targets && !targets.includes(entry)) return fail(m.linkEntry(entry))
+         const target = config?.[entry]
+         if (target?.kind === 'page' && !pageLinkPath(target, id)) return fail(m.linkUnknownPage)
+         return { entry, id, ...extra }
+      })
+   if (!field.required) return parse
+   return parse.refine((value) => value !== null, m.required)
+}
+
 function blockFieldSchema(
    blockField: FieldConfig,
    i18n: CmsI18n,
-   m: ValidationMessages
+   m: ValidationMessages,
+   config?: CmsConfig
 ): z.ZodType {
+   if (blockField.type === 'link') return linkSchema(blockField, i18n, m, config)
    if (isTranslatableField(blockField) && i18n.locales.length)
       return withValueBounds(blockField, translatableSchema(blockField, i18n, m), m)
    return withValueBounds(blockField, optionalize(blockField, scalarSchema(blockField, m), m), m)
@@ -158,7 +259,8 @@ function blockVariantSchema(
    type: string,
    block: BlockConfig,
    i18n: CmsI18n,
-   m: ValidationMessages
+   m: ValidationMessages,
+   config?: CmsConfig
 ) {
    const variant = z.object({
       type: z.literal(type),
@@ -166,7 +268,7 @@ function blockVariantSchema(
       ...Object.fromEntries(
          Object.entries(block.fields).map(([key, blockField]) => [
             key,
-            blockFieldSchema(unconditional(blockField), i18n, m),
+            blockFieldSchema(unconditional(blockField), i18n, m, config),
          ])
       ),
    })
@@ -178,9 +280,14 @@ function blockVariantSchema(
    })
 }
 
-function blocksSchema(field: FieldConfig, i18n: CmsI18n, m: ValidationMessages) {
+function blocksSchema(
+   field: FieldConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages,
+   config?: CmsConfig
+) {
    const variants = Object.entries(field.blocks ?? {}).map(([type, block]) =>
-      blockVariantSchema(type, block, i18n, m)
+      blockVariantSchema(type, block, i18n, m, config)
    )
    return z.array(z.discriminatedUnion('type', variants as never))
 }
@@ -402,7 +509,7 @@ function isEmptyValue(field: FieldConfig, value: unknown, defaultLocale: string)
 }
 
 export function buildEntrySchema(
-   entry: ValidatedEntry & { drafts?: boolean; path?: string },
+   entry: ValidatedEntry & { drafts?: boolean; path?: string; config?: CmsConfig },
    i18n: CmsI18n,
    messages?: Partial<ValidationMessages>
 ) {
@@ -429,8 +536,12 @@ export function buildEntrySchema(
          shape[key] = tagsSchema(field, !declared.showIf, m)
          continue
       }
+      if (field.type === 'link') {
+         shape[key] = linkSchema(field, i18n, m, entry.config)
+         continue
+      }
       if (field.type === 'blocks') {
-         const list = blocksSchema(field, i18n, m)
+         const list = blocksSchema(field, i18n, m, entry.config)
          const base = field.required ? list.min(1, m.required) : list
          const bounded = declared.showIf ? base : boundedBlocks(base, field, m)
          shape[key] = field.required ? bounded : bounded.nullish().transform((v) => v ?? null)

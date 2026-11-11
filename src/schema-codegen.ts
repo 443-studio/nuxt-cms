@@ -8,7 +8,9 @@ import {
    CONDITION_OPERATORS,
    contentRouteClashErrors,
    contentRouteConfigErrors,
+   declaredLinkTargets,
    isCollectionKind,
+   isLinkTargetEntry,
    isMultiSelect,
    isRequiredField,
    isStringListField,
@@ -24,6 +26,7 @@ import {
    pageMediaTableName,
    pageRoutes,
    normalizeTags,
+   relationTarget,
    selectOptionValues,
 } from './runtime/shared/index'
 import {
@@ -56,6 +59,7 @@ const RESERVED_ENTRY_KEYS = [
 const RESERVED_COLUMNS = ['id', 'status', 'created_at', 'updated_at']
 const TITLE_FIELD_TYPES = ['text', 'slug', 'email', 'number', 'date', 'datetime', 'select']
 const TRANSLATABLE_FIELD_TYPES = ['text', 'richtext', 'media']
+const TRANSLATABLE_ERROR = 'translatable is only supported on text, richtext, media and link fields'
 const CONDITION_VALUE_TYPES = [
    'select',
    'boolean',
@@ -76,6 +80,7 @@ const RESERVED_TYPE_NAMES = [
    'Mutation',
    'Subscription',
    'CmsMedia',
+   'CmsLink',
    'CmsLocalePath',
    'CmsSite',
    'JSON',
@@ -247,13 +252,12 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
             columnNames.add(column)
          }
          if (field.translatable) {
-            if (!TRANSLATABLE_FIELD_TYPES.includes(field.type))
-               errors.push(
-                  `${fat}: translatable is only supported on text, richtext and media fields`
-               )
+            if (field.type !== 'link' && !TRANSLATABLE_FIELD_TYPES.includes(field.type))
+               errors.push(`${fat}: ${TRANSLATABLE_ERROR}`)
             if (!locales.length)
                errors.push(`${fat}: translatable requires cms.i18n.locales in nuxt.config`)
          }
+         errors.push(...linkFieldErrors(fat, field, config))
          if (field.mobile) {
             const mobileKey = mobileMediaKey(key)
             if (field.type !== 'media')
@@ -304,11 +308,13 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                         `${bfat}: ${blockField.type} fields are not supported inside blocks`
                      )
                   }
+                  errors.push(...linkFieldErrors(bfat, blockField, config))
                   if (blockField.translatable) {
-                     if (!TRANSLATABLE_FIELD_TYPES.includes(blockField.type))
-                        errors.push(
-                           `${bfat}: translatable is only supported on text, richtext and media fields`
-                        )
+                     if (
+                        blockField.type !== 'link' &&
+                        !TRANSLATABLE_FIELD_TYPES.includes(blockField.type)
+                     )
+                        errors.push(`${bfat}: ${TRANSLATABLE_ERROR}`)
                      if (!locales.length)
                         errors.push(
                            `${bfat}: translatable requires cms.i18n.locales in nuxt.config`
@@ -339,8 +345,9 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
             }
          }
          if (field.type === 'relation') {
-            const target = field.to ? config[field.to] : undefined
-            if (!field.to || !target) {
+            const to = relationTarget(field)
+            const target = to ? config[to] : undefined
+            if (!to || !target) {
                errors.push(`${fat}: relation target '${field.to}' is not in the registry`)
             } else {
                if (!isCollectionKind(target))
@@ -434,6 +441,44 @@ function contentErrors(at: string, entry: CmsEntry): string[] {
       if (!system.includes(key))
          errors.push(`${at}: labels names '${key}', which is not a system field`)
    }
+   return errors
+}
+
+function linkFieldErrors(at: string, field: FieldConfig, config: CmsConfig): string[] {
+   const errors: string[] = []
+   if (field.type !== 'link') {
+      if (field.external !== undefined)
+         errors.push(`${at}: external is only supported on link fields`)
+      if (field.withLabel !== undefined)
+         errors.push(`${at}: withLabel is only supported on link fields`)
+      return errors
+   }
+   if (field.external !== undefined && typeof field.external !== 'boolean')
+      errors.push(`${at}: external must be a boolean`)
+   if (field.withLabel !== undefined && typeof field.withLabel !== 'boolean')
+      errors.push(`${at}: withLabel must be a boolean`)
+   if (field.translatable && !field.withLabel)
+      errors.push(`${at}: translatable needs withLabel (only the link text is translated)`)
+   const to: unknown = field.to
+   const declared = declaredLinkTargets(field)
+   if (to !== undefined && (!declared || declared.length !== (to as unknown[]).length)) {
+      errors.push(`${at}: to must be a list of entry names`)
+      return errors
+   }
+   const seen = new Set<string>()
+   for (const name of declared ?? []) {
+      if (seen.has(name)) errors.push(`${at}: link target '${name}' is listed twice`)
+      seen.add(name)
+      const target = config[name]
+      if (!target) errors.push(`${at}: link target '${name}' is not in the registry`)
+      else if (!isLinkTargetEntry(target))
+         errors.push(
+            `${at}: link target '${name}' must be the page entry or a content entry with a route`
+         )
+   }
+   const targets = declared ?? Object.keys(config).filter((name) => isLinkTargetEntry(config[name]))
+   if (field.external === false && !targets.length)
+      errors.push(`${at}: the link allows no target: list entries in 'to' or allow external URLs`)
    return errors
 }
 
@@ -918,6 +963,7 @@ function columnExpr(key: string, field: FieldConfig, dialect: Dialect, table: st
          break
       case 'json':
       case 'blocks':
+      case 'link':
          expr = jsonExpr(col, dialect)
          break
       case 'select':
@@ -1145,6 +1191,7 @@ export function renderSchemaFile(
          (f) =>
             f.type === 'json' ||
             f.type === 'blocks' ||
+            f.type === 'link' ||
             (isTranslatableField(f) && !isTranslatableMediaField(f)) ||
             isStringListField(f)
       )

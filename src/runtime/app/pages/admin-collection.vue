@@ -279,9 +279,11 @@ import {
    isScheduledContent,
    isTranslatableField,
    isTranslatableMediaField,
+   linkDisplayText,
    pageFields,
    pageParentPath,
    pickTranslatedMedia,
+   relationTarget,
    selectDisplayValue,
 } from '#nuxt-cms'
 import {
@@ -329,6 +331,7 @@ import {
 import { canTransferCsv, exportFileName } from '../../shared/transfer'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
+import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
 import { useCmsToast } from '../composables/cms-toast'
@@ -580,7 +583,7 @@ function formatDateTime(value: unknown): string {
 function relationLabel(field: FieldConfig, key: string, id: unknown): string {
    const title = relations.value[key]?.[String(id)]
    if (title == null || title === '') return `#${id}`
-   const target = (cmsConfig as CmsConfig)[field.to!]
+   const target = (cmsConfig as CmsConfig)[relationTarget(field)]
    const titleField = target?.titleField ? target.fields[target.titleField] : undefined
    const label =
       titleField && isTranslatableField(titleField)
@@ -604,6 +607,10 @@ function displayValue(field: FieldConfig, key: string, value: unknown): string {
          return truncate(stripHtml(String(value)))
       case 'json':
          return truncate(JSON.stringify(value))
+      case 'link':
+         return truncate(
+            linkDisplayText(value, contentI18n.defaultLocale, contentI18n.defaultLocale)
+         )
       case 'datetime':
          return formatDateTime(value)
       case 'select':
@@ -623,7 +630,7 @@ function displayValue(field: FieldConfig, key: string, value: unknown): string {
 }
 
 function isSortable(field: FieldConfig) {
-   if (field.type === 'blocks') return false
+   if (field.type === 'blocks' || field.type === 'link') return false
    return !(field.type === 'relation' && field.cardinality === 'many-to-many')
 }
 
@@ -777,6 +784,7 @@ async function onDrawerDeleted() {
 }
 
 const confirmAction = useCmsConfirm()
+const confirmLinkedDelete = useCmsLinkedDelete()
 
 const selected = ref<RowKey[]>([])
 
@@ -827,7 +835,19 @@ function reportBulk(done: string, total: number, failed: { reason: unknown }[]) 
 async function bulkDelete() {
    const ids = selected.value.map(String)
    if (!ids.length || saving.value) return
-   if (!(await confirmAction(`Delete ${entriesLabel(ids.length)}?`))) return
+   const titles = Object.fromEntries(
+      ids.map((id) => {
+         const row = rows.value.find((candidate) => String(candidate.id) === id)
+         const field = config?.titleField ? config.fields[config.titleField] : undefined
+         const title =
+            row && field && config?.titleField
+               ? displayValue(field, config.titleField, row[config.titleField])
+               : ''
+         return [id, title || `#${id}`]
+      })
+   )
+   if (!(await confirmLinkedDelete(name, ids, `Delete ${entriesLabel(ids.length)}?`, titles)))
+      return
    const emptiesPage = ids.length >= rows.value.length && page.value > 1
    const failed = await runBulk(ids, (id) => cmsApi(`${endpoint}/${id}`, { method: 'DELETE' }))
    reportBulk('Deleted', ids.length, failed)

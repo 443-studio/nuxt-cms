@@ -10,6 +10,7 @@ import {
    mediaTypeFilter,
    pageFields,
    pageRoutes,
+   relationTarget,
    routedContentNames,
    selectOptionValues,
 } from './runtime/shared/index'
@@ -43,11 +44,14 @@ function fieldTsType(
    field: FieldConfig
 ): string {
    if (field.type === 'relation') {
-      const target = typeName(field.to!)
+      const target = typeName(relationTarget(field))
       if (field.cardinality === 'many-to-many') return `${target}[]`
-      return isRequiredField(field) && !config[field.to!]?.drafts ? target : `${target} | null`
+      return isRequiredField(field) && !config[relationTarget(field)]?.drafts
+         ? target
+         : `${target} | null`
    }
    if (field.type === 'media') return `${mediaTsType(field)} | null`
+   if (field.type === 'link') return 'CmsLink | null'
    if (field.type === 'tags') return 'string[]'
    if (field.type === 'select' && field.multiple) {
       const union = selectOptionValues(field)
@@ -78,7 +82,11 @@ function blockTypesTs(entryName: string, key: string, field: FieldConfig): strin
       const lines: string[] = []
       for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
          const base =
-            blockField.type === 'media' ? mediaTsType(blockField) : scalarTsType(blockField)
+            blockField.type === 'media'
+               ? mediaTsType(blockField)
+               : blockField.type === 'link'
+                 ? 'CmsLink'
+                 : scalarTsType(blockField)
          lines.push(`  ${blockFieldKey}: ${base} | null`)
       }
       defs.push(`export interface ${props} {\n${lines.join('\n')}\n}`)
@@ -127,9 +135,9 @@ function autoTypeTs(config: CmsConfig, name: string, entry: CmsEntry): string {
    if (!keys.length) return `export type ${auto} = ${typeName(name)}`
    const lines = keys.map((key) => {
       const field = entry.fields[key]!
-      const shallow = shallowTypeTs(config, field.to!)
+      const shallow = shallowTypeTs(config, relationTarget(field))
       if (field.cardinality === 'many-to-many') return `  ${key}: ${shallow}[]`
-      const nonNull = isRequiredField(field) && !config[field.to!]?.drafts
+      const nonNull = isRequiredField(field) && !config[relationTarget(field)]?.drafts
       return `  ${key}: ${shallow}${nonNull ? '' : ' | null'}`
    })
    return `export type ${auto} = Omit<${typeName(name)}, ${quotedKeys(keys)}> & {\n${lines.join(
@@ -224,6 +232,14 @@ export function renderTypesFile(config: CmsConfig): string {
    const parts = [
       `export interface CmsLocalePath {\n  locale: string\n  path: string\n}`,
       `export type CmsMediaType = 'image' | 'video' | 'file'`,
+      `export interface CmsLink {
+  href: string | null
+  label: string | null
+  newTab: boolean
+  external: boolean
+  entry: string | null
+  id: string | null
+}`,
       `export interface CmsMedia<T extends CmsMediaType = CmsMediaType> {
   key: string
   url: string | null

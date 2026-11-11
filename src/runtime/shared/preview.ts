@@ -1,4 +1,4 @@
-import type { BlockConfig, FieldConfig, MediaItem, MediaType } from './index'
+import type { BlockConfig, CmsLink, FieldConfig, MediaItem, MediaType } from './index'
 import {
    BLOCK_HIDDEN_KEY,
    declaresHiddenField,
@@ -12,7 +12,32 @@ import {
    mediaTypeForKey,
    pickTranslatedMedia,
    resolveBlocksMedia,
+   linkDisplayText,
+   resolveCmsLink,
 } from './index'
+
+export type CmsPreviewLinkResolver = (value: unknown) => CmsLink | null
+
+function externalLinks(locale: string, defaultLocale: string): CmsPreviewLinkResolver {
+   return (value) => resolveCmsLink({}, value, locale, defaultLocale)
+}
+
+function previewBlockLinks(
+   field: FieldConfig,
+   items: CmsBlockValue[],
+   resolveLink: CmsPreviewLinkResolver
+): CmsBlockValue[] {
+   return items.map((item) => {
+      const block = isRecord(item) ? field.blocks?.[String(item.type)] : undefined
+      const keys = Object.entries(block?.fields ?? {})
+         .filter(([, blockField]) => blockField.type === 'link')
+         .map(([key]) => key)
+      if (!keys.length) return item
+      const resolved = { ...item }
+      for (const key of keys) resolved[key] = resolveLink(item[key])
+      return resolved
+   })
+}
 
 export const CMS_PREVIEW_CHANNEL = 'nuxt-cms:preview'
 
@@ -283,11 +308,13 @@ export function previewBlocks(
    value: unknown,
    locale: string,
    defaultLocale: string,
-   media: Record<string, CmsPreviewMedia>
+   media: Record<string, CmsPreviewMedia>,
+   resolveLink: CmsPreviewLinkResolver = externalLinks(locale, defaultLocale)
 ): CmsBlockValue[] {
    if (!Array.isArray(value)) return []
    const localized = localizeBlocks(field, value, locale, defaultLocale)
-   return resolveBlocksMedia(field, localized, (key) => media[key] ?? null) as CmsBlockValue[]
+   const resolved = resolveBlocksMedia(field, localized, (key) => media[key] ?? null)
+   return previewBlockLinks(field, resolved as CmsBlockValue[], resolveLink)
 }
 
 export function previewItem(
@@ -295,14 +322,17 @@ export function previewItem(
    values: Record<string, unknown>,
    locale: string,
    defaultLocale: string,
-   media: Record<string, CmsPreviewMedia>
+   media: Record<string, CmsPreviewMedia>,
+   resolveLink: CmsPreviewLinkResolver = externalLinks(locale, defaultLocale)
 ): Record<string, unknown> {
    const item: Record<string, unknown> = {}
    for (const [key, field] of Object.entries(fields)) {
       if (isPrivateField(field)) continue
       const value = values[key] ?? null
       if (field.type === 'blocks') {
-         item[key] = previewBlocks(field, value, locale, defaultLocale, media)
+         item[key] = previewBlocks(field, value, locale, defaultLocale, media, resolveLink)
+      } else if (field.type === 'link') {
+         item[key] = resolveLink(value)
       } else if (field.type === 'media') {
          const mediaKey = isTranslatableMediaField(field)
             ? pickTranslatedMedia(
@@ -330,6 +360,11 @@ export function blockSummary(
    max = 80
 ): string {
    for (const [key, field] of Object.entries(block?.fields ?? {})) {
+      if (field.type === 'link') {
+         const text = linkDisplayText(item[key], locale, defaultLocale)
+         if (text) return text.length > max ? `${text.slice(0, max - 1)}…` : text
+         continue
+      }
       if (field.type !== 'text' && field.type !== 'richtext') continue
       const raw = item[key]
       const translations = isRecord(raw) ? (raw as Record<string, string>) : null

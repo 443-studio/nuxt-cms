@@ -20,6 +20,7 @@ export type FieldType =
    | 'json'
    | 'media'
    | 'relation'
+   | 'link'
    | 'blocks'
 
 export interface CmsI18n {
@@ -370,10 +371,16 @@ export interface FieldConfig {
    accept?: string[]
    mobile?: boolean
    mobileOf?: string
-   to?: string
+   to?: string | readonly string[]
+   external?: boolean
+   withLabel?: boolean
    cardinality?: 'many-to-one' | 'one-to-one' | 'many-to-many'
    onDelete?: 'set null' | 'cascade' | 'restrict'
    showIf?: CmsShowIf
+}
+
+export function relationTarget(field: Pick<FieldConfig, 'to'>): string {
+   return typeof field.to === 'string' ? field.to : ''
 }
 
 export function isPrivateField(field: FieldConfig): boolean {
@@ -389,6 +396,10 @@ export function isTranslatableField(field: FieldConfig): boolean {
       !!field.translatable &&
       (field.type === 'text' || field.type === 'richtext' || field.type === 'media')
    )
+}
+
+export function isLocalizedLinkField(field: FieldConfig): boolean {
+   return field.type === 'link' && !!field.translatable && !!field.withLabel
 }
 
 export function isTranslatableMediaField(field: FieldConfig): boolean {
@@ -549,7 +560,9 @@ export function translatableBlockFieldKeys(block: BlockConfig): string[] {
 export function hasTranslatableBlockFields(field: FieldConfig): boolean {
    if (field.type !== 'blocks') return false
    return Object.values(field.blocks ?? {}).some((block) =>
-      Object.values(block.fields).some(isTranslatableField)
+      Object.values(block.fields).some(
+         (blockField) => isTranslatableField(blockField) || isLocalizedLinkField(blockField)
+      )
    )
 }
 
@@ -1115,6 +1128,14 @@ export interface RelationFieldInput extends FieldInputBase {
    immutable?: boolean
 }
 
+export interface LinkFieldInput extends FieldInputBase {
+   type: 'link'
+   to?: readonly string[]
+   external?: boolean
+   withLabel?: boolean
+   translatable?: boolean
+}
+
 type BlockField<T> = Omit<T, 'private' | 'tab' | 'default' | 'unique' | 'immutable'>
 
 export type BlockFieldInput =
@@ -1127,6 +1148,7 @@ export type BlockFieldInput =
    | BlockField<EmailFieldInput>
    | BlockField<SelectFieldInput>
    | BlockField<JsonFieldInput>
+   | BlockField<LinkFieldInput>
    | Omit<BlockField<MediaFieldInput>, 'mobile'>
 
 export interface BlockInput {
@@ -1159,6 +1181,7 @@ export type CmsFieldInput =
    | JsonFieldInput
    | MediaFieldInput
    | RelationFieldInput
+   | LinkFieldInput
    | BlocksFieldInput
 
 interface CmsEntryInputBase {
@@ -1234,6 +1257,7 @@ export * from './layout'
 export * from './media-focal'
 export * from './users'
 export * from './preview-links'
+export * from './links'
 export type {
    CmsAccess,
    CmsRole,
