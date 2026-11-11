@@ -30,9 +30,11 @@
             </div>
          </template>
          <PreviewOverlay
+            ref="overlay"
             :field="field"
             :total="state.blocks.length"
             :selected="state.selected"
+            :highlighted="highlighted"
             :version="version"
             @message="post"
          />
@@ -86,6 +88,8 @@ const { i18n } = useCmsRuntime()
 
 const state = shallowRef<CmsPreviewState | null>(null)
 const version = ref(0)
+const highlighted = ref<number | null>(null)
+const overlay = ref<InstanceType<typeof PreviewOverlay> | null>(null)
 const standalone = ref(false)
 
 useHead({
@@ -167,8 +171,18 @@ function onMessage(event: MessageEvent) {
    if (!isTrustedPreviewEvent(event, window.location.origin, window.parent)) return
    const message = parseHostMessage(event.data)
    if (!message) return
-   state.value = message.state
-   version.value++
+   switch (message.type) {
+      case 'render':
+         state.value = message.state
+         version.value++
+         break
+      case 'highlight':
+         highlighted.value = message.index
+         break
+      case 'reveal':
+         void overlay.value?.reveal(message.index)
+         break
+   }
 }
 
 onMounted(() => {
@@ -208,6 +222,11 @@ onBeforeUnmount(() => {
    box-sizing: border-box;
    border: 1px dashed color-mix(in oklab, var(--cms-preview-accent) 70%, transparent);
    border-radius: 2px;
+}
+
+.cms-preview-outline.is-highlighted {
+   border-style: solid;
+   background: color-mix(in oklab, var(--cms-preview-accent) 8%, transparent);
 }
 
 .cms-preview-outline.is-selected {

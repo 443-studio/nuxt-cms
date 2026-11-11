@@ -10,6 +10,7 @@ import { normalizeCmsConfig } from '../src/runtime/shared/index'
 import type { CmsBlockValue, CmsPreviewMedia } from '../src/runtime/shared/preview'
 import {
    CMS_PREVIEW_CHANNEL,
+   blockErrorIndexes,
    blockSummary,
    canHideBlock,
    collectMediaKeys,
@@ -33,6 +34,7 @@ import {
    selectionAfterMove,
    selectionAfterRemove,
    shortcutApplies,
+   stableBlockIds,
    toggleBlockHidden,
 } from '../src/runtime/shared/preview'
 import { buildEntrySchema } from '../src/runtime/shared/validation'
@@ -125,6 +127,39 @@ describe('preview message protocol', () => {
       }
       expect(parseHostMessage({ type: 'render', state: valid })).toBeNull()
       expect(parseHostMessage(previewEnvelope({ type: 'ready' }))).toBeNull()
+   })
+
+   it('parses highlight and reveal host messages', () => {
+      expect(parseHostMessage(previewEnvelope({ type: 'highlight', index: 2 }))).toEqual({
+         type: 'highlight',
+         index: 2,
+      })
+      expect(parseHostMessage(previewEnvelope({ type: 'highlight', index: null }))).toEqual({
+         type: 'highlight',
+         index: null,
+      })
+      expect(parseHostMessage(previewEnvelope({ type: 'reveal', index: 0, extra: 1 }))).toEqual({
+         type: 'reveal',
+         index: 0,
+      })
+      for (const index of [-1, 1.5, '1', undefined]) {
+         expect(parseHostMessage(previewEnvelope({ type: 'highlight', index }))).toBeNull()
+      }
+      expect(parseHostMessage(previewEnvelope({ type: 'reveal', index: null }))).toBeNull()
+      expect(parseHostMessage({ type: 'highlight', index: 1 })).toBeNull()
+   })
+
+   it('parses hover frame messages', () => {
+      expect(parseFrameMessage(previewEnvelope({ type: 'hover', index: 3 }))).toEqual({
+         type: 'hover',
+         index: 3,
+      })
+      expect(parseFrameMessage(previewEnvelope({ type: 'hover', index: null }))).toEqual({
+         type: 'hover',
+         index: null,
+      })
+      expect(parseFrameMessage(previewEnvelope({ type: 'hover', index: -1 }))).toBeNull()
+      expect(parseFrameMessage(previewEnvelope({ type: 'hover' }))).toBeNull()
    })
 
    it('trusts only the expected origin and source window', () => {
@@ -223,6 +258,24 @@ describe('block list operations', () => {
       expect(selectionAfterRemove(2, 2)).toBeNull()
       expect(selectionAfterRemove(3, 1)).toBe(2)
       expect(selectionAfterRemove(0, 1)).toBe(0)
+   })
+
+   it('keeps block ids stable across edits, moves and inserts', () => {
+      let next = 0
+      const create = () => ++next
+      const a = { type: 'text' }
+      const b = { type: 'text' }
+      const c = { type: 'image' }
+      const ids = stableBlockIds([], [], [a, b, c], create)
+      expect(ids).toEqual([1, 2, 3])
+      const edited = { ...b, heading: 'x' }
+      expect(stableBlockIds([a, b, c], ids, [a, edited, c], create)).toEqual([1, 2, 3])
+      expect(stableBlockIds([a, b, c], ids, [c, a, b], create)).toEqual([3, 1, 2])
+      const added = { type: 'quote' }
+      expect(stableBlockIds([a, b, c], ids, [a, added, b, c], create)).toEqual([1, 4, 2, 3])
+      expect(stableBlockIds([a, b, c], ids, [a, c], create)).toEqual([1, 3])
+      expect(stableBlockIds([a, b], [1, 2], [a, a], create)).toEqual([1, 2])
+      expect(stableBlockIds([a], [1], [a, a], create)).toEqual([1, 5])
    })
 
    it('turns a drop position into a move target', () => {
@@ -330,6 +383,34 @@ describe('preview data', () => {
          `${'x'.repeat(9)}…`
       )
       expect(blockSummary(body.blocks!.image, { type: 'image' }, 'en', 'en')).toBe('')
+   })
+
+   it('summarizes with entities decoded, falling back to a media file name', () => {
+      const text = body.blocks!.text!
+      expect(
+         blockSummary(
+            text,
+            { type: 'text', heading: { en: 'Fish &amp; chips&nbsp;now' } },
+            'en',
+            'en'
+         )
+      ).toBe('Fish & chips now')
+      expect(blockSummary(text, { type: 'text', heading: { en: 'Hi' } }, 'it', 'en')).toBe('Hi')
+      expect(blockSummary(body.blocks!.image, values.body[1]!, 'en', 'en')).toBe('river.jpg')
+   })
+
+   it('maps form error keys to block indexes', () => {
+      const errors = {
+         title: 'Required',
+         body: 'Too few blocks',
+         'body.0.heading': 'Required',
+         'body.2': 'Invalid block',
+         'body.3.heading': undefined,
+         'bodyx.4': 'Other field',
+         'body.x': 'Not an index',
+      }
+      expect([...blockErrorIndexes(errors, 'body')].sort()).toEqual([0, 2])
+      expect(blockErrorIndexes({}, 'body').size).toBe(0)
    })
 })
 

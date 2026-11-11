@@ -2,9 +2,12 @@
    <div ref="root" class="cms-preview-overlay" :class="{ 'is-dragging': drag?.moved }">
       <template v-for="box in boxes" :key="box.index">
          <div
-            v-if="box.index === hovered || box.index === selected"
+            v-if="box.index === hovered || box.index === selected || box.index === highlighted"
             class="cms-preview-outline"
-            :class="{ 'is-selected': box.index === selected }"
+            :class="{
+               'is-selected': box.index === selected,
+               'is-highlighted': box.index === highlighted && box.index !== selected,
+            }"
             :style="outlineStyle(box)"
          >
             <span class="cms-preview-label">{{ labelOf(box) }}</span>
@@ -133,6 +136,7 @@ const props = defineProps<{
    field: FieldConfig
    total: number
    selected: number | null
+   highlighted: number | null
    version: number
 }>()
 
@@ -387,15 +391,33 @@ function onKeydown(event: KeyboardEvent) {
    }
 }
 
+function blockElement(index: number) {
+   return document.querySelector<HTMLElement>(`[data-cms-block="${index}"]`)
+}
+
 function revealSelected() {
    if (props.selected === null || drag.value) return
-   const element = document.querySelector<HTMLElement>(`[data-cms-block="${props.selected}"]`)
+   const element = blockElement(props.selected)
    if (!element) return
    const rect = element.getBoundingClientRect()
    if (rect.bottom < 0 || rect.top > window.innerHeight) {
       element.scrollIntoView({ block: 'center', behavior: 'smooth' })
    }
 }
+
+async function reveal(index: number) {
+   await nextTick()
+   const element = blockElement(index)
+   if (!element || drag.value) return
+   const rect = element.getBoundingClientRect()
+   if (rect.top >= 0 && rect.bottom <= window.innerHeight) return
+   const tall = rect.height > window.innerHeight * 0.8
+   element.scrollIntoView({ block: tall ? 'start' : 'center', behavior: 'smooth' })
+}
+
+watch(hovered, (index) => emit('message', { type: 'hover', index }))
+
+defineExpose({ reveal })
 
 watch(
    () => props.version,

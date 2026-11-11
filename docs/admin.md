@@ -60,8 +60,9 @@ The X on a tile removes it, and a drag changes the order. No editor opens.
 
 **Visual editor for a field.** When every block of a `blocks` field names a `component`, the field
 also shows **Open visual editor**. It opens the [visual editor](#visual-editor) over the form, on
-that field only, with the Block panel. **Done** goes back to the form; the changes are already in
-the form and are saved with it.
+that field only: the block tree, the canvas and the form of the selected block, without the Content
+and SEO tabs. **Done** goes back to the form; the changes are already in the form and are saved with
+it.
 
 **Validation.** Save checks the form first: required fields, formats, the number of blocks and the
 [`validate` hooks](schema.md#validation-hooks) of the config. An error shows under its field, or
@@ -225,31 +226,51 @@ and D1 the case folding only covers ASCII letters, and a phrase that spans forma
 
 ## Visual editor
 
-The visual editor edits a body of blocks on top of the real site. It fills the window:
+The visual editor edits a body of blocks on top of the real site. It fills the window with a top
+bar and three panels:
 
 - **Top bar**: back, the title, the status badge (Draft, Published or Scheduled) and an "Unsaved
-  changes" note, the language switch, the preview width (desktop or mobile, 390 px), and the
-  actions: **Undo** and **Redo**, **Schedule**, **Save**, **Publish** or **Unpublish**, and the
-  `...` menu with the [translation actions](#translations), **Share preview**, **Duplicate** and
-  **Delete**. The language switch marks how much of the item each language has.
+  changes" note, the language switch, and the actions: **Undo** and **Redo**, **Schedule**,
+  **Save**, **Publish** or **Unpublish**, and the `...` menu with the
+  [translation actions](#translations), **Share preview**, **Duplicate** and **Delete**. The
+  language switch marks how much of the item each language has.
   **Schedule** picks a publish date and publishes the item: with a future date it stays hidden from
   the site until then. Save stays in the editor; the first save of a new item moves to its URL.
+- **Block tree** (left): every block of the body, in order. A row shows the block icon and label
+  and a short summary (the first text, rich text or email value in the current language, or the
+  name of its media file) so that similar blocks are easy to tell apart. A hidden block is dimmed
+  with an eye icon, and a red dot marks a block with a validation error. Drag a row by its handle
+  to move it, or focus it and press Alt with the up or down arrow. On hover, a row shows **+**
+  (add a block after it) and a `...` menu: add before or after, move up or down, **Duplicate**,
+  **Hide** or **Show**, and **Delete**. **Add a block** at the bottom adds one at the end.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
-  layout and CSS apply. Every change is shown at once, before saving.
-- **Inspector** (right), with three tabs. **Content**: the page address when the entry has a
-  [`route`](schema.md#routes) (in the active language, with **Open** to the live page once the
-  saved item is published and not scheduled), then title, slug, publish date, excerpt, cover and
-  the extra fields, in the order of the form layout. **Block**: the fields of the selected block,
-  or, when no block is selected, the list of blocks and the palette to add one. **SEO**: the SEO
-  fields and **Hide from search engines**. The language switch of the top bar drives every
-  translatable field.
+  layout and CSS apply. Every change is shown at once, before saving. The bar above it shows or
+  hides each side panel, sets the preview width (desktop, tablet 768 px or mobile 390 px), shows
+  the current width in pixels and reloads the preview.
+- **Inspector** (right). With a block selected, the form of that block under a header with its
+  icon, label and summary, a `...` menu with the block actions and a close button that clears the
+  selection. With no block selected, two tabs: **Content** (the page address when the entry has a
+  [`route`](schema.md#routes), in the active language, with **Open** to the live page once the
+  saved item is published and not scheduled, then title, slug, publish date, excerpt, cover and the
+  extra fields, in the order of the form layout) and **SEO** (the SEO fields and **Hide from search
+  engines**). The language switch of
+  the top bar drives every translatable field.
+
+Click a row of the tree to select its block: the canvas scrolls to it. Hover a row to outline its
+block in the canvas, and hover a block in the canvas to mark its row in the tree.
+
+Drag the inner edge of a side panel to resize it (the blocks panel from 260 to 440 px, the
+inspector from 300 to 560 px), or focus the edge and use the arrow keys, Home and End; a
+double-click restores the default width. The widths and the hidden panels are remembered in the
+browser. Below 1024 px the three panels become tabs (**Blocks**, **Preview**, **Fields**), with a
+count of errors on Blocks and Fields; picking a block in the tree opens Fields.
 
 In the canvas, hover a block to outline it with its label; click it to select it and open its
 fields. The toolbar of a block has a drag handle, move up and down, **Duplicate**, **Hide** and
 delete. A **+** between two blocks, and before the first and after the last, opens the palette
 (label, icon and description of each block type) and inserts the block there. A hidden block is not
-drawn in the canvas: it stays in the block list with an eye icon, where **Show** brings it back.
-Deleting a block asks for no confirmation: undo brings it back. Deleting the whole item still asks.
+drawn in the canvas: it stays in the block tree, where **Show** brings it back. Deleting a block
+asks for no confirmation: undo brings it back. Deleting the whole item still asks.
 
 **Undo and redo.** The editor keeps the last 100 changes of the open item, from the canvas and from
 the inspector forms alike. Typing in one field is one step once you pause. Undo restores the block
@@ -274,13 +295,16 @@ field (where the browser keeps its own undo) or in a dialog. ⌘ is Ctrl outside
 | Escape | clear the selection |
 
 Duplicate and add do nothing once the field holds `max` blocks. In the canvas you can also focus the
-drag handle of a block and press the up or down arrow to move it. In the block list, Alt with the
-up or down arrow moves the focused block. Every action is also a button.
+drag handle of a block and press the up or down arrow to move it. In the block tree, Alt with the
+up or down arrow moves the focused block. Every action is also a button or a menu item, and every
+change from the tree, the menus and the canvas is one undo step.
 
 **Validation.** Save and Publish check the whole item first, `validate` hooks included. The first
-error opens its tab, selects the block that holds it and switches to the default language when the
-field is translatable; a dot marks every tab with an error. An error or a warning that names no
-field shows at the top of the inspector, and one that names a block shows above the fields of that
+error selects the block that holds it, or opens its tab, shows the panel it is in and switches to
+the default language when the field is translatable. A count marks every tab with an error and a
+red dot every block with one in the tree. An error or a warning that names no field shows at the
+top of the inspector, an error of the body itself (for example too few blocks)
+shows at the top of the block tree, and one that names a block shows above the fields of that
 block. Leaving with unsaved changes asks for a confirmation.
 
 ### Share preview

@@ -8,6 +8,7 @@ import {
    isTranslatableField,
    isTranslatableMediaField,
    localizeBlocks,
+   mediaFilename,
    mediaPublicUrl,
    mediaTypeForKey,
    pickTranslatedMedia,
@@ -83,11 +84,15 @@ export interface CmsPreviewState {
    selected: number | null
 }
 
-export type CmsPreviewHostMessage = { type: 'render'; state: CmsPreviewState }
+export type CmsPreviewHostMessage =
+   | { type: 'render'; state: CmsPreviewState }
+   | { type: 'highlight'; index: number | null }
+   | { type: 'reveal'; index: number }
 
 export type CmsPreviewFrameMessage =
    | { type: 'ready' }
    | { type: 'select'; index: number | null; focus?: boolean }
+   | { type: 'hover'; index: number | null }
    | { type: 'insert'; index: number }
    | { type: 'move'; from: number; to: number; focus?: boolean }
    | { type: 'duplicate'; index: number }
@@ -130,6 +135,10 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
          return message.index === null || isIndex(message.index)
             ? { type: 'select', index: message.index, ...focus }
             : null
+      case 'hover':
+         return message.index === null || isIndex(message.index)
+            ? { type: 'hover', index: message.index }
+            : null
       case 'move':
          return isIndex(message.from) && isIndex(message.to)
             ? { type: 'move', from: message.from, to: message.to, ...focus }
@@ -146,7 +155,14 @@ export function parseFrameMessage(data: unknown): CmsPreviewFrameMessage | null 
 
 export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
    const message = envelope(data)
-   if (!message || message.type !== 'render' || !isRecord(message.state)) return null
+   if (!message) return null
+   if (message.type === 'highlight')
+      return message.index === null || isIndex(message.index)
+         ? { type: 'highlight', index: message.index }
+         : null
+   if (message.type === 'reveal')
+      return isIndex(message.index) ? { type: 'reveal', index: message.index } : null
+   if (message.type !== 'render' || !isRecord(message.state)) return null
    const state = message.state
    if (typeof state.entry !== 'string' || typeof state.field !== 'string') return null
    if (typeof state.locale !== 'string' || !Array.isArray(state.blocks)) return null
@@ -419,6 +435,50 @@ export function previewItem(
    return item
 }
 
+const SUMMARY_FIELD_TYPES = new Set(['text', 'richtext', 'email'])
+
+const HTML_ENTITIES: Record<string, string> = {
+   amp: '&',
+   lt: '<',
+   gt: '>',
+   quot: '"',
+   apos: "'",
+   nbsp: ' ',
+   '#39': "'",
+}
+
+function plainText(value: string) {
+   return value
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&(amp|lt|gt|quot|apos|nbsp|#39);/g, (_, name: string) => HTML_ENTITIES[name]!)
+      .replace(/\s+/g, ' ')
+      .trim()
+}
+
+function localizedText(raw: unknown, locale: string, defaultLocale: string) {
+   if (typeof raw === 'string') return raw
+   if (!isRecord(raw)) return ''
+   const value = raw[locale] || raw[defaultLocale]
+   return typeof value === 'string' ? value : ''
+}
+
+function blockMediaName(
+   block: BlockConfig | undefined,
+   item: CmsBlockValue,
+   locale: string,
+   defaultLocale: string
+) {
+   for (const [key, field] of Object.entries(block?.fields ?? {})) {
+      if (field.type !== 'media') continue
+      const raw = item[key]
+      const value = isTranslatableMediaField(field)
+         ? pickTranslatedMedia(decodeTranslatableValue(raw, defaultLocale), locale, defaultLocale)
+         : raw
+      if (typeof value === 'string' && value) return mediaFilename(value)
+   }
+   return ''
+}
+
 export function blockSummary(
    block: BlockConfig | undefined,
    item: CmsBlockValue,
@@ -426,24 +486,64 @@ export function blockSummary(
    defaultLocale: string,
    max = 80
 ): string {
+   let text = ''
    for (const [key, field] of Object.entries(block?.fields ?? {})) {
       if (field.type === 'link') {
-         const text = linkDisplayText(item[key], locale, defaultLocale)
-         if (text) return text.length > max ? `${text.slice(0, max - 1)}…` : text
+         text = linkDisplayText(item[key], locale, defaultLocale).trim()
+         if (text) break
          continue
       }
-      if (field.type !== 'text' && field.type !== 'richtext') continue
-      const raw = item[key]
-      const translations = isRecord(raw) ? (raw as Record<string, string>) : null
-      const value =
-         typeof raw === 'string'
-            ? raw
-            : translations?.[locale] || translations?.[defaultLocale] || ''
-      const text = value
-         .replace(/<[^>]*>/g, ' ')
-         .replace(/\s+/g, ' ')
-         .trim()
-      if (text) return text.length > max ? `${text.slice(0, max - 1)}…` : text
+      if (!SUMMARY_FIELD_TYPES.has(field.type)) continue
+      text = plainText(localizedText(item[key], locale, defaultLocale))
+      if (text) break
    }
-   return ''
+   if (!text) text = blockMediaName(block, item, locale, defaultLocale)
+   return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+export function blockErrorIndexes(
+   errors: Record<string, string | undefined | null>,
+   fieldKey: string
+): Set<number> {
+   const indexes = new Set<number>()
+   const prefix = `${fieldKey}.`
+   for (const [key, message] of Object.entries(errors)) {
+      if (!message || !key.startsWith(prefix)) continue
+      const index = Number(key.slice(prefix.length).split('.')[0])
+      if (isIndex(index)) indexes.add(index)
+   }
+   return indexes
+}
+
+export function stableBlockIds<T>(
+   previous: readonly CmsBlockValue[],
+   previousIds: readonly T[],
+   next: readonly CmsBlockValue[],
+   createId: () => T
+): T[] {
+   const known = new Map<CmsBlockValue, T>()
+   previous.forEach((item, index) => {
+      const id = previousIds[index]
+      if (id !== undefined && !known.has(item)) known.set(item, id)
+   })
+   const kept = new Set(next)
+   const used = new Set<T>()
+   const ids = next.map((item) => {
+      const id = known.get(item)
+      if (id === undefined || used.has(id)) return undefined
+      used.add(id)
+      return id
+   })
+   return ids.map((id, index) => {
+      if (id !== undefined) return id
+      const replaced = previous[index]
+      const candidate = previousIds[index]
+      if (replaced && !kept.has(replaced) && candidate !== undefined && !used.has(candidate)) {
+         used.add(candidate)
+         return candidate
+      }
+      const fresh = createId()
+      used.add(fresh)
+      return fresh
+   })
 }

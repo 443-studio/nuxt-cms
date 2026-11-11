@@ -1,5 +1,5 @@
 <template>
-   <div ref="root" class="cms-editor">
+   <div ref="root" class="cms-editor" :class="{ 'is-compact': compact, 'is-resizing': resizing }">
       <header class="cms-editor-bar">
          <div class="cms-editor-bar-start">
             <slot name="start" />
@@ -13,13 +13,6 @@
                v-if="i18n.locales.length > 1"
                v-model="locale"
                :progress="translations"
-            />
-            <KSegmentedControl
-               v-model="device"
-               :options="deviceOptions"
-               size="sm"
-               icon-only
-               aria-label="Preview width"
             />
          </div>
          <div class="cms-editor-bar-end">
@@ -49,199 +42,290 @@
          </div>
       </header>
 
-      <div class="cms-editor-body">
-         <div class="cms-editor-canvas">
-            <div class="cms-editor-frame" :class="`is-${device}`">
-               <iframe
-                  ref="frame"
-                  :src="previewPath"
-                  title="Live preview"
-                  class="cms-editor-iframe"
-                  @load="sendState"
+      <KTabs
+         v-if="compact"
+         v-model="pane"
+         :items="paneItems"
+         :controls="bodyId"
+         label="Editor panels"
+         size="sm"
+         fill
+         inset
+         class="cms-editor-panes"
+      />
+
+      <div :id="bodyId" class="cms-editor-body" :role="compact ? 'tabpanel' : undefined">
+         <aside
+            v-if="compact || !layout.tree.collapsed"
+            class="cms-editor-side is-tree"
+            :class="{ 'is-active': pane === 'blocks' }"
+            :style="compact ? undefined : { width: `${layout.tree.width}px` }"
+            :aria-label="blocksField.label"
+         >
+            <div class="cms-editor-side-head">
+               <span class="cms-editor-side-title">{{ blocksField.label }}</span>
+               <span class="cms-editor-side-count">{{ blockCount }}</span>
+            </div>
+            <div class="cms-editor-side-body">
+               <KFieldMessage v-if="blocksFieldError" :message="blocksFieldError" />
+               <KFieldMessage v-else tone="warning" :message="form.warnings[fieldKey]" />
+               <CmsBlockTree
+                  :items="blocks"
+                  :field="blocksField"
+                  :locale="locale"
+                  :selected="selected"
+                  :highlighted="canvasHover"
+                  :errors="blockErrors"
+                  :can-add="canAdd"
+                  :label="blocksField.label"
+                  :menu="blockMenu"
+                  @select="selectFromTree"
+                  @move="move"
+                  @hover="highlight"
+                  @insert="openPalette"
                />
+            </div>
+            <div v-if="blocks.length" class="cms-editor-side-foot">
+               <KButton
+                  v-if="canAdd"
+                  :icon="cmsIcon('plus')"
+                  label="Add a block"
+                  size="sm"
+                  variant="soft"
+                  tone="neutral"
+                  block
+                  @click="openPalette(blocks.length)"
+               />
+               <p v-else class="cms-field-hint">{{ maxReached }}</p>
+            </div>
+         </aside>
+
+         <CmsEditorResizer
+            v-if="!compact && !layout.tree.collapsed"
+            v-model:width="layout.tree.width"
+            v-model:dragging="resizing"
+            :limits="CMS_EDITOR_PANEL_LIMITS.tree"
+            label="Resize the blocks panel"
+            grows="right"
+         />
+
+         <div class="cms-editor-canvas" :class="{ 'is-active': pane === 'preview' }">
+            <div class="cms-editor-canvas-bar">
+               <div class="cms-editor-canvas-side">
+                  <KButton
+                     v-if="!compact"
+                     :icon="cmsIcon('queue-list')"
+                     size="sm"
+                     :variant="layout.tree.collapsed ? 'ghost' : 'soft'"
+                     tone="neutral"
+                     aria-label="Blocks panel"
+                     :tooltip="layout.tree.collapsed ? 'Show blocks' : 'Hide blocks'"
+                     :aria-pressed="!layout.tree.collapsed"
+                     @click="layout.tree.collapsed = !layout.tree.collapsed"
+                  />
+               </div>
+               <div class="cms-editor-canvas-tools">
+                  <KSegmentedControl
+                     v-model="device"
+                     :options="deviceOptions"
+                     size="sm"
+                     icon-only
+                     aria-label="Preview width"
+                  />
+                  <span v-if="canvasWidth" class="cms-editor-width" aria-live="polite">
+                     {{ canvasWidth }} px
+                  </span>
+                  <KButton
+                     :icon="cmsIcon('arrow-path')"
+                     size="sm"
+                     variant="ghost"
+                     tone="neutral"
+                     aria-label="Reload preview"
+                     @click="reloadPreview"
+                  />
+               </div>
+               <div class="cms-editor-canvas-side is-end">
+                  <KButton
+                     v-if="!compact"
+                     :icon="cmsIcon('adjustments-horizontal')"
+                     size="sm"
+                     :variant="layout.inspector.collapsed ? 'ghost' : 'soft'"
+                     tone="neutral"
+                     aria-label="Fields panel"
+                     :tooltip="layout.inspector.collapsed ? 'Show fields' : 'Hide fields'"
+                     :aria-pressed="!layout.inspector.collapsed"
+                     @click="layout.inspector.collapsed = !layout.inspector.collapsed"
+                  />
+               </div>
+            </div>
+            <div class="cms-editor-stage">
+               <div
+                  ref="frameBox"
+                  class="cms-editor-frame"
+                  :class="{ 'is-fixed': deviceWidth !== null }"
+                  :style="deviceWidth === null ? undefined : { width: `${deviceWidth}px` }"
+               >
+                  <iframe
+                     ref="frame"
+                     :src="previewPath"
+                     title="Live preview"
+                     class="cms-editor-iframe"
+                     @load="sendState"
+                  />
+               </div>
             </div>
          </div>
 
-         <aside class="cms-editor-panel" aria-label="Inspector">
-            <component
-               :is="tabbed ? KTabs : 'div'"
-               v-bind="tabsBinding"
-               class="cms-editor-inspector"
-            >
-               <template #[panelSlot]>
-                  <KForm ref="panel" as="div" :form="form" class="cms-editor-panel-body">
-                     <template v-if="activeTab === 'block'">
-                        <template v-if="selectedItem && selected !== null">
-                           <div class="cms-editor-block-head">
-                              <KButton
-                                 icon="arrow-left"
-                                 size="sm"
-                                 variant="ghost"
-                                 tone="neutral"
-                                 label="All blocks"
-                                 @click="select(null)"
-                              />
-                              <span class="cms-editor-block-position k-mono">
-                                 {{ selected + 1 }} / {{ blocks.length }}
-                              </span>
-                           </div>
-                           <div class="cms-editor-block-title">
-                              <KIcon :name="cmsIcon(selectedBlock?.icon ?? 'rectangle-stack')" />
-                              <span>{{ selectedBlock?.label ?? selectedItem.type }}</span>
-                              <KBadge v-if="isHiddenBlock(selectedItem)" size="sm" label="Hidden" />
-                           </div>
-                           <KStack direction="row" gap="sm" wrap class="cms-editor-block-actions">
-                              <KButton
-                                 icon="arrow-up"
-                                 size="sm"
-                                 variant="soft"
-                                 tone="neutral"
-                                 aria-label="Move up"
-                                 title="Move up"
-                                 :disabled="selected === 0"
-                                 @click="moveSelected(-1)"
-                              />
-                              <KButton
-                                 icon="arrow-down"
-                                 size="sm"
-                                 variant="soft"
-                                 tone="neutral"
-                                 aria-label="Move down"
-                                 title="Move down"
-                                 :disabled="selected === blocks.length - 1"
-                                 @click="moveSelected(1)"
-                              />
-                              <KButton
-                                 :icon="cmsIcon('document-duplicate')"
-                                 size="sm"
-                                 variant="soft"
-                                 tone="neutral"
-                                 label="Duplicate"
-                                 :disabled="!canAdd"
-                                 @click="duplicate(selected)"
-                              />
-                              <KButton
-                                 v-if="canHideBlock(selectedBlock)"
-                                 :icon="cmsIcon(isHiddenBlock(selectedItem) ? 'eye' : 'eye-slash')"
-                                 size="sm"
-                                 variant="soft"
-                                 tone="neutral"
-                                 :label="isHiddenBlock(selectedItem) ? 'Show' : 'Hide'"
-                                 @click="toggleHidden(selected)"
-                              />
-                              <KButton
-                                 icon="trash"
-                                 size="sm"
-                                 variant="soft"
-                                 tone="danger"
-                                 aria-label="Delete block"
-                                 title="Delete"
-                                 @click="remove(selected)"
-                              />
-                           </KStack>
-                           <KFieldMessage
-                              v-if="form.errors[`${fieldKey}.${selected}`]"
-                              :message="form.errors[`${fieldKey}.${selected}`]"
+         <CmsEditorResizer
+            v-if="!compact && !layout.inspector.collapsed"
+            v-model:width="layout.inspector.width"
+            v-model:dragging="resizing"
+            :limits="CMS_EDITOR_PANEL_LIMITS.inspector"
+            label="Resize the fields panel"
+            grows="left"
+         />
+
+         <aside
+            v-if="compact || !layout.inspector.collapsed"
+            class="cms-editor-side is-inspector"
+            :class="{ 'is-active': pane === 'fields' }"
+            :style="compact ? undefined : { width: `${layout.inspector.width}px` }"
+            aria-label="Fields"
+         >
+            <KForm as="div" :form="form" :alerts="false" class="cms-editor-inspector">
+               <template v-if="selectedItem && selected !== null">
+                  <div class="cms-editor-block-head">
+                     <span class="cms-editor-block-icon" aria-hidden="true">
+                        <KIcon :name="cmsIcon(selectedBlock?.icon ?? 'rectangle-stack')" />
+                     </span>
+                     <div class="cms-editor-block-heading">
+                        <span class="cms-editor-block-title">
+                           <span class="cms-editor-block-label">
+                              {{ selectedBlock?.label ?? selectedItem.type }}
+                           </span>
+                           <KBadge v-if="isHiddenBlock(selectedItem)" size="sm" label="Hidden" />
+                        </span>
+                        <span class="cms-editor-block-subtitle">
+                           {{ selectedSummary || `Block ${selected + 1} of ${blocks.length}` }}
+                        </span>
+                     </div>
+                     <KDropdownMenu :items="blockMenu(selected)" placement="bottom-end">
+                        <KButton
+                           :icon="cmsIcon('ellipsis-horizontal')"
+                           size="sm"
+                           variant="ghost"
+                           tone="neutral"
+                           aria-label="Block actions"
+                        />
+                     </KDropdownMenu>
+                     <KTooltip text="Close" shortcut="escape">
+                        <KButton
+                           :icon="cmsIcon('x-mark')"
+                           size="sm"
+                           variant="ghost"
+                           tone="neutral"
+                           aria-label="Close the block"
+                           @click="select(null)"
+                        />
+                     </KTooltip>
+                  </div>
+                  <div ref="panelBody" class="cms-editor-panel-body">
+                     <KFormAlerts />
+                     <KFieldMessage
+                        v-if="form.errors[`${fieldKey}.${selected}`]"
+                        :message="form.errors[`${fieldKey}.${selected}`]"
+                     />
+                     <KFieldMessage
+                        v-else
+                        tone="warning"
+                        :message="form.warnings[`${fieldKey}.${selected}`]"
+                     />
+                     <KStack gap="md" class="cms-editor-fields">
+                        <KFormField
+                           v-for="(blockField, blockKey) in selectedFields"
+                           :key="`${selected}-${blockKey}`"
+                           :name="`${fieldKey}.${selected}.${blockKey}`"
+                           :label="blockField.label"
+                           :description="blockField.description"
+                           :icon="cmsIcon(fieldIcon(blockField))"
+                           :required="blockField.required"
+                        >
+                           <CmsFieldInput
+                              :model-value="selectedItem[blockKey]"
+                              :field="blockField"
+                              :locale="locale"
+                              @update:model-value="
+                                 (value: unknown) => updateBlockField(String(blockKey), value)
+                              "
                            />
-                           <KFieldMessage
-                              v-else
-                              tone="warning"
-                              :message="form.warnings[`${fieldKey}.${selected}`]"
+                        </KFormField>
+                     </KStack>
+                  </div>
+               </template>
+
+               <component
+                  :is="tabbed ? KTabs : 'div'"
+                  v-else-if="content"
+                  v-bind="tabsBinding"
+                  class="cms-editor-tabs"
+               >
+                  <template #[panelSlot]>
+                     <div ref="panelBody" class="cms-editor-panel-body">
+                        <KFormAlerts />
+                        <KStack gap="md" class="cms-editor-fields">
+                           <slot
+                              v-if="activeTab === 'content'"
+                              name="content-start"
+                              :locale="locale"
                            />
-                           <KStack gap="md" class="cms-editor-fields">
+                           <template v-for="section in sections" :key="section.id">
+                              <div v-if="section.title" class="cms-editor-section-title">
+                                 <span class="k-label">{{ section.title }}</span>
+                                 <span v-if="section.description" class="cms-field-hint">
+                                    {{ section.description }}
+                                 </span>
+                              </div>
                               <KFormField
-                                 v-for="(blockField, blockKey) in selectedFields"
-                                 :key="`${selected}-${blockKey}`"
-                                 :name="`${fieldKey}.${selected}.${blockKey}`"
-                                 :label="blockField.label"
-                                 :description="blockField.description"
-                                 :icon="cmsIcon(fieldIcon(blockField))"
-                                 :required="blockField.required"
+                                 v-for="key in section.keys"
+                                 :key="key"
+                                 :name="key"
+                                 :label="fields[key]!.label"
+                                 :description="fields[key]!.description"
+                                 :icon="cmsIcon(fieldIcon(fields[key]!))"
+                                 :required="fields[key]!.required"
+                                 :disabled="locked?.includes(key) || undefined"
+                                 :data-cms-field="key"
+                                 :class="{ 'cms-search-focus': highlighted === key }"
                               >
                                  <CmsFieldInput
-                                    :model-value="selectedItem[blockKey]"
-                                    :field="blockField"
+                                    :model-value="state[key]"
+                                    :field="fields[key]!"
                                     :locale="locale"
+                                    :slug-source="slugSource(fields[key]!)"
+                                    :entry-name="entryName"
+                                    :field-key="key"
                                     @update:model-value="
-                                       (value: unknown) => updateBlockField(String(blockKey), value)
+                                       (value: unknown) => setValue(key, value, key)
                                     "
                                  />
                               </KFormField>
-                           </KStack>
-                        </template>
+                           </template>
+                        </KStack>
+                     </div>
+                  </template>
+               </component>
 
-                        <template v-else>
-                           <KFieldMessage
-                              v-if="form.errors[fieldKey]"
-                              :message="form.errors[fieldKey]"
-                           />
-                           <KFieldMessage
-                              v-else
-                              tone="warning"
-                              :message="form.warnings[fieldKey]"
-                           />
-                           <KStack v-if="blocks.length" gap="sm">
-                              <span class="k-label">{{ blocksField.label }}</span>
-                              <CmsBlockOutline
-                                 :items="blocks"
-                                 :field="blocksField"
-                                 :locale="locale"
-                                 :selected="selected"
-                                 @select="select"
-                                 @move="move"
-                              />
-                           </KStack>
-                           <KStack v-if="canAdd" gap="sm">
-                              <span class="k-label">Add a block</span>
-                              <CmsBlockPalette
-                                 :blocks="blocksField.blocks ?? {}"
-                                 @pick="(type: string) => insert(blocks.length, type)"
-                              />
-                           </KStack>
-                           <p v-else class="cms-field-hint">{{ maxReached }}</p>
-                        </template>
-                     </template>
-
-                     <KStack v-else gap="md" class="cms-editor-fields">
-                        <slot
-                           v-if="activeTab === 'content'"
-                           name="content-start"
-                           :locale="locale"
-                        />
-                        <template v-for="section in sections" :key="section.id">
-                           <div v-if="section.title" class="cms-editor-section-title">
-                              <span class="k-label">{{ section.title }}</span>
-                              <span v-if="section.description" class="cms-field-hint">
-                                 {{ section.description }}
-                              </span>
-                           </div>
-                           <KFormField
-                              v-for="key in section.keys"
-                              :key="key"
-                              :name="key"
-                              :label="fields[key]!.label"
-                              :description="fields[key]!.description"
-                              :icon="cmsIcon(fieldIcon(fields[key]!))"
-                              :required="fields[key]!.required"
-                              :disabled="locked?.includes(key) || undefined"
-                              :data-cms-field="key"
-                              :class="{ 'cms-search-focus': highlighted === key }"
-                           >
-                              <CmsFieldInput
-                                 :model-value="state[key]"
-                                 :field="fields[key]!"
-                                 :locale="locale"
-                                 :slug-source="slugSource(fields[key]!)"
-                                 :entry-name="entryName"
-                                 :field-key="key"
-                                 @update:model-value="(value: unknown) => setValue(key, value, key)"
-                              />
-                           </KFormField>
-                        </template>
-                     </KStack>
-                  </KForm>
-               </template>
-            </component>
+               <div v-else class="cms-editor-panel-body is-empty">
+                  <KFormAlerts />
+                  <KEmptyState
+                     :icon="cmsIcon('cursor-arrow-rays')"
+                     title="No block selected"
+                     description="Pick a block in the list or in the preview to edit its fields."
+                     variant="plain"
+                     size="sm"
+                  />
+               </div>
+            </KForm>
          </aside>
       </div>
 
@@ -260,12 +344,15 @@ import {
    isTranslatableField,
    slugSourceValue,
 } from '#nuxt-cms'
-import type { FormIssuePath } from '@xleddyl/443-components-vue'
+import type { FormIssuePath, MenuItems } from '@xleddyl/443-components-vue'
 import {
    Badge as KBadge,
    Button as KButton,
+   DropdownMenu as KDropdownMenu,
+   EmptyState as KEmptyState,
    FieldMessage as KFieldMessage,
    Form as KForm,
+   FormAlerts as KFormAlerts,
    FormField as KFormField,
    Icon as KIcon,
    Modal as KModal,
@@ -275,18 +362,23 @@ import {
    Tooltip as KTooltip,
    useForm,
 } from '@xleddyl/443-components-vue'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from '#imports'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from '#imports'
 import cmsConfig from '#cms-config'
+import type { CmsPreviewDevice } from '../../../shared/editor-layout'
+import { CMS_EDITOR_PANEL_LIMITS, CMS_PREVIEW_DEVICE_WIDTHS } from '../../../shared/editor-layout'
 import type { CmsSearchFocus } from '../../../shared/search'
 import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
 import type {
    CmsBlockValue,
    CmsEditorShortcut,
    CmsPreviewFrameMessage,
+   CmsPreviewHostMessage,
    CmsPreviewState,
 } from '../../../shared/preview'
 import {
    DEFAULT_CMS_PREVIEW_PATH,
+   blockErrorIndexes,
+   blockSummary,
    canHideBlock,
    collectMediaKeys,
    duplicateBlock,
@@ -305,6 +397,7 @@ import {
    toggleBlockHidden,
 } from '../../../shared/preview'
 import { translationProgress } from '../../../shared/translations'
+import { useCmsEditorLayout } from '../../composables/cms-editor-layout'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsHistory } from '../../composables/cms-history'
 import { useCmsRuntime } from '../../composables/cms-runtime'
@@ -313,11 +406,15 @@ import { isInForeignOverlay, onApplePlatform, shortcutTarget } from '../../utils
 import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
+type EditorPane = 'blocks' | 'preview' | 'fields'
+type EntryTab = 'content' | 'seo'
+
 const SEO_KEYS = ['seoTitle', 'seoDescription', 'seoImage', 'seoNoindex']
 
-const deviceOptions = [
+const deviceOptions: { value: CmsPreviewDevice; label: string; icon: string }[] = [
    { value: 'desktop', label: 'Desktop width', icon: cmsIcon('computer-desktop') },
-   { value: 'mobile', label: 'Mobile width', icon: cmsIcon('device-phone-mobile') },
+   { value: 'tablet', label: 'Tablet width, 768 px', icon: cmsIcon('device-tablet') },
+   { value: 'mobile', label: 'Mobile width, 390 px', icon: cmsIcon('device-phone-mobile') },
 ]
 
 const props = defineProps<{
@@ -338,15 +435,24 @@ const runtime = useCmsRuntime()
 const { i18n } = runtime
 const previewPath = runtime.previewPath ?? DEFAULT_CMS_PREVIEW_PATH
 const settings = useCmsSettingsState()
+const { layout, compact, resizing } = useCmsEditorLayout()
+const bodyId = `${useId()}-body`
 
 const locale = ref(i18n.defaultLocale)
-const device = ref<string | null>('desktop')
+const device = ref<CmsPreviewDevice>('desktop')
+const pane = ref<EditorPane>('preview')
 const selected = ref<number | null>(null)
+const canvasHover = ref<number | null>(null)
+const canvasWidth = ref<number | null>(null)
 const paletteOpen = ref(false)
 const paletteIndex = ref(0)
 const frame = ref<HTMLIFrameElement | null>(null)
+const frameBox = ref<HTMLElement | null>(null)
+const panelBody = ref<HTMLElement | null>(null)
 const root = ref<HTMLElement | null>(null)
 const library = shallowRef(new Map<string, MediaItem>())
+
+const deviceWidth = computed(() => CMS_PREVIEW_DEVICE_WIDTHS[device.value])
 
 const blocksField = computed(() => props.fields[props.fieldKey]!)
 
@@ -356,6 +462,11 @@ const blocks = computed<CmsBlockValue[]>(() => {
 })
 
 const canAdd = computed(() => canAddBlock(blocksField.value, blocks.value.length))
+
+const blockCount = computed(() => {
+   const max = blocksField.value.max
+   return max === undefined ? String(blocks.value.length) : `${blocks.value.length} / ${max}`
+})
 
 const maxReached = computed(() => {
    const max = blocksField.value.max ?? 0
@@ -378,49 +489,68 @@ const selectedFields = computed(() => {
    )
 })
 
+const selectedSummary = computed(() =>
+   selectedItem.value
+      ? blockSummary(selectedBlock.value, selectedItem.value, locale.value, i18n.defaultLocale)
+      : ''
+)
+
+const seoKeys = computed(() => SEO_KEYS.filter((key) => Object.hasOwn(props.fields, key)))
+
+const activeTab = ref<EntryTab>('content')
+
 const tabList = computed(() => {
-   if (!props.content) return [{ id: 'block', label: 'Block' }]
-   const tabs = [
-      { id: 'content', label: 'Content' },
-      { id: 'block', label: 'Block' },
-   ]
+   const tabs: { id: EntryTab; label: string }[] = [{ id: 'content', label: 'Content' }]
    if (seoKeys.value.length) tabs.push({ id: 'seo', label: 'SEO' })
    return tabs
 })
-
-const activeTab = ref(props.content ? 'content' : 'block')
 
 const tabbed = computed(() => tabList.value.length > 1)
 
 const panelSlot = computed(() => (tabbed.value ? 'panel' : 'default'))
 
+function errorBadge(count: number) {
+   return {
+      badge: count || undefined,
+      badgeTone: 'danger' as const,
+      badgeLabel: count ? `${count} ${count === 1 ? 'error' : 'errors'}` : undefined,
+   }
+}
+
 const tabsBinding = computed(() =>
    tabbed.value
       ? {
-           items: tabList.value.map((tab) => {
-              const errorCount = tabErrorCount(tab.id)
-              return {
-                 value: tab.id,
-                 label: tab.label,
-                 badge: errorCount || undefined,
-                 badgeTone: 'danger' as const,
-                 badgeLabel: errorCount
-                    ? `${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`
-                    : undefined,
-              }
-           }),
+           items: tabList.value.map((tab) => ({
+              value: tab.id,
+              label: tab.label,
+              ...errorBadge(tabErrorCount(tab.id)),
+           })),
+           label: 'Entry fields',
            modelValue: activeTab.value,
            panelFocusable: false,
            stretch: true,
            inset: true,
+           fill: true,
            'onUpdate:modelValue': (value: string | number | undefined) => {
-              activeTab.value = String(value ?? '')
+              activeTab.value = value === 'seo' ? 'seo' : 'content'
            },
         }
       : {}
 )
 
-const seoKeys = computed(() => SEO_KEYS.filter((key) => Object.hasOwn(props.fields, key)))
+const paneItems = computed(() => [
+   {
+      value: 'blocks',
+      label: 'Blocks',
+      ...errorBadge(blockErrors.value.size + (blocksFieldError.value ? 1 : 0)),
+   },
+   { value: 'preview', label: 'Preview' },
+   {
+      value: 'fields',
+      label: 'Fields',
+      ...errorBadge(tabErrorCount('content') + tabErrorCount('seo')),
+   },
+])
 
 const contentFields = computed(() =>
    Object.fromEntries(
@@ -465,7 +595,21 @@ function slugSource(field: FieldConfig) {
 
 function select(index: number | null) {
    selected.value = index
-   if (selected.value !== null) activeTab.value = 'block'
+}
+
+function showPanel(name: 'tree' | 'inspector') {
+   if (compact.value) pane.value = name === 'tree' ? 'blocks' : 'fields'
+   else layout.value[name].collapsed = false
+}
+
+function selectFromTree(index: number) {
+   select(index)
+   post({ type: 'reveal', index })
+   if (compact.value) pane.value = 'fields'
+}
+
+function highlight(index: number | null) {
+   post({ type: 'highlight', index })
 }
 
 function blockConfigAt(index: number) {
@@ -516,6 +660,69 @@ function remove(index: number) {
    if (!blocks.value[index]) return
    setBlocks(removeBlock(blocks.value, index))
    selected.value = selectionAfterRemove(selected.value, index)
+}
+
+function blockMenu(index: number): MenuItems {
+   const item = blocks.value[index]
+   if (!item) return []
+   const full = canAdd.value ? undefined : maxReached.value
+   const hidden = isHiddenBlock(item)
+   return [
+      [
+         {
+            label: 'Add a block before',
+            icon: cmsIcon('bars-arrow-up'),
+            disabled: !!full,
+            disabledReason: full,
+            onSelect: () => openPalette(index),
+         },
+         {
+            label: 'Add a block after',
+            icon: cmsIcon('bars-arrow-down'),
+            disabled: !!full,
+            disabledReason: full,
+            onSelect: () => openPalette(index + 1),
+         },
+      ],
+      [
+         {
+            label: 'Move up',
+            icon: cmsIcon('arrow-up'),
+            disabled: index === 0,
+            onSelect: () => move(index, index - 1),
+         },
+         {
+            label: 'Move down',
+            icon: cmsIcon('arrow-down'),
+            disabled: index === blocks.value.length - 1,
+            onSelect: () => move(index, index + 1),
+         },
+         {
+            label: 'Duplicate',
+            icon: cmsIcon('document-duplicate'),
+            disabled: !!full,
+            disabledReason: full,
+            onSelect: () => duplicate(index),
+         },
+         ...(canHideBlock(blockConfigAt(index))
+            ? [
+                 {
+                    label: hidden ? 'Show' : 'Hide',
+                    icon: cmsIcon(hidden ? 'eye' : 'eye-slash'),
+                    onSelect: () => toggleHidden(index),
+                 },
+              ]
+            : []),
+      ],
+      [
+         {
+            label: 'Delete',
+            icon: cmsIcon('trash'),
+            tone: 'danger' as const,
+            onSelect: () => remove(index),
+         },
+      ],
+   ]
 }
 
 function updateBlockField(key: string, value: unknown) {
@@ -592,14 +799,23 @@ const previewState = computed<CmsPreviewState>(() => ({
    selected: selected.value,
 }))
 
-function sendState() {
+function post(message: CmsPreviewHostMessage) {
    const target = frame.value?.contentWindow
    if (!target) return
+   target.postMessage(previewEnvelope(message), window.location.origin)
+}
+
+function sendState() {
    const snapshot = JSON.parse(JSON.stringify(previewState.value)) as CmsPreviewState
-   target.postMessage(previewEnvelope({ type: 'render', state: snapshot }), window.location.origin)
+   post({ type: 'render', state: snapshot })
 }
 
 watch(previewState, sendState, { deep: true })
+
+function reloadPreview() {
+   canvasHover.value = null
+   frame.value?.contentWindow?.location.reload()
+}
 
 function onFrameMessage(message: CmsPreviewFrameMessage) {
    switch (message.type) {
@@ -608,6 +824,9 @@ function onFrameMessage(message: CmsPreviewFrameMessage) {
          break
       case 'select':
          select(message.index)
+         break
+      case 'hover':
+         canvasHover.value = message.index
          break
       case 'insert':
          openPalette(message.index)
@@ -652,25 +871,53 @@ async function loadLibrary() {
    }
 }
 
-const panel = ref<{ el: HTMLElement | null } | null>(null)
 const { highlighted, reveal } = useCmsFieldFocus()
+
+function revealBlock(index: number | null) {
+   select(index)
+   if (index === null) {
+      showPanel('tree')
+      return
+   }
+   showPanel('inspector')
+   post({ type: 'reveal', index })
+}
+
+function revealField(key: string) {
+   select(null)
+   activeTab.value = tabOfKey(key) === 'seo' ? 'seo' : 'content'
+   showPanel('inspector')
+}
 
 function applyFocus(focus: CmsSearchFocus) {
    if (focus.locale && i18n.locales.includes(focus.locale)) locale.value = focus.locale
    const key = focus.field
    if (!key || !Object.hasOwn(props.fields, key)) return
    if (key === props.fieldKey) {
-      activeTab.value = 'block'
-      if (focus.block != null && focus.block < blocks.value.length) select(focus.block)
+      const index = focus.block != null && focus.block < blocks.value.length ? focus.block : null
+      revealBlock(index)
       return
    }
-   activeTab.value = tabOfKey(key)
-   reveal(() => panel.value?.el, key)
+   revealField(key)
+   reveal(() => panelBody.value, key)
 }
+
+let frameObserver: ResizeObserver | null = null
 
 onMounted(() => {
    window.addEventListener('message', onMessage)
    document.addEventListener('keydown', runShortcut)
+   frameObserver = new ResizeObserver(([entry]) => {
+      canvasWidth.value = entry ? Math.round(entry.contentRect.width) : null
+   })
+   watch(
+      frameBox,
+      (element, previous) => {
+         if (previous) frameObserver?.unobserve(previous)
+         if (element) frameObserver?.observe(element)
+      },
+      { immediate: true }
+   )
    void loadLibrary()
    if (props.focus) applyFocus(props.focus)
 })
@@ -678,6 +925,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
    window.removeEventListener('message', onMessage)
    document.removeEventListener('keydown', runShortcut)
+   frameObserver?.disconnect()
 })
 
 const validateHook = computed(() =>
@@ -716,8 +964,14 @@ const form = useForm({
    issueKey,
 })
 
+const blockErrors = computed(() => blockErrorIndexes(form.errors, props.fieldKey))
+
+const blocksFieldError = computed(() =>
+   blockErrors.value.size ? undefined : form.errors[props.fieldKey]
+)
+
 function tabOfKey(key: string) {
-   if (key === props.fieldKey) return 'block'
+   if (key === props.fieldKey) return 'blocks'
    return SEO_KEYS.includes(key) ? 'seo' : 'content'
 }
 
@@ -749,10 +1003,9 @@ function revealFirstError() {
    if (!first) return
    const field = props.fields[first.name]
    if (first.name === props.fieldKey) {
-      select(first.index)
-      activeTab.value = 'block'
+      revealBlock(first.index)
    } else if (field) {
-      activeTab.value = tabOfKey(first.name)
+      revealField(first.name)
       if (isTranslatableField(field)) locale.value = i18n.defaultLocale
    }
 }
