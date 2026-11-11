@@ -1399,12 +1399,62 @@ body:has(.cms-scope) {
    color: var(--k-text-dimmed);
 }
 
-.cms-media-detail-preview > img,
-.cms-media-detail-preview > video {
+.cms-media-detail-preview > video,
+.cms-media-focal > img {
    max-width: 100%;
    max-height: 24rem;
    object-fit: contain;
    animation: k-fade 300ms var(--k-ease);
+}
+
+.cms-media-focal {
+   position: relative;
+   display: flex;
+   max-width: 100%;
+   outline: none;
+   touch-action: none;
+   user-select: none;
+}
+
+.cms-media-focal > img {
+   display: block;
+}
+
+.cms-media-focal.is-editable {
+   cursor: crosshair;
+}
+
+.cms-media-focal.is-editable:focus-visible {
+   outline: 2px solid var(--k-accent);
+   outline-offset: 2px;
+}
+
+.cms-media-focal-marker {
+   position: absolute;
+   width: 1.5rem;
+   height: 1.5rem;
+   border: 2px solid #fff;
+   border-radius: 999px;
+   background: color-mix(in oklab, var(--k-accent) 45%, transparent);
+   box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.35),
+      0 1px 4px rgb(0 0 0 / 0.35);
+   transform: translate(-50%, -50%);
+   pointer-events: none;
+   transition: transform var(--k-duration) var(--k-ease);
+}
+
+.cms-media-focal.is-dragging .cms-media-focal-marker {
+   transform: translate(-50%, -50%) scale(1.15);
+}
+
+.cms-media-focal-row {
+   min-height: 2rem;
+}
+
+.cms-media-focal-value {
+   font-size: 0.8125rem;
+   color: var(--k-text-toned);
 }
 
 .cms-media-detail-facts {

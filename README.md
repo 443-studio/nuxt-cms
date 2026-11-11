@@ -92,7 +92,7 @@ The database is a local SQLite file (`data/cms.db`) by default. To use a differe
 | [Schema](docs/schema.md) | Entry kinds, field types, relations, blocks, i18n, form layout |
 | [Querying content](docs/querying.md) | GraphQL API, composables, `<CmsBlocks>` |
 | [Admin panel & security](docs/admin.md) | Admin pages, search, visual editor, accounts, sessions |
-| [Media](docs/media.md) | Storage modes, uploads, allowed file types |
+| [Media](docs/media.md) | Storage modes, uploads, allowed file types, focal point, `<CmsImage>` |
 | [Deployment](docs/deployment.md) | Hosts, migrations on serverless, scaling |
 
 [llm.txt](llm.txt) is a compact reference for LLMs: schema, composables and GraphQL API.

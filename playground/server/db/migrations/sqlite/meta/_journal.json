@@ -15,6 +15,13 @@
       "when": 1793627824004,
       "tag": "0001_hesitant_morlun",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794396339811,
+      "tag": "0002_loving_silvermane",
+      "breakpoints": true
     }
   ]
 }

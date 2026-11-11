@@ -25,6 +25,17 @@ describe('renderSchemaFile', () => {
       expect(out).not.toContain("tags: text('tags')")
    })
 
+   it('stores the media focal point as nullable floats in both dialects', () => {
+      const sqlite = renderSchemaFile(sampleConfig(), 'sqlite')
+      expect(sqlite).toContain("focalX: real('focal_x'),")
+      expect(sqlite).toContain("focalY: real('focal_y'),")
+      expect(sqlite).toMatch(/import \{[^}]*\breal\b[^}]*\} from 'drizzle-orm\/sqlite-core'/)
+      const pg = renderSchemaFile(sampleConfig(), 'postgres')
+      expect(pg).toContain("focalX: doublePrecision('focal_x'),")
+      expect(pg).toContain("focalY: doublePrecision('focal_y'),")
+      expect(pg).toMatch(/import \{[^}]*\bdoublePrecision\b[^}]*\} from 'drizzle-orm\/pg-core'/)
+   })
+
    it('keeps the sqlite timestamp defaults so existing tables are not rebuilt', () => {
       const out = renderSchemaFile(sampleConfig(), 'sqlite')
       const legacyDefault = ".notNull().default(sql`(datetime('now'))`)"
@@ -91,7 +102,7 @@ describe('renderSchemaFile', () => {
       }
       const sqlite = renderSchemaFile(config, 'sqlite')
       expect(sqlite).toContain(
-         "import { foreignKey, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'"
+         "import { foreignKey, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'"
       )
       expect(sqlite).toContain("parent: text('parent'),")
       expect(sqlite).toContain(

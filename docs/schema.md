@@ -153,7 +153,7 @@ D1, `json_agg` on Postgres). Saving a page is one transaction on SQLite and Post
 
 **No foreign key to `cms_media`.** `media_key` is not a foreign key to `cms_media.key`. With
 `storage: 'local'` the files come from the folder (or the build manifest) and `cms_media` only holds
-the alt texts, so it can be empty while pages use many media; with `'s3'` deleting a file from the
+the alt texts and focal points, so it can be empty while pages use many media; with `'s3'` deleting a file from the
 library removes its `cms_media` row, and a foreign key would either block that or wipe content. The
 module checks media keys when a page is saved instead: the admin API rejects (400) a media key, in
 a media field or in a block, that is not in the media library (the folder or manifest in local

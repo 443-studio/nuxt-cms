@@ -66,10 +66,11 @@
                      class="relative aspect-[5/2] shrink-0 overflow-hidden bg-(--k-field)"
                      :class="event.featured ? 'sm:aspect-auto sm:w-2/5' : ''"
                   >
-                     <img
-                        v-if="event.poster?.url"
-                        :src="event.poster.url"
+                     <CmsImage
+                        v-if="event.poster?.url && event.poster.type === 'image'"
+                        :media="event.poster"
                         :alt="event.poster.alt ?? event.title"
+                        sizes="sm:100vw md:50vw"
                         class="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                      />
                      <span

@@ -8,7 +8,7 @@ import {
    pageRoutes,
 } from './runtime/shared/index'
 
-const MEDIA_SELECTION = 'key url type alt folder mime size width height'
+const MEDIA_SELECTION = 'key url type alt folder mime size width height focalX focalY'
 
 function blocksSelection(entryName: string, key: string, field: FieldConfig): string {
    const parts = ['__typename type']

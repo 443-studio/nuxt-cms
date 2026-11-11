@@ -63,8 +63,8 @@ interface CmsMediaChange {
 }
 ```
 
-`upload` fires when an uploaded file is registered in the library, `update` on an alt text or
-folder change, `move` on a bulk move (`keys` are the moved files), `delete` on a single or bulk
+`upload` fires when an uploaded file is registered in the library, `update` on an alt text,
+focal point or folder change, `move` on a bulk move (`keys` are the moved files), `delete` on a single or bulk
 delete. Folder actions list the files they moved or deleted.
 
 ### Guarantees

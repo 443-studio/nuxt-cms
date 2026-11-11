@@ -67,7 +67,7 @@ events.value[0]?.poster?.url
 What they select:
 
 - every public field of the entry, plus `id` and `updatedAt` (and `createdAt` for a collection);
-- media fields with all their keys (`key url type alt folder mime size width height`);
+- media fields with all their keys (`key url type alt folder mime size width height focalX focalY`);
 - blocks fields with `__typename`, `type` and an inline fragment per block type;
 - relations one level deep. The related entry brings its own fields, but not its own relations.
 
@@ -206,13 +206,22 @@ const { data } = await useCmsCollection('guides', {
 `media` fields resolve to a `CmsMedia` object:
 
 ```graphql
-poster { key url type alt folder mime size width height }
+poster { key url type alt folder mime size width height focalX focalY }
 ```
 
 - **`key`**: the object key in your S3-compatible storage (the media field stores only this).
 - **`url`**: the public URL, built as `publicBaseUrl` + "/" + `key`. A relative `publicBaseUrl` (e.g. `/images`) gives a root-relative URL. `url` is `null` only when `publicBaseUrl` is not configured.
 - **`type`**: the enum `CmsMediaType`, derived from the mime type: `image`, `video` or `file`.
+- **`focalX`** / **`focalY`**: the focal point an editor marked on the image, as floats from 0
+  (left / top) to 1 (right / bottom). Both are `null` until it is set, which means the center. See
+  [Media → Focal point](media.md#focal-point).
 - Other fields: metadata set at upload time (alt text, folder, dimensions).
+
+To render an image, use `<CmsImage>` (see [Media → Rendering images](media.md#rendering-images)):
+
+```vue
+<CmsImage :media="event.poster" sizes="sm:100vw md:50vw" class="aspect-video w-full object-cover" />
+```
 
 ## Blocks
 

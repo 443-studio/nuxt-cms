@@ -223,6 +223,8 @@ export function renderTypesFile(config: CmsConfig): string {
   size: number | null
   width: number | null
   height: number | null
+  focalX: number | null
+  focalY: number | null
 }`,
    ]
    for (const [name, entry] of Object.entries(config)) {

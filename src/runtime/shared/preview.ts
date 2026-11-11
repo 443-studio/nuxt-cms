@@ -44,6 +44,8 @@ export interface CmsPreviewMedia {
    size: number | null
    width: number | null
    height: number | null
+   focalX: number | null
+   focalY: number | null
 }
 
 export interface CmsPreviewState {
@@ -271,6 +273,8 @@ export function previewMedia(
       size: item?.size ?? null,
       width: item?.width ?? null,
       height: item?.height ?? null,
+      focalX: item?.focalX ?? null,
+      focalY: item?.focalY ?? null,
    }
 }
 

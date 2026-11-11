@@ -149,7 +149,7 @@ const COMMON_SDL = [
    'input BooleanFilter {\n  eq: Boolean\n  neq: Boolean\n  isNull: Boolean\n}',
    `input ${LIST_FILTER} {\n  hasAny: [String!]\n  hasAll: [String!]\n  isEmpty: Boolean\n}`,
    'enum CmsMediaType {\n  image\n  video\n  file\n}',
-   'type CmsMedia {\n  key: String!\n  url: String\n  type: CmsMediaType!\n  alt: String\n  folder: String\n  mime: String\n  size: Int\n  width: Int\n  height: Int\n}',
+   'type CmsMedia {\n  key: String!\n  url: String\n  type: CmsMediaType!\n  alt: String\n  folder: String\n  mime: String\n  size: Int\n  width: Int\n  height: Int\n  focalX: Float\n  focalY: Float\n}',
 ]
 
 export function renderGraphqlSdl(config: CmsConfig): string {

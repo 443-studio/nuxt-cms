@@ -10,6 +10,7 @@ import type {
 import {
    BLOCK_HIDDEN_KEY,
    declaresHiddenField,
+   focalPointIssue,
    isFieldVisible,
    isTranslatableField,
    normalizeTags,
@@ -21,6 +22,21 @@ export const objectKeySchema = z
    .min(1)
    .max(1024)
    .refine((k) => !k.includes('..') && !k.startsWith('/'), 'Invalid object key')
+
+const focalCoordinateSchema = z.number().min(0).max(1).nullish()
+
+export const mediaUpdateSchema = z
+   .object({
+      key: objectKeySchema,
+      alt: z.string().max(1024).nullish(),
+      folder: z.string().max(255).nullish(),
+      focalX: focalCoordinateSchema,
+      focalY: focalCoordinateSchema,
+   })
+   .superRefine((body, ctx) => {
+      const message = focalPointIssue(body.focalX, body.focalY)
+      if (message) ctx.addIssue({ code: 'custom', message, path: ['focalX'] })
+   })
 
 export interface ValidationMessages {
    required: string

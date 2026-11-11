@@ -15,6 +15,7 @@ import {
    createResolver,
    defineNuxtModule,
    extendPages,
+   hasNuxtModule,
    resolvePath,
    tryResolveModule,
    useLogger,
@@ -24,6 +25,7 @@ import { buildSchema, introspectionFromSchema } from 'graphql'
 import { minifyIntrospection, outputIntrospectionFile } from 'gql.tada/internal'
 import { createJiti } from 'jiti'
 import { renderBrandFile, resolveBrand } from './brand-codegen'
+import { renderImageFile, resolveCmsImageSetup } from './image-codegen'
 import { renderGraphqlSdl } from './runtime/shared/graphql-sdl'
 import { migrationsDirFor } from './runtime/shared/migrations-dir'
 import type { CmsConfig, CmsPageRoute, MediaStorageMode } from './runtime/shared/index'
@@ -455,6 +457,25 @@ function addCmsBlocks(
    })
 }
 
+function addCmsImage(nuxt: Nuxt, resolver: ReturnType<typeof createResolver>) {
+   const imageTemplate = addTemplate({
+      filename: 'cms/image.ts',
+      write: true,
+      getContents: () =>
+         renderImageFile(
+            resolveCmsImageSetup(
+               hasNuxtModule('@nuxt/image', nuxt),
+               nuxt.options as { image?: { provider?: unknown } }
+            )
+         ),
+   })
+   nuxt.options.alias['#cms-image'] = imageTemplate.dst
+   addComponent({
+      name: 'CmsImage',
+      filePath: resolver.resolve('./runtime/app/image/CmsImage.vue'),
+   })
+}
+
 export default defineNuxtModule<ModuleOptions>({
    meta: {
       name: '@xleddyl/nuxt-cms',
@@ -547,6 +568,7 @@ export default defineNuxtModule<ModuleOptions>({
          )
          addCmsTypeTemplates(nuxt, disabledConfig)
          addCmsBlocks(nuxt, resolver, disabledConfig, resolved.preview.component)
+         addCmsImage(nuxt, resolver)
          nuxt.options.runtimeConfig.public.cms = {
             mediaBaseUrl: resolved.media.publicBaseUrl,
             mediaStorage: resolved.media.storage,
@@ -653,6 +675,7 @@ export default defineNuxtModule<ModuleOptions>({
          { name: 'useCmsContent', from: entryComposables },
       ])
       addCmsBlocks(nuxt, resolver, cmsConfig, resolved.preview.component)
+      addCmsImage(nuxt, resolver)
 
       const previewErrors = previewPathErrors(resolved.preview.path, Object.keys(cmsConfig))
       if (previewErrors.length) throw new Error(`[nuxt-cms] ${previewErrors.join('\n')}`)

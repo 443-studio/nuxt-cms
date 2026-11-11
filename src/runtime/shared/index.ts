@@ -188,6 +188,8 @@ export interface MediaItem {
    size: number | null
    width: number | null
    height: number | null
+   focalX: number | null
+   focalY: number | null
    createdAt: string | null
    type: MediaType
    url: string | null
@@ -1210,6 +1212,7 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
 }
 
 export * from './layout'
+export * from './media-focal'
 export * from './users'
 export type {
    CmsAccess,

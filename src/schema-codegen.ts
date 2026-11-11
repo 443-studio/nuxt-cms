@@ -737,6 +737,8 @@ function mediaTableExpr(dialect: Dialect): string {
       `  size: integer('size'),\n` +
       `  width: integer('width'),\n` +
       `  height: integer('height'),\n` +
+      `  focalX: ${pg ? `doublePrecision('focal_x')` : `real('focal_x')`},\n` +
+      `  focalY: ${pg ? `doublePrecision('focal_y')` : `real('focal_y')`},\n` +
       `  createdAt: ${nowExpr(pg, 'created_at')},\n` +
       `})`
    )
@@ -756,8 +758,7 @@ export function renderSchemaFile(
    const pg = dialect === 'postgres'
 
    const core = new Set(['integer', 'text', pg ? 'pgTable' : 'sqliteTable'])
-   if (fields.some((f) => f.type === 'number' && !f.integer))
-      core.add(pg ? 'doublePrecision' : 'real')
+   core.add(pg ? 'doublePrecision' : 'real')
    if (pg && fields.some((f) => f.type === 'date')) core.add('date')
    if (pg) core.add('boolean')
    if (

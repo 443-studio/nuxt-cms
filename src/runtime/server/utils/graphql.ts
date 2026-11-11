@@ -300,8 +300,8 @@ async function resolveMedia(ctx: Ctx, key: unknown) {
    if (isLocalMedia()) {
       const file = (await useMediaIndex()).get(key as string)
       if (!file) return null
-      const alt = await loadMediaAlt(ctx).load(key as string)
-      return mediaObject(key as string, { ...file, alt: alt ?? null })
+      const meta = await loadMediaMeta(ctx).load(key as string)
+      return mediaObject(key as string, { ...file, ...meta })
    }
 
    const row = await loadMedia(ctx).load(key as string)
@@ -372,15 +372,35 @@ function loadMedia(ctx: Ctx) {
    })
 }
 
-function loadMediaAlt(ctx: Ctx) {
-   return getLoader<string, string | null>(ctx, 'mediaAlt', async (keys) => {
+interface MediaMeta {
+   alt: string | null
+   focalX: number | null
+   focalY: number | null
+}
+
+function loadMediaMeta(ctx: Ctx) {
+   return getLoader<string, MediaMeta>(ctx, 'mediaMeta', async (keys) => {
       const media = (cmsTables as Record<string, unknown>).cms_media as SQLiteTable
       const columns = tableColumns(media)
       const rows = await useDb()
-         .select({ key: columns.key!, alt: columns.alt! })
+         .select({
+            key: columns.key!,
+            alt: columns.alt!,
+            focalX: columns.focalX!,
+            focalY: columns.focalY!,
+         })
          .from(media)
          .where(inArray(columns.key!, keys))
-      return new Map(rows.map((row) => [row.key as string, (row.alt ?? null) as string | null]))
+      return new Map(
+         rows.map((row) => [
+            row.key as string,
+            {
+               alt: (row.alt ?? null) as string | null,
+               focalX: (row.focalX ?? null) as number | null,
+               focalY: (row.focalY ?? null) as number | null,
+            },
+         ])
+      )
    })
 }
 
@@ -394,6 +414,8 @@ function mediaObject(key: string, row: Record<string, unknown> | undefined) {
       size: row?.size ?? null,
       width: row?.width ?? null,
       height: row?.height ?? null,
+      focalX: row?.focalX ?? null,
+      focalY: row?.focalY ?? null,
       type: mediaTypeFor(row?.mime as string | null, key),
    }
 }

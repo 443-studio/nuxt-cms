@@ -125,7 +125,15 @@ export function useCmsMediaLibrary() {
       })
    }
 
-   function updateItem(key: string, changes: { alt?: string | null; folder?: string | null }) {
+   function updateItem(
+      key: string,
+      changes: {
+         alt?: string | null
+         folder?: string | null
+         focalX?: number | null
+         focalY?: number | null
+      }
+   ) {
       return attempt('Save failed', async () => {
          await $fetch(endpoint, { method: 'PUT', body: { key, ...changes } })
          await reload({ quiet: true })

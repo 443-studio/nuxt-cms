@@ -7,7 +7,7 @@ Media (images, video, documents) can be stored three ways, selected with `cms.me
   similar. The database stores only metadata; the files live in your bucket. When media is not
   configured, media endpoints return `501` and `media` fields cannot be uploaded to.
 - **`'local'`**: the files in your `public/` folder **are** the library: no bucket, no credentials,
-  no uploads. Only alt text is editable. Files
+  no uploads. Only the alt text and the focal point are editable. Files
   are expected to already live wherever `publicBaseUrl` points (e.g. your app's own `public/`
   directory, or any URL you serve yourself). When `publicBaseUrl` is a root-relative path, the
   library is **read from that folder** on every request, so the gallery mirrors what the running
@@ -74,12 +74,12 @@ NUXT_PUBLIC_CMS_MEDIA_MAX_FILE_SIZE=52428800
 ## Local mode (files own the library)
 
 With `storage: 'local'` the files in your `public/` folder **are** the media library. The `cms_media`
-table is not a copy of them: it only stores the `alt` texts you write. Nothing syncs, nothing
+table is not a copy of them: it only stores the `alt` texts and focal points you write. Nothing syncs, nothing
 reconciles, and there is no background job that can disagree with what is on disk.
 
 - `GET` (the admin listing and the media field picker) reads the file list directly from the source
   described below and left-joins the alt texts.
-- **Alt text is editable**, in the admin panel like in `'s3'` mode.
+- **Alt text and focal point are editable**, in the admin panel like in `'s3'` mode.
 - Uploading, deleting and moving a file between folders are disabled, because the files belong to
   your repository: the UI hides the dropzone and the delete action, `folder` is derived from the
   file's own path, and `presign`, `POST` and `DELETE` answer `501` if called directly.
@@ -206,7 +206,7 @@ levels. In `'s3'` and `'filesystem'` mode you manage the folders from the panel:
   than 4 levels go into the deepest allowed folder.
 - Select files with the round check on a tile, or with Shift, Ctrl or Cmd and a click. The
   selection bar moves or deletes all the selected files.
-- Click a file to open its detail panel: preview, facts, alt text, folder, a **Copy URL** button,
+- Click a file to open its detail panel: preview, focal point, facts, alt text, folder, a **Copy URL** button,
   a **Download** button and the list of entries that use the file, with links to them.
 - Each tile and each list row shows how many entries use the file, or an "unused" mark.
 - Before you delete a file that entries use, the confirmation lists those entries with links.
@@ -293,7 +293,7 @@ unrestricted.
 In GraphQL it resolves to a `CmsMedia` object:
 
 ```graphql
-poster { key url type alt folder mime size width height }
+poster { key url type alt folder mime size width height focalX focalY }
 ```
 
 The database stores only the **`key`** (the object path in your bucket). In queries:
@@ -302,11 +302,76 @@ The database stores only the **`key`** (the object path in your bucket). In quer
 - When `publicBaseUrl` is empty, `url` is `null`; construct it yourself from `key`.
 - **`type`** is the enum `CmsMediaType`, derived from the mime type (`image` / `video` / `file`). In `#cms-types` the field is narrowed to the declared `mediaType`, for example `CmsMedia<'image' | 'video'>`.
 
+- **`focalX`** / **`focalY`**: the focal point (see below), `null` until an editor sets it.
+
 **Missing files on pages.** Saving a page from the admin fails with a 400 when a media field, or a
 media field inside a block, points at a key that is not in the library (the folder or the build
 manifest in local mode, `cms_media` in `'s3'` mode; the check is skipped in local mode when no
 folder was found). The admin form marks a saved media whose file is no longer in the library, so it
 can be replaced before saving. Collections and singles are not checked.
+
+## Focal point
+
+An image can carry a focal point: the part of the picture that must stay visible when a layout
+crops it. In the media detail drawer, click or drag on the image to place it (with the drawer
+focused on the image, the arrow keys move it by 1%, with Shift by 10%), then **Save**. **Reset**
+clears it, which means the center. Setting it needs the `media.write` permission, and saving fires
+`cms:media:change` with action `update`.
+
+The point is stored in `cms_media` (`focal_x`, `focal_y`, floats from 0 to 1 measured from the left
+and top edges) in every storage mode. In `'local'` mode it lives next to the alt text, so it works
+without touching the files. The admin endpoint `PUT /api/cms/admin/media` takes
+`{ key, focalX, focalY }`: both numbers from 0 to 1, or both `null` to reset; anything else answers
+`400`. Omit both to leave the point unchanged.
+
+GraphQL and `#cms-types` expose it on `CmsMedia` as `focalX` and `focalY` (nullable floats), and the
+generated queries select them.
+
+## Rendering images
+
+`<CmsImage>` is registered in the app and renders an image `CmsMedia`:
+
+```vue
+<CmsImage
+   :media="event.poster"
+   sizes="sm:100vw md:50vw"
+   class="aspect-[5/2] w-full object-cover"
+/>
+```
+
+- `alt` comes from the media (the `alt` prop overrides it; an empty string when there is none).
+- `width` and `height` come from the media. Pass one of them and the other follows the aspect
+  ratio, or pass both.
+- `loading="lazy"` and `decoding="async"` by default.
+- The focal point becomes `object-position` on the `<img>`, so with `object-fit: cover` the crop
+  keeps the marked subject.
+- It renders nothing for a video or a file, or when `url` is `null`.
+
+With [`@nuxt/image`](https://image.nuxt.com) installed in the project, it renders `<NuxtImg>`
+(`<NuxtPicture>` with the `picture` prop, where the focal point goes on the inner `<img>`), and any
+other attribute passes through to it: `sizes`, `densities`, `format`, `quality`, `fit`, `preset`,
+`placeholder`, and so on. The module builds no image variants itself: `@nuxt/image` and its
+provider do. `provider` and `modifiers` are forwarded. The focal point is also sent to the provider
+where it has a documented focal crop: today that is `imgix` (the `provider` prop, or
+`image.provider` in `nuxt.config`), which gets `crop: 'focalpoint'` with `fp-x` / `fp-y`. Other
+providers crop with their own defaults and the `<img>` keeps the `object-position`.
+
+Without `@nuxt/image` it renders a plain `<img>` with the same attributes.
+
+Per storage mode:
+
+- `'local'`: the URL is under `public/`, so the default `ipx` provider reads the files directly.
+- `'s3'`: the URL is absolute, so add your CDN host to `image.domains` for `ipx`, or use the
+  provider of your CDN.
+- `'filesystem'`: the files are not in `public/`, so `ipx` cannot read them. With no `provider`
+  prop and the default `ipx` provider, `<CmsImage>` renders a plain `<img>`. Pass `provider` to
+  route them through another provider.
+
+Named presets are `@nuxt/image` presets (`image.presets` in `nuxt.config`, `preset="card"` on the
+component); the module has no presets of its own. The helpers are exported from `#nuxt-cms` for
+your own components: `focalObjectPosition(media)` returns the `object-position` value (or
+`undefined`), `focalPointOf(media)` the point as `{ x, y }` (or `null`), and
+`cmsImageSize(media, { width, height })` the rendered size.
 
 ## One file per locale
 

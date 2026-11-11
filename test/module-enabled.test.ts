@@ -17,6 +17,7 @@ const kit = vi.hoisted(() => ({
    createResolver: vi.fn(() => ({ resolve: (path: string) => path })),
    defineNuxtModule: vi.fn((definition: unknown) => definition),
    extendPages: vi.fn(),
+   hasNuxtModule: vi.fn(() => false),
    resolvePath: vi.fn(async (path: string) => `/virtual/root/${path}.ts`),
    useLogger: vi.fn(() => ({
       info: vi.fn(),
@@ -121,7 +122,18 @@ describe('module setup when disabled', () => {
          'cms/graphql-env.d.ts',
          'cms/graphql.ts',
          'cms/blocks.ts',
+         'cms/image.ts',
       ])
+   })
+
+   it('still registers the image component', async () => {
+      const nuxt = createNuxt()
+      await moduleDefinition.setup(options({ enabled: false }), nuxt)
+
+      expect(kit.addComponent).toHaveBeenCalledWith({
+         name: 'CmsImage',
+         filePath: expect.stringContaining('image/CmsImage.vue'),
+      })
    })
 
    it('still registers the block renderer', async () => {
@@ -145,6 +157,7 @@ describe('module setup when disabled', () => {
          '#cms-queries',
          '#cms-graphql',
          '#cms-blocks',
+         '#cms-image',
       ])
       expect(nuxt.options.runtimeConfig.cms).toBeUndefined()
    })

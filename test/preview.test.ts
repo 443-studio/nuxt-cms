@@ -270,6 +270,8 @@ describe('preview data', () => {
          size: 10,
          width: 800,
          height: 600,
+         focalX: 0.25,
+         focalY: 0.75,
          createdAt: null,
          type: 'image' as const,
          url: 'https://cdn.test/a.jpg',
@@ -278,7 +280,10 @@ describe('preview data', () => {
          url: 'https://cdn.test/a.jpg',
          alt: 'Lake',
          width: 800,
+         focalX: 0.25,
+         focalY: 0.75,
       })
+      expect(media('blocks/river.jpg')).toMatchObject({ focalX: null, focalY: null })
    })
 
    it('localizes blocks like GraphQL and resolves their media', () => {
