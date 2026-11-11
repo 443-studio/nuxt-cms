@@ -33,7 +33,7 @@
                to="/cms"
                class="inline-flex items-center gap-2 rounded-lg border border-(--k-line-strong) px-4 py-1.5 text-sm font-medium text-(--k-text) transition-colors hover:bg-(--k-subtle)"
             >
-               <CmsIcon name="cog-6-tooth" class="size-4" />
+               <KIcon name="heroicons:cog-6-tooth" class="size-4" />
                Open admin
             </NuxtLink>
          </section>
@@ -48,7 +48,7 @@
                class="site-empty site-rise mt-6 flex flex-col items-center gap-3 px-6 py-16 text-center"
                style="animation-delay: 220ms"
             >
-               <CmsIcon name="calendar" class="size-6 text-(--k-text-dimmed)" />
+               <KIcon name="heroicons:calendar" class="size-6 text-(--k-text-dimmed)" />
                <p class="text-sm text-(--k-text-muted)">
                   No published events yet. Create one in the admin and it will show up here.
                </p>
