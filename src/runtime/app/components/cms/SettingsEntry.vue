@@ -13,7 +13,7 @@
             <CmsSettingsColumns
                :model-value="columns"
                :fields="entry.fields"
-               :extra="listExtraColumns(name)"
+               :extra="listExtraColumns(name, i18n)"
                @update:model-value="saveColumns"
             />
          </template>
@@ -61,6 +61,7 @@ import {
    listExtraColumns,
    useCmsSettings,
 } from '../../composables/cms-settings'
+import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsIcon, errorMessage } from '../../utils/ui'
 
@@ -71,6 +72,7 @@ const props = defineProps<{ name: string }>()
 const status = defineModel<Status>('status', { default: 'idle' })
 
 const { settings, save, reset } = useCmsSettings()
+const { i18n } = useCmsRuntime()
 const toast = useCmsToast()
 
 const entry = computed(() => (cmsConfig as Record<string, CmsEntry>)[props.name]!)
@@ -85,7 +87,7 @@ const parts = computed<TabItem[]>(() => [
 
 const activePart = ref<TabItem['value']>(parts.value[0]!.value)
 
-const columns = computed(() => entryListColumns(props.name, settings.value))
+const columns = computed(() => entryListColumns(props.name, settings.value, i18n))
 const layout = computed(() => entryFormLayout(props.name, settings.value, fields.value))
 
 const isCustom = computed(() => {

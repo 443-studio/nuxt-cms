@@ -43,11 +43,7 @@
                            >
                               <CmsLocaleSwitch
                                  :model-value="localeFor(key)"
-                                 :value="
-                                    isTranslatableField(fields[key]!)
-                                       ? (state[key] as Record<string, string> | null)
-                                       : null
-                                 "
+                                 :progress="fieldProgress(key)"
                                  @update:model-value="(locale: string) => setLocale(key, locale)"
                               />
                            </template>
@@ -110,6 +106,7 @@ import {
 import { computed, nextTick, onMounted, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import type { CmsSearchFocus } from '../../../shared/search'
+import { translationProgress } from '../../../shared/translations'
 import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
@@ -252,6 +249,10 @@ function slugSource(field: FieldConfig) {
 
 function hasLocaleSwitch(field: FieldConfig) {
    return isTranslatableField(field) || hasTranslatableBlockFields(field)
+}
+
+function fieldProgress(key: string) {
+   return translationProgress(props.fields, state.value, i18n, [key])
 }
 
 function localeFor(key: string) {

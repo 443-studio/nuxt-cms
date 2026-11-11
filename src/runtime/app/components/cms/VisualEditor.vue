@@ -12,7 +12,7 @@
             <CmsLocaleSwitch
                v-if="i18n.locales.length > 1"
                v-model="locale"
-               :value="localeFilled"
+               :progress="translations"
             />
             <KSegmentedControl
                v-model="device"
@@ -273,6 +273,7 @@ import {
    selectionAfterRemove,
    toggleBlockHidden,
 } from '../../../shared/preview'
+import { translationProgress } from '../../../shared/translations'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
@@ -412,10 +413,7 @@ const sections = computed(() => {
       .filter((section) => section.keys.length)
 })
 
-const localeFilled = computed(() => {
-   const title = props.content ? state.value.title : null
-   return title && typeof title === 'object' ? (title as Record<string, string>) : null
-})
+const translations = computed(() => translationProgress(props.fields, state.value, i18n))
 
 function setValue(key: string, value: unknown) {
    state.value = { ...state.value, [key]: value }

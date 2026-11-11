@@ -58,6 +58,7 @@
 import type { FieldConfig } from '#nuxt-cms'
 import { Icon as KIcon, Switch as KSwitch } from '@xleddyl/443-components-vue'
 import { computed, ref } from '#imports'
+import { TRANSLATIONS_COLUMN } from '../../../shared/translations'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const props = defineProps<{
@@ -70,13 +71,18 @@ const model = defineModel<string[]>({ required: true })
 const available = computed(() => [...Object.keys(props.fields), ...props.extra])
 const hidden = computed(() => available.value.filter((key) => !model.value.includes(key)))
 
+const EXTRA_COLUMNS: Record<string, { label: string; icon: string }> = {
+   status: { label: 'Status', icon: 'check-circle' },
+   [TRANSLATIONS_COLUMN]: { label: 'Translations', icon: 'language' },
+}
+
 function labelOf(key: string) {
-   return props.fields[key]?.label ?? (key === 'status' ? 'Status' : key)
+   return props.fields[key]?.label ?? EXTRA_COLUMNS[key]?.label ?? key
 }
 
 function iconOf(key: string) {
    const field = props.fields[key]
-   return field ? fieldIcon(field) : 'check-circle'
+   return field ? fieldIcon(field) : EXTRA_COLUMNS[key]?.icon ?? 'check-circle'
 }
 
 function hide(key: string) {

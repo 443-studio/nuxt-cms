@@ -180,6 +180,32 @@ body:has(.cms-scope) {
    text-transform: uppercase;
 }
 
+.cms-locale-dot {
+   flex: none;
+   width: 0.375rem;
+   height: 0.375rem;
+   margin-inline-start: -0.125rem;
+   border-radius: 999px;
+}
+
+.cms-locale-dot.is-complete {
+   background: var(--k-success);
+}
+
+.cms-locale-dot.is-partial {
+   background: var(--k-warning);
+}
+
+.cms-locale-dot.is-missing {
+   box-shadow: inset 0 0 0 1.5px var(--k-danger);
+}
+
+.cms-translation-badges {
+   display: inline-flex;
+   flex-wrap: wrap;
+   gap: 0.25rem;
+}
+
 .cms-page {
    display: flex;
    flex-direction: column;
@@ -297,6 +323,10 @@ body:has(.cms-scope) {
    text-overflow: ellipsis;
    white-space: nowrap;
    color: var(--k-text-dimmed);
+}
+
+.cms-tree-translations {
+   flex-shrink: 0;
 }
 
 .cms-tree-meta {

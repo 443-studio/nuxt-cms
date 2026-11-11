@@ -9,6 +9,7 @@
             <span :key="total" class="cms-count">{{ total }}</span>
          </template>
          <template v-if="config.kind === 'single' && !singleLock" #actions>
+            <CmsTranslationMenu v-model="formState" :fields="config.fields" />
             <KButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
          </template>
       </KPageHeader>
@@ -79,6 +80,11 @@
                   <span class="cms-tree-title">{{ node.row.label }}</span>
                   <span class="cms-tree-path">{{ node.row.path }}</span>
                </span>
+               <CmsTranslationBadges
+                  v-if="pageTranslations"
+                  :progress="pageProgress(node.row)"
+                  class="cms-tree-translations"
+               />
                <span class="cms-tree-meta">{{ lastEdit(node.row.updatedAt) }}</span>
                <KIcon name="chevron-right" class="cms-tree-chevron" />
             </NuxtLink>
@@ -200,6 +206,9 @@
             <template v-for="key in mediaKeys" #[`cell-${key}`]="{ row }" :key="key">
                <CmsMediaThumb :value="mediaThumbValue(key, row[key])" />
             </template>
+            <template v-if="translationsShown" #[`cell-${TRANSLATIONS_COLUMN}`]="{ row }">
+               <CmsTranslationBadges :progress="rowProgress(row)" />
+            </template>
             <template v-if="drafts" #cell-status="{ row }">
                <CmsStatusBadge
                   :published="row.status === 'published'"
@@ -270,6 +279,7 @@ import {
    isScheduledContent,
    isTranslatableField,
    isTranslatableMediaField,
+   pageFields,
    pageParentPath,
    pickTranslatedMedia,
    selectDisplayValue,
@@ -311,6 +321,11 @@ import {
 } from '../../shared/list-filters'
 import { readSearchFocus } from '../../shared/search'
 import type { CmsTransferFormat } from '../../shared/transfer'
+import {
+   TRANSLATIONS_COLUMN,
+   entryHasTranslations,
+   translationProgress,
+} from '../../shared/translations'
 import { canTransferCsv, exportFileName } from '../../shared/transfer'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
@@ -614,16 +629,33 @@ function isSortable(field: FieldConfig) {
 
 const settings = useCmsSettingsState()
 
+const listColumns = computed(() => entryListColumns(name, settings.value, contentI18n))
+
+const translationsShown = computed(() => listColumns.value.includes(TRANSLATIONS_COLUMN))
+
+const pageTranslations =
+   config.kind === 'page' && contentI18n.locales.length > 1 && entryHasTranslations(config)
+
+function rowProgress(row: Row) {
+   return translationProgress(config!.fields, row, contentI18n)
+}
+
+function pageProgress(row: Row) {
+   return translationProgress(pageFields(config!, String(row.path)), row, contentI18n)
+}
+
 const columns = computed<TableColumn<Row>[]>(() =>
-   entryListColumns(name, settings.value).map((key) =>
-      key === 'status' && !config.fields.status
-         ? { key: 'status', label: 'Status', sortable: true }
-         : {
-              key,
-              label: config.fields[key]!.label,
-              value: (row: Row) => displayValue(config.fields[key]!, key, row[key]),
-              sortable: isSortable(config.fields[key]!),
-           }
+   listColumns.value.map((key) =>
+      key === TRANSLATIONS_COLUMN
+         ? { key, label: 'Translations' }
+         : key === 'status' && !config.fields.status
+           ? { key: 'status', label: 'Status', sortable: true }
+           : {
+                key,
+                label: config.fields[key]!.label,
+                value: (row: Row) => displayValue(config.fields[key]!, key, row[key]),
+                sortable: isSortable(config.fields[key]!),
+             }
    )
 )
 
@@ -633,7 +665,7 @@ function rowKey(row: Row) {
 
 const filterKeys = computed(() => {
    if (!isCollectionKind(config)) return []
-   const shown = entryListFilterKeys(config, entryListColumns(name, settings.value))
+   const shown = entryListFilterKeys(config, listColumns.value)
    const active = Object.keys(filters.value).filter((key) => !shown.includes(key))
    return [...shown, ...active]
 })

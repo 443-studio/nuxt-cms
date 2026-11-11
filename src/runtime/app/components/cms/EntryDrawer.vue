@@ -9,6 +9,15 @@
          />
       </template>
 
+      <template v-if="!loading" #actions>
+         <CmsTranslationMenu
+            v-model="formState"
+            :fields="config.fields"
+            :disabled="!!lock"
+            size="sm"
+         />
+      </template>
+
       <KStack v-if="loading" align="center" justify="center" class="cms-drawer-loading">
          <KSpinner size="lg" label="Loading" />
       </KStack>

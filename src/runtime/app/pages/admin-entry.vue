@@ -5,6 +5,7 @@
             <CmsStatusBadge :published="published" />
          </template>
          <template #actions>
+            <CmsTranslationMenu v-model="formState" :fields="fields" :disabled="!!lock" />
             <KButton label="Back" icon="arrow-left" variant="soft" @click="goBack" />
             <KButton v-if="!lock" type="submit" :form="FORM_ID" label="Save" :loading="saving" />
             <KButton

@@ -25,7 +25,8 @@ A [`page` entry](schema.md#pages) gets its own section in the sidebar. The list 
 follows the routes of the site: a child path sits under its parent, indented. On the right of each
 row is the date and time of the last save, or `Never saved` when the page has no row yet, because a
 page row is written the first time that page is saved. The stamp is rendered in the timezone of the
-browser. The editor of a page shows the shared fields plus the
+browser. With several languages, a badge per language shows how much of the page is
+[translated](#translations). The editor of a page shows the shared fields plus the
 fields of that path, and its title carries a breadcrumb back to each ancestor page and to the list.
 Pages cannot be deleted from the admin.
 
@@ -169,6 +170,34 @@ session, same-origin requests for writes): `GET /api/cms/export/<entry>?format=j
 `POST /api/cms/import/<entry>?format=json|csv&mode=create|upsert&dryRun=true|false` with the file
 as the request body. Singles and pages have no import or export.
 
+### Translations
+
+With more than one language in [`cms.i18n`](configuration.md#i18n), the admin tracks how much of
+each item is translated. Every translatable value that is filled in the default language counts:
+`text`, `richtext` and `media` fields, at the top level and inside blocks, on collections, singles,
+pages and content items. A value counts as translated in a language when that language has it too (rich
+text with no visible text is empty). Fields hidden by `showIf` are left out, and `required` does not
+matter. Each language is **complete** (every value), **partial** (some) or **missing** (none).
+
+- **Language switches** carry a dot on every other language: green for complete, amber for partial,
+  a red ring for missing. Hover a language for the count, for example `it: 3 of 5 values
+  translated`. In a form each field has its own switch (a `blocks` field counts all its blocks); the
+  switch of the visual editor counts the whole item.
+- **Lists**: the table of a collection or content entry with translatable fields has a
+  **Translations** column, with one badge per language other than the default. It is shown by
+  default and can be hidden in **Settings > Content > Table columns**. The page tree shows the same
+  badges. They are computed in the browser from the rows the list already loads.
+- **Actions**: the `...` menu of the form header (entry page, entry drawer, single, page) and of the
+  visual editor has a **Translations** group. **Copy EN into IT** has two choices: **Fill empty
+  values** writes only the values that IT does not have yet, and **Replace all values...** asks
+  first, then overwrites every IT value that has an EN version. **Clear IT...** asks first, then
+  removes the IT values so the site falls back to the default language. The visual editor acts on
+  the language picked in its top bar; a form lists every language other than the default. The
+  actions change the form only: nothing is written until you save. They are hidden when your role
+  cannot edit the item.
+
+Read-only users can still switch languages to read every translation.
+
 ## Search
 
 The search box under the title of the sidebar, or ⌘K (Ctrl K on Windows and Linux), opens a search
@@ -200,7 +229,9 @@ The visual editor edits a body of blocks on top of the real site. It fills the w
 
 - **Top bar**: back, the title, the status badge (Draft, Published or Scheduled) and an "Unsaved
   changes" note, the language switch, the preview width (desktop or mobile, 390 px), and the
-  actions: **Schedule**, **Save**, **Publish** or **Unpublish**, and Delete in the `...` menu.
+  actions: **Schedule**, **Save**, **Publish** or **Unpublish**, and the `...` menu with the
+  [translation actions](#translations), **Duplicate** and **Delete**. The language switch marks how
+  much of the item each language has.
   **Schedule** picks a publish date and publishes the item: with a future date it stays hidden from
   the site until then. Save stays in the editor; the first save of a new item moves to its URL.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
@@ -257,7 +288,8 @@ The account button at the bottom of the sidebar opens **Settings**:
 - **Users** (super admin and roles with `users.manage`): add accounts, pick their role, set a new
   password, delete accounts.
 - **Content** (roles with `settings.manage`): one item for each entry the role can read.
-  - **Table columns** (collections only): show, hide and drag the columns of the table.
+  - **Table columns** (collections only): show, hide and drag the columns of the table, including
+    **Status** and **Translations**.
   - **Form layout**: drag a field up or down, or next to another field to put them in the same row.
     Sections come from the config and fields cannot be added.
 - **Sign out**.

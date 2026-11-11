@@ -1,4 +1,4 @@
-import type { CmsEntry, CmsEntrySettings, CmsFormLayout, CmsSettingsMap } from '#nuxt-cms'
+import type { CmsEntry, CmsEntrySettings, CmsFormLayout, CmsI18n, CmsSettingsMap } from '#nuxt-cms'
 import {
    isCollectionKind,
    layoutFromConfig,
@@ -8,6 +8,7 @@ import {
 } from '#nuxt-cms'
 import { useFetch, useState } from '#imports'
 import cmsConfig from '#cms-config'
+import { TRANSLATIONS_COLUMN, hasTranslationsColumn } from '../../shared/translations'
 import { cmsApi } from '../utils/api'
 
 const SETTINGS_ENDPOINT = '/api/cms/admin/settings'
@@ -66,18 +67,27 @@ export function entryFormLayout(
    return saved ? resolveFormLayout(fields, saved) : defaultFormLayout(name, fields)
 }
 
-export function listExtraColumns(name: string): string[] {
+export function listExtraColumns(name: string, i18n?: CmsI18n): string[] {
    const entry = entryOf(name)
-   return entry && isCollectionKind(entry) && entry.drafts ? ['status'] : []
+   if (!entry || !isCollectionKind(entry)) return []
+   return [
+      ...(entry.drafts ? ['status'] : []),
+      ...(i18n && hasTranslationsColumn(entry, i18n) ? [TRANSLATIONS_COLUMN] : []),
+   ]
 }
 
-export function entryListColumns(name: string, settings: CmsSettingsMap): string[] {
+export function entryListColumns(name: string, settings: CmsSettingsMap, i18n?: CmsI18n): string[] {
    const entry = entryOf(name)
    if (!entry) return []
-   return resolveListColumns(
-      entry.fields,
-      settings[name]?.columns,
-      entry.list,
-      listExtraColumns(name)
+   const extra = listExtraColumns(name, i18n)
+   const saved = settings[name]?.columns
+   const columns = resolveListColumns(entry.fields, saved, entry.list, extra)
+   const customized = !!saved?.some(
+      (key) => Object.hasOwn(entry.fields, key) || extra.includes(key)
    )
+   return customized ||
+      !extra.includes(TRANSLATIONS_COLUMN) ||
+      columns.includes(TRANSLATIONS_COLUMN)
+      ? columns
+      : [...columns, TRANSLATIONS_COLUMN]
 }

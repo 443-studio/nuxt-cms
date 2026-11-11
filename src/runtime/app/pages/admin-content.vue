@@ -88,7 +88,7 @@
             :loading="saving"
             @click="save(published ? 'draft' : 'published')"
          />
-         <KDropdownMenu v-if="!isNew && moreItems.length" :items="moreItems" placement="bottom-end">
+         <KDropdownMenu v-if="moreItems.length" :items="moreItems" placement="bottom-end">
             <KButton
                :icon="cmsIcon('ellipsis-horizontal')"
                size="sm"
@@ -141,6 +141,7 @@ import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsToast } from '../composables/cms-toast'
+import { useCmsTranslationActions } from '../composables/cms-translation-actions'
 import { cmsApi } from '../utils/api'
 import type { CmsResponseIssue } from '../utils/ui'
 import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
@@ -173,6 +174,7 @@ const formKeys = [...Object.keys(config.fields), 'status']
 const editor = ref<{
    validate: () => boolean
    setIssues: (issues: CmsResponseIssue[]) => void
+   locale: string
 } | null>(null)
 
 function pickFields(row: Record<string, unknown>) {
@@ -216,10 +218,23 @@ const lock = computed(() =>
       status: (JSON.parse(snapshot.value) as Record<string, unknown>).status,
    })
 )
-const moreItems = computed<MenuEntry[]>(() => [
-   ...(can(`${name}.create`) ? [{ label: 'Duplicate', onSelect: duplicate }] : []),
-   ...(can(`${name}.delete`) ? [{ label: 'Delete', onSelect: remove }] : []),
-])
+const { items: translationItems } = useCmsTranslationActions({
+   fields: config.fields,
+   state: formState,
+   locale: () => editor.value?.locale,
+   disabled: () => !!lock.value,
+})
+const entryItems = computed<MenuEntry[]>(() =>
+   isNew
+      ? []
+      : [
+           ...(can(`${name}.create`) ? [{ label: 'Duplicate', onSelect: duplicate }] : []),
+           ...(can(`${name}.delete`) ? [{ label: 'Delete', onSelect: remove }] : []),
+        ]
+)
+const moreItems = computed<MenuEntry[][]>(() =>
+   [translationItems.value, entryItems.value].filter((group) => group.length)
+)
 
 const locked = computed(() =>
    isNew
