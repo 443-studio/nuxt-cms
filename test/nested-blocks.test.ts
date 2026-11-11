@@ -562,7 +562,7 @@ describe('nested page storage', () => {
          position: 1,
          value: JSON.stringify(data.body[1]!.items),
       })
-      expect(encoded.fieldKeys).toContain('body.items')
+      expect(encoded.blockPrefixes).toContain('body.')
       expect(encoded.media).toEqual([])
       const row = {
          id: 'home',

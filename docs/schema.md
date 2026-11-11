@@ -140,7 +140,9 @@ pages_media   (page_id -> pages.id on delete cascade, key, position default 0, m
   column would (the key, or the JSON of a translatable media).
 - A `blocks` field stores each block at its own `position`: the block type is a row with
   `key = <field>._type`, each subfield is a row with `key = <field>.<subfield>` (media subfields
-  in `<entry>_media`, the others in `<entry>_fields`).
+  in `<entry>_media`, the others in `<entry>_fields`), and the Hide/Show flag of a block that does
+  not declare its own `hidden` field is a row `<field>.hidden` (`true` or `false`). Saving a blocks
+  field replaces every `<field>.*` row of the page, so rows of removed block fields go away too.
 - A [nested `blocks` subfield](#nested-blocks) is one `<entry>_fields` row
   `<field>.<subfield>` at the position of its parent block, holding the JSON of the whole nested
   list (the same shape a collection column holds). Media keys inside it stay in that JSON, not in
