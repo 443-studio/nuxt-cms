@@ -43,6 +43,7 @@ import {
    isMultiValueField,
    isPrivateField,
    isRoutedContent,
+   isStringListField,
    isTranslatableMediaField,
    linkHref,
    linkLabelText,
@@ -530,6 +531,8 @@ function entryResolvers(config: CmsConfig, name: string, entry: CmsEntry) {
          }
       } else if (field.type === 'media') {
          resolvers[key] = (parent: Row, _args: unknown, ctx: Ctx) => resolveMedia(ctx, parent[key])
+      } else if (isStringListField(field)) {
+         resolvers[key] = (parent: Row) => (Array.isArray(parent[key]) ? parent[key] : [])
       }
    }
    if (isRoutedContent(entry)) {
