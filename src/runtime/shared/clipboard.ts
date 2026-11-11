@@ -144,7 +144,10 @@ function blockCount(count: number) {
    return `${count} ${count === 1 ? 'block' : 'blocks'}`
 }
 
-function skippedText(result: CmsPasteResult, field: Pick<FieldConfig, 'max'>): string | undefined {
+export function skippedText(
+   result: CmsPasteResult,
+   field: Pick<FieldConfig, 'max'>
+): string | undefined {
    const parts: string[] = []
    if (result.unknown.length) {
       const types = [...new Set(result.unknown)].join(', ')

@@ -350,8 +350,18 @@
          :blocks="blocksField.blocks ?? {}"
          :disabled-reason="canAdd ? undefined : maxReached"
          :paste-count="pasteCount"
+         :presets="presets"
          @pick="insertFromPalette"
          @paste="pasteFromPalette"
+         @preset="insertPresetFromPalette"
+      />
+
+      <CmsPresetModal
+         v-model:open="presetOpen"
+         title="Save as preset"
+         submit-label="Save preset"
+         :hint="presetHint"
+         :save="savePreset"
       />
    </div>
 </template>
@@ -408,6 +418,8 @@ import {
    normalizeInlineText,
 } from '../../../shared/inline-text'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
+import type { CmsPresetDetails } from '../../../shared/presets'
+import { CMS_PRESET_ICON, presetInsertNotice } from '../../../shared/presets'
 import type {
    CmsBlockValue,
    CmsClipboardAction,
@@ -444,6 +456,7 @@ import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsEditorLayout } from '../../composables/cms-editor-layout'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsHistory } from '../../composables/cms-history'
+import { useCmsPresets } from '../../composables/cms-presets'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
 import {
@@ -789,16 +802,66 @@ function cut(index: number, event?: ClipboardEvent) {
    clipboard.notify(copyNotice(1, true))
 }
 
-async function paste(index: number, text?: string | null) {
-   const items = await clipboard.read(text)
-   const result = items ? pasteBlocks(blocks.value, index, items, blocksField.value, i18n) : null
-   if (result?.pasted) {
+function insertItems(index: number, items: readonly CmsBlockValue[]) {
+   const result = pasteBlocks(blocks.value, index, items, blocksField.value, i18n)
+   if (result.pasted) {
       setBlocks(result.list)
       select(result.at)
       post({ type: 'reveal', index: result.at })
    }
+   return result
+}
+
+async function paste(index: number, text?: string | null) {
+   const items = await clipboard.read(text)
+   const result = items ? insertItems(index, items) : null
    clipboard.notify(pasteNotice(result, blocksField.value))
 }
+
+const {
+   presets,
+   load: loadPresets,
+   create: createPreset,
+} = useCmsPresets(
+   () => props.entryName,
+   () => props.fieldKey
+)
+
+const presetOpen = ref(false)
+const presetItems = ref<CmsBlockValue[]>([])
+
+const presetHint = computed(() => {
+   const types = presetItems.value.map(
+      (item) => blocksField.value.blocks?.[String(item.type)]?.label ?? String(item.type)
+   )
+   return `A copy of ${types.join(
+      ', '
+   )}. Insert it from the block picker of any field with the same blocks.`
+})
+
+function openPresetSave(index: number) {
+   const item = blocks.value[index]
+   if (!item) return
+   presetItems.value = [JSON.parse(JSON.stringify(item)) as CmsBlockValue]
+   presetOpen.value = true
+}
+
+async function savePreset(details: CmsPresetDetails) {
+   const preset = await createPreset({ ...details, items: presetItems.value })
+   clipboard.notify({ title: `Preset "${preset.name}" saved`, color: 'success' })
+}
+
+function insertPresetFromPalette(id: string) {
+   paletteOpen.value = false
+   const preset = presets.value.find((candidate) => candidate.id === id)
+   if (!preset || !canAdd.value) return
+   const result = insertItems(paletteIndex.value, preset.items)
+   clipboard.notify(presetInsertNotice(result, blocksField.value, preset))
+}
+
+watch(paletteOpen, (open) => {
+   if (open) void loadPresets()
+})
 
 function onClipboard(event: ClipboardEvent) {
    if (event.defaultPrevented || paletteOpen.value) return
@@ -890,6 +953,11 @@ function blockMenu(index: number): MenuItems {
             disabled: !!full,
             disabledReason: full,
             onSelect: () => void paste(index + 1),
+         },
+         {
+            label: 'Save as preset',
+            icon: cmsIcon(CMS_PRESET_ICON),
+            onSelect: () => openPresetSave(index),
          },
       ],
       [
@@ -1161,6 +1229,7 @@ onMounted(() => {
       { immediate: true }
    )
    void loadLibrary()
+   void loadPresets()
    if (props.focus) applyFocus(props.focus)
 })
 

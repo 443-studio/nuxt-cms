@@ -1,4 +1,5 @@
 import { defineEventHandler } from 'h3'
+import cmsConfig from '#cms-config'
 import { useDb } from '#cms-db'
 import { cms_settings } from '#cms-tables'
 import type { CmsSettingsMap } from '../../shared/index'
@@ -10,6 +11,7 @@ export default defineEventHandler(async (event): Promise<CmsSettingsMap> => {
    const rows = await useDb().select().from(cms_settings)
    return Object.fromEntries(
       rows.flatMap((row) => {
+         if (!Object.hasOwn(cmsConfig, row.key)) return []
          const value = parseSettingsValue(row.value)
          return value ? [[row.key, value]] : []
       })

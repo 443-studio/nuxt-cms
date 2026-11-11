@@ -345,7 +345,8 @@ by label, description, [group and tags](schema.md#block-components) (case and ac
 matter), move with ↑ and ↓, pick with Enter or a click, close with Escape. Blocks with a `group`
 are listed under its heading. Each block shows its icon, label and description. When the field is
 full the blocks are disabled. After you copy or cut blocks that the field accepts, the first row is
-**Paste N blocks**.
+**Paste N blocks**. The [presets](#block-presets) that fit the field are listed last, under
+**Presets**.
 
 ### Copy and paste
 
@@ -356,6 +357,22 @@ another content type that uses the same blocks, or into the tiles of a `blocks` 
 block types of the target field are pasted: unknown fields are dropped, values are checked like the
 form, and a full field takes as many as fit. A toast says what was pasted and what was skipped. In a
 text field, or with text selected, the keys copy and paste text as usual.
+
+### Block presets
+
+**Save as preset** in the `...` menu of a block (block tree, inspector header, or a tile of a
+`blocks` field) keeps a copy of that block under a name and an optional description. The
+[block picker](#block-picker) of every field that has all the block types of a preset lists it
+under **Presets**, with its name and its number of blocks: picking it inserts a copy, the same way
+a paste does (one undo step, as many blocks as fit under `max`, unknown fields dropped, values
+checked). So a preset saved in a news item can be inserted into another news item, or into a blog
+item when both use the same blocks. A preset is a copy, not a link: changing or deleting it never
+changes the blocks that were inserted from it.
+
+**Settings → Block presets** lists every preset with its size and where it was saved from, to
+rename or delete it. Presets live in the `cms_settings` table (one row per preset, keyed
+`cms:presets:<id>`), up to 500 presets of up to 100 blocks and 1 MB each, and every admin can use
+and manage them.
 
 ### Share preview
 
@@ -415,6 +432,7 @@ The account button at the bottom of the sidebar opens **Settings**:
   [SEO](seo.md#site-settings).
 - **Redirects** (roles with `redirects.manage`): the redirects of the site, with search, import and
   export. Changing the slug of a published item adds one. See [SEO](seo.md#redirects).
+- **Block presets**: rename and delete the [block presets](#block-presets).
 - **Content** (roles with `settings.manage`): one item for each entry the role can read.
   - **Table columns** (collections only): show, hide and drag the columns of the table, including
     **Status** and **Translations**.

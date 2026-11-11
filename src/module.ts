@@ -1452,6 +1452,31 @@ export default defineNuxtModule<ModuleOptions>({
          method: 'delete',
          handler: resolver.resolve('./runtime/server/api/settings.delete'),
       })
+      addServerHandler({
+         route: '/api/cms/presets',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/presets.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:id',
+         method: 'put',
+         handler: resolver.resolve('./runtime/server/api/preset.put'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:id',
+         method: 'delete',
+         handler: resolver.resolve('./runtime/server/api/preset.delete'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:collection/:field',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/presets-field.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:collection/:field',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/presets-field.post'),
+      })
 
       addServerHandler({
          route: '/api/cms/tags/:collection/:field',

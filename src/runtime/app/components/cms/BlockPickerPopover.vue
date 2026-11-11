@@ -13,8 +13,10 @@
             :blocks="blocks"
             :disabled-reason="disabledReason"
             :paste-count="pasteCount"
+            :presets="presets"
             @pick="pick"
             @paste="paste"
+            @preset="preset"
             @close="open = false"
          />
       </template>
@@ -27,8 +29,10 @@
             :blocks="blocks"
             :disabled-reason="disabledReason"
             :paste-count="pasteCount"
+            :presets="presets"
             @pick="pick"
             @paste="paste"
+            @preset="preset"
          />
       </KModal>
    </template>
@@ -40,19 +44,27 @@ import type { OverlayAnchorTarget } from '@xleddyl/443-components-vue'
 import { Modal as KModal, Popover as KPopover } from '@xleddyl/443-components-vue'
 import { onBeforeUnmount, onMounted, ref } from '#imports'
 import { CMS_BLOCK_PICKER_MODAL_QUERY } from '../../../shared/block-picker'
+import type { CmsBlockPreset } from '../../../shared/presets'
 
 withDefaults(
    defineProps<{
       blocks: Record<string, BlockConfig>
       disabledReason?: string
       pasteCount?: number
+      presets?: CmsBlockPreset[]
       label?: string
       anchor?: OverlayAnchorTarget | null
    }>(),
-   { disabledReason: undefined, pasteCount: 0, label: 'Insert a block', anchor: null }
+   {
+      disabledReason: undefined,
+      pasteCount: 0,
+      presets: () => [],
+      label: 'Insert a block',
+      anchor: null,
+   }
 )
 
-const emit = defineEmits<{ pick: [type: string]; paste: [] }>()
+const emit = defineEmits<{ pick: [type: string]; paste: []; preset: [id: string] }>()
 
 const open = defineModel<boolean>('open', { default: false })
 const narrow = ref(false)
@@ -71,6 +83,11 @@ function pick(type: string) {
 function paste() {
    open.value = false
    emit('paste')
+}
+
+function preset(id: string) {
+   open.value = false
+   emit('preset', id)
 }
 
 onMounted(() => {

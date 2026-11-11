@@ -17,26 +17,51 @@ import type { CommandGroup, CommandItem } from '@xleddyl/443-components-vue'
 import { CommandList as KCommandList } from '@xleddyl/443-components-vue'
 import { computed } from '#imports'
 import { blockPickerGroups } from '../../../shared/block-picker'
+import type { CmsBlockPreset } from '../../../shared/presets'
+import { CMS_PRESET_ICON, CMS_PRESET_PICKER_GROUP, presetPickerItem } from '../../../shared/presets'
 import { cmsIcon } from '../../utils/ui'
 
 const PASTE_ID = 'cms:paste'
+
+const PRESET_PREFIX = 'cms:preset:'
 
 const props = withDefaults(
    defineProps<{
       blocks: Record<string, BlockConfig>
       disabledReason?: string
       pasteCount?: number
+      presets?: CmsBlockPreset[]
       label?: string
    }>(),
-   { disabledReason: undefined, pasteCount: 0, label: 'Available blocks' }
+   { disabledReason: undefined, pasteCount: 0, presets: () => [], label: 'Available blocks' }
 )
 
-const emit = defineEmits<{ pick: [type: string]; paste: []; close: [] }>()
+const emit = defineEmits<{ pick: [type: string]; paste: []; preset: [id: string]; close: [] }>()
 
-const groups = computed<CommandGroup<string>[]>(() =>
-   blockPickerGroups(props.blocks, () => !!props.disabledReason).map((group) => ({
+const presetGroup = computed<CommandGroup<string>[]>(() =>
+   props.presets.length
+      ? [
+           {
+              id: 'cms:presets',
+              label: CMS_PRESET_PICKER_GROUP,
+              items: props.presets.map((preset) => {
+                 const item = presetPickerItem(preset)
+                 return {
+                    ...item,
+                    id: `${PRESET_PREFIX}${item.id}`,
+                    icon: cmsIcon(CMS_PRESET_ICON),
+                    disabled: !!props.disabledReason,
+                 }
+              }),
+           },
+        ]
+      : []
+)
+
+const groups = computed<CommandGroup<string>[]>(() => [
+   ...blockPickerGroups(props.blocks, () => !!props.disabledReason).map((group) => ({
       id: group.id || 'other',
-      label: group.label ?? undefined,
+      label: group.label ?? (presetGroup.value.length ? 'Blocks' : undefined),
       items: group.items.map((item) => ({
          id: item.type,
          label: item.label,
@@ -46,8 +71,9 @@ const groups = computed<CommandGroup<string>[]>(() =>
          disabled: item.disabled,
          data: item.type,
       })),
-   }))
-)
+   })),
+   ...presetGroup.value,
+])
 
 function pinned(query: string): CommandItem<string>[] {
    const count = props.pasteCount
@@ -69,6 +95,7 @@ function emptyText(query: string) {
 
 function choose(item: CommandItem<string>) {
    if (item.id === PASTE_ID) emit('paste')
+   else if (item.id.startsWith(PRESET_PREFIX)) emit('preset', item.id.slice(PRESET_PREFIX.length))
    else if (item.data) emit('pick', item.data)
 }
 </script>

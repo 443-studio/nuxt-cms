@@ -117,11 +117,19 @@
          </div>
 
          <CmsBlockPickerPopover
-            v-if="canAdd && !disabled && Object.keys(blocks).length > 1"
+            v-if="
+               canAdd &&
+               !disabled &&
+               !mediaOnly &&
+               (Object.keys(blocks).length > 1 || presets.length)
+            "
+            v-model:open="pickerMenuOpen"
             :blocks="blocks"
             :paste-count="pasteCount"
+            :presets="presets"
             @pick="add"
             @paste="paste(items.length, null)"
+            @preset="insertPreset"
          >
             <button type="button" class="cms-block-add">
                <KIcon name="plus" />
@@ -187,6 +195,15 @@
             </template>
          </CmsVisualEditor>
       </KModal>
+
+      <CmsPresetModal
+         v-if="presetsEnabled"
+         v-model:open="presetOpen"
+         title="Save as preset"
+         submit-label="Save preset"
+         :hint="presetHint"
+         :save="savePreset"
+      />
 
       <KModal v-if="mediaOnly" v-model:open="pickerOpen" title="Media" size="lg">
          <CmsMediaGallery
@@ -310,12 +327,15 @@ import {
    Stack as KStack,
    useFieldControl,
 } from '@xleddyl/443-components-vue'
-import { computed, ref, useState } from '#imports'
+import { computed, onMounted, ref, useState, watch } from '#imports'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
+import type { CmsPresetDetails } from '../../../shared/presets'
+import { CMS_PRESET_ICON, presetInsertNotice } from '../../../shared/presets'
 import type { CmsBlockValue, CmsClipboardAction } from '../../../shared/preview'
 import { clipboardActionApplies } from '../../../shared/preview'
 import { useCmsClipboard } from '../../composables/cms-clipboard'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
+import { useCmsPresets } from '../../composables/cms-presets'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { clipboardTarget } from '../../utils/keyboard'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
@@ -709,6 +729,64 @@ function onClipboard(event: ClipboardEvent) {
    }
 }
 
+const presetsEnabled = computed(() => !mediaOnly.value && !!props.entryName && !!props.fieldKey)
+
+const {
+   presets: fieldPresets,
+   load: loadPresets,
+   create: createPreset,
+} = useCmsPresets(
+   () => (presetsEnabled.value ? props.entryName : undefined),
+   () => props.fieldKey
+)
+
+const presets = computed(() => (presetsEnabled.value ? fieldPresets.value : []))
+
+const pickerMenuOpen = ref(false)
+const presetOpen = ref(false)
+const presetItems = ref<CmsBlockValue[]>([])
+
+const presetHint = computed(() => {
+   const types = presetItems.value.map((item) => labelOf(item))
+   return `A copy of ${types.join(
+      ', '
+   )}. Insert it from the block picker of any field with the same blocks.`
+})
+
+function openPresetSave(index: number) {
+   const item = items.value[index]
+   if (!item) return
+   presetItems.value = [JSON.parse(JSON.stringify(item)) as CmsBlockValue]
+   presetOpen.value = true
+}
+
+async function savePreset(details: CmsPresetDetails) {
+   const preset = await createPreset({ ...details, items: presetItems.value })
+   clipboard.notify({ title: `Preset "${preset.name}" saved`, color: 'success' })
+}
+
+function insertPreset(id: string) {
+   const preset = presets.value.find((candidate) => candidate.id === id)
+   if (!preset || !canAdd.value || disabled.value) return
+   const result = pasteBlocks(
+      items.value as CmsBlockValue[],
+      items.value.length,
+      preset.items,
+      props.field,
+      i18n
+   )
+   if (result.pasted) model.value = result.list
+   clipboard.notify(presetInsertNotice(result, props.field, preset))
+}
+
+watch(pickerMenuOpen, (open) => {
+   if (open) void loadPresets()
+})
+
+onMounted(() => {
+   if (presetsEnabled.value) void loadPresets()
+})
+
 function tileMenu(index: number): MenuItems {
    const copyItem = {
       label: 'Copy',
@@ -744,6 +822,15 @@ function tileMenu(index: number): MenuItems {
             disabledReason: full,
             onSelect: () => duplicate(index),
          },
+         ...(presetsEnabled.value
+            ? [
+                 {
+                    label: 'Save as preset',
+                    icon: cmsIcon(CMS_PRESET_ICON),
+                    onSelect: () => openPresetSave(index),
+                 },
+              ]
+            : []),
       ],
    ]
 }

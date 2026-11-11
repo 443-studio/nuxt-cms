@@ -52,6 +52,10 @@
          <CmsSettingsRedirects v-model:creating="redirectsCreating" />
       </template>
 
+      <template v-if="hasBlocks" #section-presets>
+         <CmsSettingsPresets />
+      </template>
+
       <template v-for="item in visibleEntries" :key="item.key" #[`actions-${item.key}`]>
          <span class="cms-settings-status" :class="`is-${entryStatus}`" aria-live="polite">
             {{ STATUS_LABELS[entryStatus] }}
@@ -65,6 +69,7 @@
 
 <script setup lang="ts">
 import type { CmsEntry, CmsEntryKind } from '#nuxt-cms'
+import { entryFieldsFor } from '#nuxt-cms'
 import type { SettingsModalSection } from '@xleddyl/443-components-vue'
 import {
    AppearanceSettings as KAppearanceSettings,
@@ -73,6 +78,7 @@ import {
 } from '@xleddyl/443-components-vue'
 import { computed, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
+import { CMS_PRESET_ICON } from '../../../shared/presets'
 import { useCmsAccount } from '../../composables/cms-account'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { CMS_SETTINGS_QUERY, cmsIcon } from '../../utils/ui'
@@ -116,6 +122,10 @@ const entries = Object.entries(cmsConfig as Record<string, CmsEntry>).map(([name
    kind: entry.kind,
    icon: entry.icon ?? KIND_ICONS[entry.kind],
 }))
+
+const hasBlocks = Object.values(cmsConfig as Record<string, CmsEntry>).some((entry) =>
+   Object.values(entryFieldsFor(entry)).some((field) => field.type === 'blocks')
+)
 
 const account = computed(() => ({
    name: displayName.value,
@@ -162,6 +172,16 @@ const sections = computed<SettingsModalSection[]>(() => [
               label: 'Redirects',
               icon: cmsIcon('arrow-uturn-right'),
               description: 'Send visitors from old paths to new ones.',
+           },
+        ]
+      : []),
+   ...(hasBlocks
+      ? [
+           {
+              id: 'presets',
+              label: 'Block presets',
+              icon: cmsIcon(CMS_PRESET_ICON),
+              description: 'Saved copies of blocks, inserted from the block picker.',
            },
         ]
       : []),
