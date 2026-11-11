@@ -443,76 +443,69 @@
          </p>
       </KModal>
 
-      <KModal v-if="canUpload" v-model:open="newFolderOpen" title="New folder" size="sm">
+      <KFormModal
+         v-if="canUpload"
+         v-model:open="newFolderOpen"
+         title="New folder"
+         size="sm"
+         :form="newFolderForm"
+         :guard="false"
+         creating
+         :submit-icon="cmsIcon('folder-plus')"
+      >
          <KFormField
             label="Name"
+            name="name"
+            required
             :description="
                newFolderPath ? `Creates ${newFolderPath}/` : 'Letters, numbers and dashes.'
             "
          >
-            <KInput
-               v-model="folderName"
-               autofocus
-               placeholder="e.g. covers"
-               @keydown.enter.prevent="createFolder"
-            />
+            <KInput v-model="folderDraft.name" autofocus placeholder="e.g. covers" />
          </KFormField>
-         <template #footer>
-            <KButton label="Cancel" variant="ghost" tone="neutral" @click="newFolderOpen = false" />
-            <KButton
-               label="Create"
-               :loading="busy"
-               :disabled="!newFolderPath"
-               @click="createFolder"
-            />
-         </template>
-      </KModal>
+      </KFormModal>
 
-      <KModal v-if="canManage" v-model:open="renameOpen" title="Rename folder" size="sm">
-         <KStack gap="md">
-            <KFormField label="Name">
-               <KInput v-model="folderName" autofocus @keydown.enter.prevent="renameFolder" />
+      <KFormModal
+         v-if="canManage"
+         v-model:open="renameOpen"
+         title="Rename folder"
+         size="sm"
+         :form="renameForm"
+         :guard="false"
+      >
+         <div class="cms-stack">
+            <KFormField label="Name" name="name" required>
+               <KInput v-model="folderDraft.name" autofocus />
             </KFormField>
-            <KFormField label="Location">
+            <KFormField label="Location" name="parent">
                <CmsMediaFolderPicker
-                  v-model="renameParent"
+                  v-model="folderDraft.parent"
                   :folders="parentCandidates"
                   :exclude="folder"
                />
             </KFormField>
-            <p class="cms-media-hint">
+            <p class="cms-hint">
                {{
                   renamePath ? `Moves ${folder}/ to ${renamePath}/` : 'Letters, numbers and dashes.'
                }}
             </p>
-         </KStack>
-         <template #footer>
-            <KButton label="Cancel" variant="ghost" tone="neutral" @click="renameOpen = false" />
-            <KButton
-               label="Save"
-               :loading="busy"
-               :disabled="!renamePath || renamePath === folder"
-               @click="renameFolder"
-            />
-         </template>
-      </KModal>
+         </div>
+      </KFormModal>
 
-      <KModal
+      <KFormModal
          v-if="canManage"
          v-model:open="moveOpen"
          :title="`Move ${selection.length} file${selection.length > 1 ? 's' : ''}`"
          size="sm"
+         :form="moveForm"
+         :guard="false"
+         :require-dirty="false"
+         submit-label="Move here"
       >
-         <CmsMediaFolderPicker
-            v-model="moveTarget"
-            :folders="library.folders.value"
-            label="Folder"
-         />
-         <template #footer>
-            <KButton label="Cancel" variant="ghost" tone="neutral" @click="moveOpen = false" />
-            <KButton label="Move here" :loading="busy" @click="moveSelection" />
-         </template>
-      </KModal>
+         <KFormField label="Folder" name="target">
+            <CmsMediaFolderPicker v-model="moveDraft.target" :folders="library.folders.value" />
+         </KFormField>
+      </KFormModal>
 
       <CmsMediaDetail
          v-if="!selectable"
@@ -539,6 +532,7 @@ import {
    EmptyState as KEmptyState,
    FilterPills as KFilterPills,
    FormField as KFormField,
+   FormModal as KFormModal,
    Icon as KIcon,
    Input as KInput,
    Modal as KModal,
@@ -547,7 +541,9 @@ import {
    SelectionBar as KSelectionBar,
    Spinner as KSpinner,
    Stack as KStack,
+   toast,
    useFileDrop,
+   useForm,
    useRouteState,
 } from '@xleddyl/443-components-vue'
 import {
@@ -580,7 +576,6 @@ import {
 } from '../../composables/cms-media-uploader'
 import { CMS_MEDIA_ROUTE_KEY, useCmsOverlayFlag } from '../../composables/cms-route'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { useCmsToast } from '../../composables/cms-toast'
 import { cmsIcon } from '../../utils/ui'
 
 type SortKey = 'newest' | 'oldest' | 'name' | 'size'
@@ -626,8 +621,6 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [item: { key: string; url: string | null }] }>()
 
 const folder = defineModel<string | null>('folder', { default: null })
-
-const toast = useCmsToast()
 const confirmAction = useCmsConfirm()
 const runtime = useCmsRuntime()
 const library = useCmsMediaLibrary()
@@ -1009,8 +1002,8 @@ async function run(action: () => Promise<boolean>) {
 }
 
 const newFolderOpen = useCmsOverlayFlag('newfolder', !props.selectable)
-const folderName = ref('')
-const folderSlug = computed(() => slugify(folderName.value))
+const folderDraft = ref<{ name: string; parent: string | null }>({ name: '', parent: null })
+const folderSlug = computed(() => slugify(folderDraft.value.name))
 const newFolderPath = computed(() =>
    folderSlug.value
       ? folder.value
@@ -1023,30 +1016,30 @@ function openNewFolder() {
    newFolderOpen.value = true
 }
 
-watch(
-   newFolderOpen,
-   (open) => {
-      if (open) folderName.value = ''
-   },
-   { immediate: true }
-)
+watch(newFolderOpen, (open) => {
+   if (open) newFolderForm.reset({ name: '', parent: null })
+})
 
-async function createFolder() {
-   const path = newFolderPath.value
-   if (!path) return
-   if (library.folders.value.includes(path)) {
-      newFolderOpen.value = false
-      openFolder(path)
-      return
-   }
-   const ok = await run(() => library.createFolder(path))
-   if (!ok) return
-   newFolderOpen.value = false
-   openFolder(path)
+const folderNameRule = {
+   required: true,
+   maxLength: 64,
+   validate: (value: string) => (slugify(value) ? undefined : 'Use letters, numbers or dashes'),
 }
 
+const newFolderForm = useForm({
+   values: folderDraft,
+   schema: { name: folderNameRule },
+   guard: false,
+   onSubmit: async () => {
+      const path = newFolderPath.value
+      if (!path) return
+      if (!library.folders.value.includes(path) && !(await library.createFolder(path))) return
+      newFolderOpen.value = false
+      openFolder(path)
+   },
+})
+
 const renameOpen = useCmsOverlayFlag('renamefolder', !props.selectable)
-const renameParent = ref<string | null>(null)
 
 const parentCandidates = computed(() => {
    const own = folder.value
@@ -1063,64 +1056,70 @@ const parentCandidates = computed(() => {
 
 const renamePath = computed(() => {
    if (!folderSlug.value) return null
-   return renameParent.value ? `${renameParent.value}/${folderSlug.value}` : folderSlug.value
+   const parent = folderDraft.value.parent
+   return parent ? `${parent}/${folderSlug.value}` : folderSlug.value
 })
 
 function openRename() {
    if (folder.value) renameOpen.value = true
 }
 
-watch(
-   renameOpen,
-   (open) => {
-      if (!open) return
-      if (!folder.value) {
+watch(renameOpen, (open) => {
+   if (!open) return
+   if (!folder.value) {
+      renameOpen.value = false
+      return
+   }
+   renameForm.reset({
+      name: mediaFolderName(folder.value),
+      parent: mediaFolderParent(folder.value),
+   })
+})
+
+const renameForm = useForm({
+   values: folderDraft,
+   schema: { name: folderNameRule },
+   guard: false,
+   onSubmit: async () => {
+      const from = folder.value
+      const to = renamePath.value
+      if (!from || !to || from === to) {
          renameOpen.value = false
          return
       }
-      folderName.value = mediaFolderName(folder.value)
-      renameParent.value = mediaFolderParent(folder.value)
+      if (!(await library.moveFolder(from, to))) return
+      renameOpen.value = false
+      openFolder(to)
    },
-   { immediate: true }
-)
+})
 
-async function renameFolder() {
-   const from = folder.value
-   const to = renamePath.value
-   if (!from || !to || from === to) return
-   const ok = await run(() => library.moveFolder(from, to))
-   if (!ok) return
-   renameOpen.value = false
-   openFolder(to)
-}
-
-async function confirmDelete(keys: string[], question: string, title: string) {
+async function confirmDelete(keys: string[], question: string) {
    const usage = await library.usage(keys)
    const groups = usage ? mediaUsageGroups(usage.usage, keys, usage.hidden) : []
    if (!groups.length) {
       const warning = usage ? '' : ' Could not check where the files are used.'
-      return confirmAction(`${question}${warning}`, { title, confirmLabel: 'Delete' })
+      return confirmAction({ title: question, description: warning.trim() || undefined })
    }
    const single = keys.length === 1
    const usedIn = single
       ? `This file is used in ${entriesLabel(groups[0]!.entries.length + groups[0]!.hidden)}.`
       : `${groups.length} of ${keys.length} files are used in your content.`
-   return confirmAction(
-      `${question} ${usedIn} Deleting ${single ? 'it' : 'them'} leaves broken links there.`,
-      {
-         title: single ? 'File in use' : 'Files in use',
-         confirmLabel: 'Delete anyway',
-         groups: groups.map((group) => ({
-            title: group.key,
-            links: group.entries.map((entry) => ({
-               title: entry.title ?? entry.label,
-               meta: `${entry.label} · ${entry.fields.join(', ')}`,
-               to: usageLink(entry),
-            })),
-            note: group.hidden ? otherEntriesLabel(group.hidden) : undefined,
+   return confirmAction({
+      title: single ? 'File in use' : 'Files in use',
+      description: `${question} ${usedIn} Deleting ${
+         single ? 'it' : 'them'
+      } leaves broken links there.`,
+      confirmLabel: 'Delete anyway',
+      groups: groups.map((group) => ({
+         title: group.key,
+         links: group.entries.map((entry) => ({
+            title: entry.title ?? entry.label,
+            meta: `${entry.label} · ${entry.fields.join(', ')}`,
+            to: usageLink(entry),
          })),
-      }
-   )
+         note: group.hidden ? otherEntriesLabel(group.hidden) : undefined,
+      })),
+   })
 }
 
 async function removeFolder(path: string) {
@@ -1137,8 +1136,7 @@ async function removeFolder(path: string) {
    if (
       !(await confirmDelete(
          files.map((item) => item.key),
-         question,
-         'Delete folder'
+         question
       ))
    )
       return
@@ -1153,7 +1151,7 @@ async function removeItems(items: MediaItem[]) {
    const keys = items.map((item) => item.key)
    const question =
       keys.length === 1 ? `Delete "${mediaFilename(keys[0]!)}"?` : `Delete ${keys.length} files?`
-   if (!(await confirmDelete(keys, question, 'Delete'))) return
+   if (!(await confirmDelete(keys, question))) return
    const ok = await run(() => library.deleteItems(keys))
    if (!ok) return
    if (detailKey.value && keys.includes(detailKey.value)) detailKey.value = null
@@ -1161,24 +1159,30 @@ async function removeItems(items: MediaItem[]) {
 }
 
 const moveOpen = useCmsOverlayFlag('move', !props.selectable)
-const moveTarget = ref<string | null>(null)
+const moveDraft = ref<{ target: string | null }>({ target: null })
 
 function openMove() {
    moveOpen.value = true
 }
 
-watch(
-   moveOpen,
-   (open) => {
-      if (!open) return
-      if (!selection.value.length) {
-         moveOpen.value = false
-         return
-      }
-      moveTarget.value = folder.value
+watch(moveOpen, (open) => {
+   if (!open) return
+   if (!selection.value.length) {
+      moveOpen.value = false
+      return
+   }
+   moveForm.reset({ target: folder.value })
+})
+
+const moveForm = useForm({
+   values: moveDraft,
+   guard: false,
+   onSubmit: async (values) => {
+      if (!(await moveKeys(selection.value, values.target))) return
+      moveOpen.value = false
+      clearSelection()
    },
-   { immediate: true }
-)
+})
 
 async function moveKeys(keys: string[], target: string | null) {
    const moving = keys.filter(
@@ -1187,21 +1191,11 @@ async function moveKeys(keys: string[], target: string | null) {
    if (!moving.length) return true
    const ok = await run(() => library.moveItems(moving, target))
    if (ok) {
-      toast.add({
-         title: `Moved ${moving.length} file${moving.length > 1 ? 's' : ''} to ${
-            target ?? 'Library root'
-         }`,
-         color: 'success',
-      })
+      toast.success(
+         `Moved ${moving.length} file${moving.length > 1 ? 's' : ''} to ${target ?? 'Library root'}`
+      )
    }
    return ok
-}
-
-async function moveSelection() {
-   const ok = await moveKeys(selection.value, moveTarget.value)
-   if (!ok) return
-   moveOpen.value = false
-   clearSelection()
 }
 
 const uploadOpen = useCmsOverlayFlag('upload', !props.selectable)
@@ -1216,10 +1210,7 @@ async function afterUpload(uploaded: MediaItem[]) {
       return
    }
    await library.reload({ quiet: true })
-   toast.add({
-      title: `Uploaded ${uploaded.length} file${uploaded.length > 1 ? 's' : ''}`,
-      color: 'success',
-   })
+   toast.success(`Uploaded ${uploaded.length} file${uploaded.length > 1 ? 's' : ''}`)
 }
 
 function onUploaded(uploaded: MediaItem[]) {

@@ -6,9 +6,8 @@ import {
    normalizeMediaFolder,
 } from '../../shared/index'
 import { ref } from '#imports'
-import { readDroppedFiles } from '@xleddyl/443-components-vue'
+import { readDroppedFiles, toast } from '@xleddyl/443-components-vue'
 import { useCmsRuntime } from './cms-runtime'
-import { useCmsToast } from './cms-toast'
 
 interface PresignResponse {
    key: string
@@ -152,7 +151,6 @@ function isWithinOrAbove(folder: string, other: string) {
 }
 
 export function useCmsMediaUploader() {
-   const toast = useCmsToast()
    const { mediaMaxFileSize } = useCmsRuntime()
 
    const uploading = ref(false)
@@ -197,11 +195,7 @@ export function useCmsMediaUploader() {
          })
       )
       const failed = results.filter((r) => r.status === 'rejected').length
-      if (failed)
-         toast.add({
-            title: `${failed} folder${failed > 1 ? 's' : ''} could not be created`,
-            color: 'error',
-         })
+      if (failed) toast.error(`${failed} folder${failed > 1 ? 's' : ''} could not be created`)
    }
 
    async function upload(
@@ -214,16 +208,10 @@ export function useCmsMediaUploader() {
       let files = all.filter((entry) => matchesAccept(entry.file, options.accept))
       const rejected = all.length - files.length
       if (rejected) {
-         toast.add({
-            title: `${rejected} file${rejected > 1 ? 's' : ''} of an unsupported type skipped`,
-            color: 'error',
-         })
+         toast.error(`${rejected} file${rejected > 1 ? 's' : ''} of an unsupported type skipped`)
       }
       for (const { file } of files.filter((entry) => entry.file.size > mediaMaxFileSize)) {
-         toast.add({
-            title: `File too large (max ${formatFileSize(mediaMaxFileSize)}): ${file.name}`,
-            color: 'error',
-         })
+         toast.error(`File too large (max ${formatFileSize(mediaMaxFileSize)}): ${file.name}`)
       }
       files = files.filter((entry) => entry.file.size <= mediaMaxFileSize)
       const nested = options.multiple !== false
@@ -244,8 +232,7 @@ export function useCmsMediaUploader() {
          ),
       ].filter((folder) => !fileFolders.some((other) => isWithinOrAbove(folder, other)))
       if (planned.some((entry) => entry.flattened)) {
-         toast.add({
-            title: `Folders nest up to ${MEDIA_FOLDER_MAX_DEPTH} levels`,
+         toast(`Folders nest up to ${MEDIA_FOLDER_MAX_DEPTH} levels`, {
             description: 'Files in deeper folders were uploaded to the deepest allowed folder.',
          })
       }
@@ -260,8 +247,7 @@ export function useCmsMediaUploader() {
          )
          const ok = results.filter((r) => r.status === 'fulfilled').map((r) => r.value)
          const failed = results.length - ok.length
-         if (failed)
-            toast.add({ title: `${failed} upload${failed > 1 ? 's' : ''} failed`, color: 'error' })
+         if (failed) toast.error(`${failed} upload${failed > 1 ? 's' : ''} failed`)
          return ok
       } finally {
          uploading.value = false

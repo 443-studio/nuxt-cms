@@ -14,11 +14,10 @@
 import type { CmsConfig } from '#nuxt-cms'
 import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
 import type { ComboboxOption } from '@xleddyl/443-components-vue'
-import { Combobox as KCombobox } from '@xleddyl/443-components-vue'
+import { Combobox as KCombobox, toast } from '@xleddyl/443-components-vue'
 import { computed, onMounted, ref } from '#imports'
 import cmsConfig from '#cms-config'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { useCmsToast } from '../../composables/cms-toast'
 import { errorMessage } from '../../utils/ui'
 
 const props = defineProps<{
@@ -28,8 +27,6 @@ const props = defineProps<{
 }>()
 
 const model = defineModel<string | string[] | null>({ required: true })
-
-const toast = useCmsToast()
 
 type Row = Record<string, unknown>
 
@@ -47,11 +44,7 @@ async function search(query: string, signal: AbortSignal): Promise<ComboboxOptio
       return page.items.map((row) => ({ label: optionLabel(row), value: row.id as string }))
    } catch (err) {
       if (signal.aborted) throw err
-      toast.add({
-         title: 'Loading failed',
-         description: errorMessage(err),
-         color: 'error',
-      })
+      toast.error('Loading failed', { description: errorMessage(err) })
       return []
    }
 }

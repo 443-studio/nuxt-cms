@@ -69,13 +69,13 @@ import {
    Input as KInput,
    SegmentedControl as KSegmentedControl,
    Switch as KSwitch,
+   toast,
 } from '@xleddyl/443-components-vue'
 import { computed, ref, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { useCmsLinkTargets } from '../../composables/cms-link-targets'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { useCmsToast } from '../../composables/cms-toast'
 import { cmsIcon, errorMessage } from '../../utils/ui'
 
 type Mode = 'internal' | 'external'
@@ -89,7 +89,6 @@ const model = defineModel<unknown>({ required: true })
 
 const config = cmsConfig as CmsConfig
 const { i18n } = useCmsRuntime()
-const toast = useCmsToast()
 const targets = useCmsLinkTargets(config)
 const { can } = useCmsPermissions()
 
@@ -251,7 +250,7 @@ async function search(query: string, signal: AbortSignal): Promise<ComboboxOptio
       return groups.flat()
    } catch (error) {
       if (signal.aborted) throw error
-      toast.add({ title: 'Loading failed', description: errorMessage(error), color: 'error' })
+      toast.error('Loading failed', { description: errorMessage(error) })
       return []
    }
 }

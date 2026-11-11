@@ -1,40 +1,33 @@
 <template>
-   <KModal
+   <KFormModal
       :open="open"
       size="sm"
       :title="`Welcome to ${cmsBrand.title}`"
-      @update:open="(value) => !value && keep()"
+      :form="form"
+      :guard="false"
+      @update:open="(value: boolean) => !value && keep()"
    >
-      <KForm :form="form">
-         <p class="cms-settings-hint">
+      <div class="cms-stack">
+         <p class="cms-hint">
             You signed in with a password that someone shared with you. Set your own password now,
             or keep this one. You can change it later in Settings, Account.
          </p>
-         <KFormField label="New password" name="password">
+         <KFormField label="New password" name="password" required>
             <KPasswordInput
-               v-model="form.values.password"
-               icon="key"
+               v-model="draft.password"
                autocomplete="new-password"
                :generate="generatePassword"
                copy
             />
          </KFormField>
-         <KStack direction="row" justify="end" gap="sm" wrap>
-            <KButton
-               label="Keep current password"
-               variant="ghost"
-               tone="neutral"
-               :disabled="form.submitting.value"
-               @click="keep"
-            />
-            <KButton
-               type="submit"
-               label="Set password"
-               :disabled="(form.values.password ?? '').length < MIN_PASSWORD_LENGTH"
-            />
-         </KStack>
-      </KForm>
-   </KModal>
+      </div>
+      <template #footer="{ submit }">
+         <KButton variant="ghost" tone="neutral" :disabled="form.submitting.value" @click="keep">
+            Keep current password
+         </KButton>
+         <KButton :loading="form.submitting.value" @click="submit">Set password</KButton>
+      </template>
+   </KFormModal>
 </template>
 
 <script setup lang="ts">
@@ -42,47 +35,41 @@ import { MIN_PASSWORD_LENGTH } from '#nuxt-cms'
 import { cmsBrand } from '#cms-brand'
 import {
    Button as KButton,
-   Form as KForm,
    FormField as KFormField,
-   Modal as KModal,
+   FormModal as KFormModal,
    PasswordInput as KPasswordInput,
-   Stack as KStack,
+   toast,
    useForm,
 } from '@xleddyl/443-components-vue'
 import { computed, ref } from '#imports'
 import { generatePassword, useCmsAccount } from '../../composables/cms-account'
-import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
-import { errorMessage } from '../../utils/ui'
 
 const { user, refresh } = useCmsAccount()
-const toast = useCmsToast()
 
 const dismissed = ref(false)
 const open = computed(() => !!user.value?.firstLogin && !dismissed.value)
 
+const draft = ref({ password: '' })
+
 const form = useForm({
-   schema: { password: { initial: (): string | null | undefined => '' } },
-   onSubmit: save,
-})
-
-async function keep() {
-   dismissed.value = true
-   await cmsApi('/api/cms/account/welcome', { method: 'POST' }).catch(() => undefined)
-   await refresh()
-}
-
-async function save(values: { password: string | null | undefined }) {
-   try {
+   values: draft,
+   schema: { password: { required: true, minLength: MIN_PASSWORD_LENGTH, maxLength: 256 } },
+   guard: false,
+   onSubmit: async (values) => {
       await cmsApi('/api/cms/account/password', {
          method: 'PUT',
          body: { newPassword: values.password },
       })
       dismissed.value = true
       await refresh()
-      toast.add({ title: 'Password set', color: 'success' })
-   } catch (e) {
-      form.setError('', errorMessage(e) ?? 'Password not set.')
-   }
+      toast.success('Password set')
+   },
+})
+
+async function keep() {
+   dismissed.value = true
+   await cmsApi('/api/cms/account/welcome', { method: 'POST' }).catch(() => undefined)
+   await refresh()
 }
 </script>

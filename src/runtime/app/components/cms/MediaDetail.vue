@@ -1,9 +1,13 @@
 <template>
-   <KDrawer
+   <KFormDrawer
       :open="!!item"
       :title="shown ? mediaFilename(shown.key) : ''"
       size="lg"
-      @update:open="(value) => !value && emit('close')"
+      :form="form"
+      :readonly="!canEdit"
+      :deletable="!readOnly && canDelete"
+      @update:open="(value: boolean) => !value && emit('close')"
+      @delete="item && emit('delete', item)"
    >
       <div v-if="shown" class="cms-media-detail">
          <div class="cms-media-detail-preview">
@@ -110,24 +114,21 @@
                   />
                </KStack>
             </KFormField>
-            <KFormField label="Alt text">
+            <KFormField label="Alt text" name="alt">
                <KInput
-                  v-model="alt"
-                  :disabled="!canEdit"
+                  v-model="draft.alt"
                   placeholder="Describe the image for screen readers"
-                  @keydown.enter.prevent="save"
+                  :maxlength="ALT_MAX"
                />
             </KFormField>
-            <KFormField v-if="!readOnly && canEdit" label="Folder">
-               <CmsMediaFolderPicker v-model="folder" :folders="folders" />
+            <KFormField v-if="!readOnly && canEdit" label="Folder" name="folder">
+               <CmsMediaFolderPicker v-model="draft.folder" :folders="folders" />
             </KFormField>
          </KStack>
 
          <section class="cms-media-detail-usage">
-            <h3 class="cms-media-section-title">Used in</h3>
-            <div v-if="usageLoading" class="cms-media-loading">
-               <KSpinner size="sm" />
-            </div>
+            <KSeparator variant="heading" label="Used in" :level="3" />
+            <KSkeletonList v-if="usageLoading" :rows="2" />
             <p v-else-if="usageList === null" class="cms-media-hint">
                Could not check where this file is used.
             </p>
@@ -136,11 +137,7 @@
             </p>
             <ul v-else class="cms-media-usage-list">
                <li v-for="(entry, index) in usageList" :key="index">
-                  <NuxtLink
-                     :to="usageLink(entry)"
-                     class="cms-media-usage-link"
-                     @click="emit('close')"
-                  >
+                  <NuxtLink :to="usageLink(entry)" class="cms-media-usage-link">
                      <span class="cms-media-usage-title">{{ entry.title ?? entry.label }}</span>
                      <span class="cms-media-usage-meta">{{ entry.label }} · {{ entry.field }}</span>
                   </NuxtLink>
@@ -151,29 +148,7 @@
             </ul>
          </section>
       </div>
-
-      <template #footer>
-         <KButton
-            v-if="!readOnly && canDelete"
-            label="Delete"
-            :icon="cmsIcon('trash')"
-            variant="ghost"
-            tone="danger"
-            @click="item && emit('delete', item)"
-         />
-         <span v-else />
-         <KStack direction="row" gap="sm" align="center">
-            <KButton label="Close" variant="ghost" tone="neutral" @click="emit('close')" />
-            <KButton
-               v-if="canEdit"
-               label="Save"
-               :loading="saving"
-               :disabled="!dirty"
-               @click="save"
-            />
-         </KStack>
-      </template>
-   </KDrawer>
+   </KFormDrawer>
 </template>
 
 <script setup lang="ts">
@@ -183,12 +158,15 @@ import {
    Button as KButton,
    CopyButton as KCopyButton,
    DescriptionList as KDescriptionList,
-   Drawer as KDrawer,
+   FormDrawer as KFormDrawer,
    FormField as KFormField,
    Icon as KIcon,
    Input as KInput,
-   Spinner as KSpinner,
+   Separator as KSeparator,
+   SkeletonList as KSkeletonList,
    Stack as KStack,
+   toast,
+   useForm,
 } from '@xleddyl/443-components-vue'
 import type { CmsFocalPoint } from '#nuxt-cms'
 import {
@@ -218,9 +196,16 @@ const emit = defineEmits<{ close: []; delete: [item: MediaItem] }>()
 
 const folders = computed(() => props.library.folders.value)
 
-const alt = ref('')
-const folder = ref<string | null>(null)
-const saving = ref(false)
+const ALT_MAX = 1024
+
+const draft = ref<{
+   alt: string
+   folder: string | null
+   focalX: number | null
+   focalY: number | null
+}>({ alt: '', folder: null, focalX: null, focalY: null })
+
+const form = useForm({ values: draft, onSubmit: save })
 const usageList = ref<MediaUsage[] | null>([])
 const hiddenUsage = ref(0)
 const usageLoading = ref(false)
@@ -240,9 +225,13 @@ watch(
    () => props.item?.key,
    async (key) => {
       if (!props.item || !key) return
-      alt.value = props.item.alt ?? ''
-      folder.value = props.item.folder ?? null
-      focal.value = focalPointOf(props.item)
+      const point = focalPointOf(props.item)
+      form.reset({
+         alt: props.item.alt ?? '',
+         folder: props.item.folder ?? null,
+         focalX: point?.x ?? null,
+         focalY: point?.y ?? null,
+      })
       usageLoading.value = true
       const usage = await props.library.usage([key])
       if (props.item?.key !== key) return
@@ -256,7 +245,16 @@ watch(
 const FOCAL_STEP = 0.01
 const FOCAL_STEP_LARGE = 0.1
 
-const focal = ref<CmsFocalPoint | null>(null)
+const focal = computed<CmsFocalPoint | null>({
+   get: () =>
+      draft.value.focalX == null || draft.value.focalY == null
+         ? null
+         : { x: draft.value.focalX, y: draft.value.focalY },
+   set: (point) => {
+      draft.value.focalX = point?.x ?? null
+      draft.value.focalY = point?.y ?? null
+   },
+})
 const focalDragging = ref(false)
 const focalEditable = computed(() => props.canEdit && !!props.item)
 
@@ -324,15 +322,6 @@ function resetFocal() {
    focal.value = null
 }
 
-const dirty = computed(() => {
-   if (!props.item) return false
-   return (
-      focalChanged.value ||
-      (alt.value.trim() || null) !== (props.item.alt ?? null) ||
-      (!props.readOnly && folder.value !== (props.item.folder ?? null))
-   )
-})
-
 const downloadHref = computed(() =>
    shown.value ? `/api/cms/admin/media/download?key=${encodeURIComponent(shown.value.key)}` : ''
 )
@@ -365,17 +354,14 @@ const facts = computed(() => {
    return list
 })
 
-async function save() {
-   if (!props.item || !dirty.value || saving.value) return
-   saving.value = true
-   const ok = await props.library.updateItem(props.item.key, {
-      alt: alt.value.trim() || null,
-      ...(props.readOnly ? {} : { folder: folder.value }),
-      ...(focalChanged.value
-         ? { focalX: focal.value?.x ?? null, focalY: focal.value?.y ?? null }
-         : {}),
+async function save(values: typeof draft.value) {
+   if (!props.item) return
+   await props.library.updateItem(props.item.key, {
+      alt: values.alt.trim() || null,
+      ...(props.readOnly ? {} : { folder: values.folder }),
+      ...(focalChanged.value ? { focalX: values.focalX, focalY: values.focalY } : {}),
    })
-   saving.value = false
-   if (ok) emit('close')
+   toast.success('Saved')
+   emit('close')
 }
 </script>

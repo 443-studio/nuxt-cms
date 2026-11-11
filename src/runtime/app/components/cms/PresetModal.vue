@@ -1,108 +1,81 @@
 <template>
-   <KModal v-model:open="open" :title="title" size="sm">
-      <KForm :id="formId" :form="form">
-         <KStack gap="md">
-            <p v-if="hint" class="cms-field-hint">{{ hint }}</p>
-            <KFormField label="Name" name="name" required>
-               <KInput
-                  v-model="form.values.name"
-                  :maxlength="CMS_PRESET_NAME_MAX"
-                  placeholder="Article intro"
-                  autocomplete="off"
-               />
-            </KFormField>
-            <KFormField label="Description" name="description">
-               <KTextarea
-                  v-model="form.values.description"
-                  :maxlength="CMS_PRESET_DESCRIPTION_MAX"
-                  :rows="3"
-                  placeholder="Optional"
-               />
-            </KFormField>
-         </KStack>
-      </KForm>
-      <template #footer>
-         <KStack direction="row" justify="end" gap="sm">
-            <KButton label="Cancel" variant="ghost" tone="neutral" @click="open = false" />
-            <KButton
-               type="submit"
-               :form="formId"
-               :label="submitLabel"
-               :loading="saving"
-               :disabled="!String(form.values.name ?? '').trim()"
+   <KFormModal
+      v-model:open="open"
+      :title="title"
+      size="sm"
+      :form="form"
+      :submit-label="submitLabel"
+      :submit-icon="cmsIcon(CMS_PRESET_ICON)"
+      creating
+      nested
+   >
+      <div class="cms-stack">
+         <p v-if="hint" class="cms-hint">{{ hint }}</p>
+         <KFormField label="Name" name="name" required>
+            <KInput
+               v-model="draft.name"
+               :maxlength="CMS_PRESET_NAME_MAX"
+               placeholder="Article intro"
+               autocomplete="off"
             />
-         </KStack>
-      </template>
-   </KModal>
+         </KFormField>
+         <KFormField label="Description" name="description">
+            <KTextarea
+               v-model="draft.description"
+               :maxlength="CMS_PRESET_DESCRIPTION_MAX"
+               :rows="3"
+               placeholder="Optional"
+            />
+         </KFormField>
+      </div>
+   </KFormModal>
 </template>
 
 <script setup lang="ts">
 import {
-   Button as KButton,
-   Form as KForm,
    FormField as KFormField,
+   FormModal as KFormModal,
    Input as KInput,
-   Modal as KModal,
-   Stack as KStack,
    Textarea as KTextarea,
    useForm,
 } from '@xleddyl/443-components-vue'
-import { ref, useId, watch } from '#imports'
+import { ref, watch } from '#imports'
 import type { CmsPresetDetails } from '../../../shared/presets'
-import { CMS_PRESET_DESCRIPTION_MAX, CMS_PRESET_NAME_MAX } from '../../../shared/presets'
-import { errorMessage } from '../../utils/ui'
+import {
+   CMS_PRESET_DESCRIPTION_MAX,
+   CMS_PRESET_ICON,
+   CMS_PRESET_NAME_MAX,
+} from '../../../shared/presets'
+import { cmsIcon } from '../../utils/ui'
 
 const props = withDefaults(
    defineProps<{
       title: string
       submitLabel?: string
       hint?: string
-      initial?: CmsPresetDetails | null
       save: (details: CmsPresetDetails) => Promise<void>
    }>(),
-   { submitLabel: 'Save', hint: undefined, initial: null }
+   { submitLabel: 'Save', hint: undefined }
 )
 
 const open = defineModel<boolean>('open', { default: false })
 
-const formId = `${useId()}-preset`
-const saving = ref(false)
+const draft = ref({ name: '', description: '' })
 
 const form = useForm({
+   values: draft,
    schema: {
-      name: { initial: (): string | null | undefined => '' },
-      description: { initial: (): string | null | undefined => '' },
+      name: { required: true, maxLength: CMS_PRESET_NAME_MAX },
+      description: { maxLength: CMS_PRESET_DESCRIPTION_MAX },
    },
-   onSubmit: submit,
+   onSubmit: async (values) => {
+      const description = values.description.trim()
+      await props.save({ name: values.name.trim(), ...(description ? { description } : {}) })
+      open.value = false
+   },
 })
 
-watch(
-   open,
-   (value) => {
-      if (value)
-         form.reset({
-            name: props.initial?.name ?? '',
-            description: props.initial?.description ?? '',
-         })
-   },
-   { immediate: true }
-)
-
-async function submit(values: {
-   name: string | null | undefined
-   description: string | null | undefined
-}) {
-   const name = String(values.name ?? '').trim()
-   const description = String(values.description ?? '').trim()
-   if (!name) return
-   saving.value = true
-   try {
-      await props.save({ name, ...(description ? { description } : {}) })
-      open.value = false
-   } catch (error) {
-      form.setError('', errorMessage(error) ?? 'Preset not saved.')
-   } finally {
-      saving.value = false
-   }
-}
+watch(open, (value) => {
+   if (value) form.reset({ name: '', description: '' })
+})
 </script>

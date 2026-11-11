@@ -231,6 +231,7 @@ const form =
       path: () => props.path,
       onSubmit: () => emit('submit'),
       onInvalid: (errors) => onError(firstErrorKey(errors)),
+      guard: false,
    })
 
 const wrapper: Component | string = external ? 'div' : KForm

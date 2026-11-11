@@ -125,11 +125,11 @@ import {
    Select as KSelect,
    Spinner as KSpinner,
    Stack as KStack,
+   toast,
 } from '@xleddyl/443-components-vue'
 import { ref, watch } from '#imports'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
 import { cmsIcon, errorMessage } from '../../utils/ui'
 
@@ -144,7 +144,6 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { required: true })
 
 const { i18n } = useCmsRuntime()
-const toast = useCmsToast()
 const confirmAction = useCmsConfirm()
 
 const durationOptions = PREVIEW_LINK_DURATIONS.map(({ value, label }) => ({ value, label }))
@@ -172,11 +171,7 @@ async function load() {
       links.value = await cmsApi<CmsPreviewLink[]>(endpoint())
    } catch (error) {
       links.value = []
-      toast.add({
-         title: 'Could not load the preview links',
-         description: errorMessage(error),
-         color: 'error',
-      })
+      toast.error('Could not load the preview links', { description: errorMessage(error) })
    } finally {
       loading.value = false
    }
@@ -194,9 +189,9 @@ watch(open, (value) => {
 async function copy(url: string) {
    try {
       await navigator.clipboard.writeText(url)
-      toast.add({ title: 'Link copied', color: 'success' })
+      toast.success('Link copied')
    } catch {
-      toast.add({ title: 'Link created', description: 'Copy it from the box.', color: 'success' })
+      toast.success('Link created', { description: 'Copy it from the box.' })
    }
 }
 
@@ -213,11 +208,7 @@ async function create() {
       )
       await copy(created.value)
    } catch (error) {
-      toast.add({
-         title: 'Could not create the link',
-         description: errorMessage(error),
-         color: 'error',
-      })
+      toast.error('Could not create the link', { description: errorMessage(error) })
    } finally {
       busy.value = false
    }
@@ -228,14 +219,20 @@ async function saveAndCreate() {
 }
 
 async function revoke(link: CmsPreviewLink) {
-   if (!(await confirmAction(`Revoke the link to ${link.path}? It stops working right away.`)))
+   if (
+      !(await confirmAction({
+         title: 'Revoke this link?',
+         description: `The link to ${link.path} stops working right away.`,
+         confirmLabel: 'Revoke',
+      }))
+   )
       return
    try {
       await cmsApi(`${endpoint()}/${encodeURIComponent(link.id)}`, { method: 'DELETE' })
       links.value = links.value.filter((item) => item.id !== link.id)
-      toast.add({ title: 'Link revoked', color: 'success' })
+      toast.success('Link revoked')
    } catch (error) {
-      toast.add({ title: 'Revoke failed', description: errorMessage(error), color: 'error' })
+      toast.error('Revoke failed', { description: errorMessage(error) })
    }
 }
 </script>

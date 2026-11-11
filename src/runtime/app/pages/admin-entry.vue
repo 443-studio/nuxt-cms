@@ -49,8 +49,6 @@ import {
    createError,
    definePageMeta,
    navigateTo,
-   onBeforeRouteLeave,
-   onBeforeUnmount,
    ref,
    useFetch,
    useRoute,
@@ -61,17 +59,17 @@ import {
    Button as KButton,
    Card as KCard,
    PageHeader as KPageHeader,
+   toast,
+   useLeaveGuard,
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { cloneState, mergeSavedState } from '../../shared/save-state'
 import { cmsEntryLink, readSearchFocus } from '../../shared/search'
-import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { CMS_NEW_RECORD } from '../composables/cms-route'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
-import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
 import type { CmsResponseIssue } from '../utils/ui'
 import { errorIssues, errorMessage } from '../utils/ui'
@@ -87,7 +85,6 @@ definePageMeta({
 })
 
 const route = useRoute()
-const toast = useCmsToast()
 const focus = readSearchFocus(route.query)
 
 const name = route.params.collection as string
@@ -179,7 +176,6 @@ const snapshot = ref(JSON.stringify(formState.value))
 const handoff = useCmsSaveHandoff(name)
 const handedOver = id && !isNew ? handoff.take(id) : null
 if (handedOver) formState.value = handedOver
-let leaving = false
 
 const { can, entryLock } = useCmsPermissions()
 const canPublish = computed(() => can(`${name}.publish`))
@@ -198,24 +194,7 @@ const formRef = ref<{ setIssues: (issues: CmsResponseIssue[]) => void } | null>(
 
 const dirty = computed(() => !lock.value && JSON.stringify(formState.value) !== snapshot.value)
 
-function onBeforeUnload(event: BeforeUnloadEvent) {
-   event.preventDefault()
-}
-
-watch(dirty, (value) => {
-   if (value) window.addEventListener('beforeunload', onBeforeUnload)
-   else window.removeEventListener('beforeunload', onBeforeUnload)
-})
-
-onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
-
-const confirmAction = useCmsConfirm()
-
-onBeforeRouteLeave(async () => {
-   if (leaving) return
-   if (dirty.value && !(await confirmAction('You have unsaved changes. Leave anyway?')))
-      return false
-})
+const leave = useLeaveGuard(dirty)
 
 const published = computed({
    get: () => formState.value.status === 'published',
@@ -252,30 +231,22 @@ async function save() {
       snapshot.value = JSON.stringify(saved)
       if (merged.clean) {
          formState.value = merged.state
-         toast.add({ title: 'Saved', color: 'success' })
+         toast.success('Saved')
          goBack()
          return
       }
       formState.value = merged.state
-      toast.add({
-         title: 'Saved',
-         description: 'Changes made while saving are not saved yet.',
-         color: 'success',
-      })
+      toast.success('Saved', { description: 'Changes made while saving are not saved yet.' })
       const createdId = isNew && row?.id ? String(row.id) : null
       if (createdId) {
          handoff.stash(createdId, merged.state)
-         leaving = true
+         leave.allowNext()
          await navigateTo(`/cms/${name}/${createdId}`, { replace: true })
       }
    } catch (error) {
       revertStatus()
       formRef.value?.setIssues(errorIssues(error))
-      toast.add({
-         title: 'Save failed',
-         description: errorMessage(error),
-         color: 'error',
-      })
+      toast.error('Save failed', { description: errorMessage(error) })
    } finally {
       saving.value = false
    }

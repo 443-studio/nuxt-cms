@@ -1,3 +1,4 @@
+import { toast } from '@xleddyl/443-components-vue'
 import type { FieldConfig } from '#nuxt-cms'
 import type { MenuEntry } from '@xleddyl/443-components-vue'
 import type { MaybeRefOrGetter, Ref } from 'vue'
@@ -10,7 +11,6 @@ import {
 import { cmsIcon } from '../utils/ui'
 import { useCmsConfirm } from './cms-confirm'
 import { useCmsRuntime } from './cms-runtime'
-import { useCmsToast } from './cms-toast'
 
 type Values = Record<string, unknown>
 
@@ -33,7 +33,6 @@ function valuesLabel(count: number) {
 export function useCmsTranslationActions(options: CmsTranslationActionsOptions) {
    const { i18n } = useCmsRuntime()
    const confirmAction = useCmsConfirm()
-   const toast = useCmsToast()
 
    function commit(values: Values) {
       if (options.apply) options.apply(values)
@@ -48,36 +47,32 @@ export function useCmsTranslationActions(options: CmsTranslationActionsOptions) 
       })
       if (!result.count) return
       commit(result.values)
-      toast.add({
-         title: `Copied ${valuesLabel(result.count)} from ${code(from)} to ${code(to)}`,
-         color: 'success',
-      })
+      toast.success(`Copied ${valuesLabel(result.count)} from ${code(from)} to ${code(to)}`)
    }
 
    async function replace(from: string, to: string) {
-      const confirmed = await confirmAction(
-         `Every ${code(to)} value that has a ${code(
+      const confirmed = await confirmAction({
+         title: `Replace ${code(to)} with ${code(from)}?`,
+         description: `Every ${code(to)} value that has a ${code(
             from
          )} version is overwritten. The change stays unsaved until you save.`,
-         { title: `Replace ${code(to)} with ${code(from)}?`, confirmLabel: 'Replace' }
-      )
+         confirmLabel: 'Replace',
+      })
       if (confirmed) copy(from, to, true)
    }
 
    async function clear(locale: string) {
-      const confirmed = await confirmAction(
-         `The ${code(locale)} values are removed and the site shows the ${code(
+      const confirmed = await confirmAction({
+         title: `Clear ${code(locale)}?`,
+         description: `The ${code(locale)} values are removed and the site shows the ${code(
             i18n.defaultLocale
          )} text instead. The change stays unsaved until you save.`,
-         { title: `Clear ${code(locale)}?`, confirmLabel: 'Clear' }
-      )
+         confirmLabel: 'Clear',
+      })
       if (!confirmed) return
       const result = clearTranslations(toValue(options.fields), options.state.value, i18n, locale)
       commit(result.values)
-      toast.add({
-         title: `Cleared ${valuesLabel(result.count)} in ${code(locale)}`,
-         color: 'success',
-      })
+      toast.success(`Cleared ${valuesLabel(result.count)} in ${code(locale)}`)
    }
 
    function copyItem(fields: Record<string, FieldConfig>, from: string, to: string): MenuEntry {

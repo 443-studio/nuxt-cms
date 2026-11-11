@@ -47,7 +47,7 @@
             />
          </KFormField>
 
-         <KSpinner v-if="checking" />
+         <KSkeletonList v-if="checking" :rows="3" />
 
          <KAlert
             v-else-if="fileErrors.length"
@@ -92,7 +92,7 @@
       </KStack>
 
       <template #footer>
-         <KButton label="Cancel" variant="soft" tone="neutral" @click="open = false" />
+         <KButton label="Cancel" variant="ghost" tone="neutral" @click="open = false" />
          <KButton
             :label="importLabel"
             :icon="cmsIcon('arrow-down-tray')"
@@ -116,9 +116,10 @@ import {
    Icon as KIcon,
    Modal as KModal,
    SegmentedControl as KSegmentedControl,
-   Spinner as KSpinner,
+   SkeletonList as KSkeletonList,
    Stack as KStack,
    Table as KTable,
+   toast,
 } from '@xleddyl/443-components-vue'
 import { computed, ref, watch } from '#imports'
 import type {
@@ -129,7 +130,6 @@ import type {
 } from '../../../shared/transfer'
 import { canTransferCsv, IMPORT_MAX_BYTES, IMPORT_MAX_ROWS } from '../../../shared/transfer'
 import { useCmsPermissions } from '../../composables/cms-permissions'
-import { useCmsToast } from '../../composables/cms-toast'
 import { cmsIcon, errorMessage } from '../../utils/ui'
 
 const MODE_OPTIONS: ChoiceOption<CmsImportMode>[] = [
@@ -152,8 +152,6 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{ imported: [] }>()
-
-const toast = useCmsToast()
 const { can } = useCmsPermissions()
 const canUpsert = computed(() => can(`${props.collection}.update`))
 
@@ -284,10 +282,7 @@ async function commit() {
    try {
       const result = await send(false)
       const count = result.create + result.update
-      toast.add({
-         title: `Imported ${count} ${count === 1 ? 'entry' : 'entries'}`,
-         color: 'success',
-      })
+      toast.success(`Imported ${count} ${count === 1 ? 'entry' : 'entries'}`)
       emit('imported')
       open.value = false
    } catch (error) {
@@ -296,7 +291,7 @@ async function commit() {
          preview.value = returned
          fileErrors.value = returned.errors
       }
-      toast.add({ title: 'Import failed', description: errorMessage(error), color: 'error' })
+      toast.error('Import failed', { description: errorMessage(error) })
    } finally {
       importing.value = false
    }

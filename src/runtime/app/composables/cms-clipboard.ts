@@ -2,7 +2,7 @@ import { computed, shallowRef } from '#imports'
 import type { CmsClipboardNotice } from '../../shared/clipboard'
 import { clipboardText, parseClipboardText } from '../../shared/clipboard'
 import type { CmsBlockValue } from '../../shared/preview'
-import { useCmsToast } from './cms-toast'
+import { showCmsNotice } from './cms-toast'
 
 const memory = shallowRef<string | null>(null)
 
@@ -15,8 +15,6 @@ async function readSystemClipboard(): Promise<string | null> {
 }
 
 export function useCmsClipboard() {
-   const toast = useCmsToast()
-
    const items = computed(() => parseClipboardText(memory.value))
 
    function copy(list: readonly CmsBlockValue[], event?: ClipboardEvent) {
@@ -41,7 +39,7 @@ export function useCmsClipboard() {
    }
 
    function notify(notice: CmsClipboardNotice) {
-      toast.add(notice)
+      showCmsNotice(notice)
    }
 
    return { items, copy, read, notify }

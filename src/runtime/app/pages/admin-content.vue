@@ -155,8 +155,6 @@ import {
    createError,
    definePageMeta,
    navigateTo,
-   onBeforeRouteLeave,
-   onBeforeUnmount,
    onMounted,
    ref,
    useFetch,
@@ -172,19 +170,19 @@ import {
    FormField as KFormField,
    Popover as KPopover,
    Stack as KStack,
+   toast,
+   useLeaveGuard,
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { duplicateEntryValues } from '../../shared/duplicate'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { cloneState, mergeSavedState } from '../../shared/save-state'
 import { readSearchFocus } from '../../shared/search'
-import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { useCmsRouteFlag } from '../composables/cms-route'
 import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
-import { useCmsToast } from '../composables/cms-toast'
 import { useCmsTranslationActions } from '../composables/cms-translation-actions'
 import { cmsApi } from '../utils/api'
 import type { CmsResponseIssue } from '../utils/ui'
@@ -199,8 +197,6 @@ definePageMeta({
 type Status = 'draft' | 'published'
 
 const route = useRoute()
-const toast = useCmsToast()
-const confirmAction = useCmsConfirm()
 const confirmLinkedDelete = useCmsLinkedDelete()
 const focus = readSearchFocus(route.query)
 const { i18n } = useCmsRuntime()
@@ -259,7 +255,6 @@ const snapshot = ref(JSON.stringify(duplicateOf ? blankState : formState.value))
 const handoff = useCmsSaveHandoff(name)
 const handedOver = id ? handoff.take(id) : null
 if (handedOver) formState.value = handedOver
-let leaving = false
 
 const { can, entryLock } = useCmsPermissions()
 const canPublish = computed(() => can(`${name}.publish`))
@@ -404,26 +399,10 @@ watch(scheduleOpen, (open) => {
       : new Date(Math.ceil(Date.now() / 3_600_000) * 3_600_000 + 3_600_000).toISOString()
 })
 
-function onBeforeUnload(event: BeforeUnloadEvent) {
-   event.preventDefault()
-}
-
-watch(dirty, (value) => {
-   if (value) window.addEventListener('beforeunload', onBeforeUnload)
-   else window.removeEventListener('beforeunload', onBeforeUnload)
-})
+const leave = useLeaveGuard(dirty)
 
 onMounted(() => {
    mounted.value = true
-   if (dirty.value) window.addEventListener('beforeunload', onBeforeUnload)
-})
-
-onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
-
-onBeforeRouteLeave(async () => {
-   if (leaving) return
-   if (dirty.value && !(await confirmAction('You have unsaved changes. Leave anyway?')))
-      return false
 })
 
 function goBack() {
@@ -448,7 +427,7 @@ async function save(status?: Status, changes: Record<string, unknown> = {}, noti
          status: before.status,
          ...pickRevert(before, changes),
       }
-      toast.add({ title: 'Check the highlighted fields', color: 'error' })
+      toast.error('Check the highlighted fields')
       return false
    }
    saving.value = true
@@ -464,14 +443,12 @@ async function save(status?: Status, changes: Record<string, unknown> = {}, noti
       const merged = mergeSavedState(submitted, formState.value, saved)
       formState.value = merged.state
       snapshot.value = JSON.stringify(saved)
-      toast.add({
-         title: SUCCESS[notice ?? status ?? 'save'] ?? 'Saved',
+      toast.success(SUCCESS[notice ?? status ?? 'save'] ?? 'Saved', {
          description: merged.clean ? undefined : LATER_CHANGES,
-         color: 'success',
       })
       if (isNew && row.id) {
          if (!merged.clean) handoff.stash(String(row.id), merged.state)
-         leaving = true
+         leave.allowNext()
          await navigateTo(`/cms/${name}/${row.id}`, { replace: true })
       }
       return true
@@ -482,7 +459,7 @@ async function save(status?: Status, changes: Record<string, unknown> = {}, noti
          ...pickRevert(before, changes),
       }
       editor.value?.setIssues(errorIssues(error))
-      toast.add({ title: 'Save failed', description: errorMessage(error), color: 'error' })
+      toast.error('Save failed', { description: errorMessage(error) })
       return false
    } finally {
       saving.value = false
@@ -517,10 +494,10 @@ async function remove() {
    try {
       await cmsApi(`${endpoint}/${id}`, { method: 'DELETE' })
       snapshot.value = JSON.stringify(formState.value)
-      toast.add({ title: 'Deleted', color: 'success' })
+      toast.success('Deleted')
       goBack()
    } catch (error) {
-      toast.add({ title: 'Delete failed', description: errorMessage(error), color: 'error' })
+      toast.error('Delete failed', { description: errorMessage(error) })
    } finally {
       saving.value = false
    }

@@ -1,3 +1,4 @@
+import { toast } from '@xleddyl/443-components-vue'
 import type { MediaItem, MediaSourceInfo, MediaUsage, MediaUsageReport } from '../../shared/index'
 import {
    expandMediaFolders,
@@ -8,7 +9,6 @@ import {
 import { computed, ref } from '#imports'
 import { cmsSettingsLink, errorMessage } from '../utils/ui'
 import { invalidateCmsMediaKeys } from './cms-media-keys'
-import { useCmsToast } from './cms-toast'
 
 const endpoint = '/api/cms/admin/media'
 const USAGE_CHUNK = 1000
@@ -19,8 +19,6 @@ export interface MediaFolderStats {
 }
 
 export function useCmsMediaLibrary() {
-   const toast = useCmsToast()
-
    const items = ref<MediaItem[]>([])
    const serverFolders = ref<string[]>([])
    const source = ref<MediaSourceInfo | null>(null)
@@ -80,7 +78,7 @@ export function useCmsMediaLibrary() {
          await action()
          return true
       } catch (err) {
-         toast.add({ title, description: errorMessage(err), color: 'error' })
+         toast.error(title, { description: errorMessage(err) })
          return false
       }
    }
@@ -134,10 +132,10 @@ export function useCmsMediaLibrary() {
          focalY?: number | null
       }
    ) {
-      return attempt('Save failed', async () => {
+      return (async () => {
          await $fetch(endpoint, { method: 'PUT', body: { key, ...changes } })
          await reload({ quiet: true })
-      })
+      })()
    }
 
    async function usage(keys: string[]): Promise<MediaUsageReport | null> {

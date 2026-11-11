@@ -302,8 +302,6 @@ import {
 } from '#imports'
 import type { MenuEntry, RowKey, TableColumn, TableSort } from '@xleddyl/443-components-vue'
 import {
-   routeHashValue,
-   useRouteRecord,
    Button as KButton,
    Card as KCard,
    DropdownMenu as KDropdownMenu,
@@ -315,6 +313,10 @@ import {
    SelectionBar as KSelectionBar,
    Spinner as KSpinner,
    Table as KTable,
+   routeHashValue,
+   toast,
+   useLeaveGuard,
+   useRouteRecord,
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
@@ -338,13 +340,11 @@ import {
    translationProgress,
 } from '../../shared/translations'
 import { canTransferCsv, exportFileName } from '../../shared/transfer'
-import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
 import { CMS_NEW_RECORD, useCmsRouteFlag } from '../composables/cms-route'
 import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
-import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
 import type { CmsResponseIssue } from '../utils/ui'
 import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
@@ -359,7 +359,6 @@ definePageMeta({
 const FORM_ID = 'cms-single-form'
 
 const route = useRoute()
-const toast = useCmsToast()
 const focus = readSearchFocus(route.query)
 
 const name = route.params.collection as string
@@ -497,10 +496,7 @@ const relations = computed(() => (isList(data.value) ? data.value.relations ?? {
 
 const reload = async () => {
    await refresh()
-   if (config.kind === 'single' && !error.value) {
-      formState.value =
-         data.value && !isList(data.value) ? pickFields(data.value as Row) : emptyState()
-   }
+   if (config.kind === 'single' && !error.value) resetSingle()
 }
 
 const saving = ref(false)
@@ -536,25 +532,35 @@ async function submit(action: () => Promise<unknown>) {
       return true
    } catch (error) {
       singleForm.value?.setIssues(errorIssues(error))
-      toast.add({
-         title: 'Save failed',
-         description: errorMessage(error),
-         color: 'error',
-      })
+      toast.error('Save failed', { description: errorMessage(error) })
       return false
    } finally {
       saving.value = false
    }
 }
 
-if (config.kind === 'single') {
+const singleSnapshot = ref('')
+
+function resetSingle() {
    formState.value =
       data.value && !isList(data.value) ? pickFields(data.value as Row) : emptyState()
+   singleSnapshot.value = JSON.stringify(formState.value)
 }
 
+if (config.kind === 'single') resetSingle()
+
+useLeaveGuard(
+   () =>
+      config!.kind === 'single' &&
+      !singleLock.value &&
+      JSON.stringify(formState.value) !== singleSnapshot.value
+)
+
 async function saveSingle() {
+   const submitted = JSON.stringify(formState.value)
    const ok = await submit(() => cmsApi(endpoint, { method: 'PUT', body: formState.value }))
-   if (ok) toast.add({ title: 'Saved', color: 'success' })
+   if (ok) singleSnapshot.value = submitted
+   if (ok) toast.success('Saved')
 }
 
 function stripHtml(html: string) {
@@ -764,7 +770,7 @@ async function exportEntries(format: CmsTransferFormat, narrow: boolean) {
       link.click()
       URL.revokeObjectURL(url)
    } catch (error) {
-      toast.add({ title: 'Export failed', description: errorMessage(error), color: 'error' })
+      toast.error('Export failed', { description: errorMessage(error) })
    } finally {
       exporting.value = false
    }
@@ -799,7 +805,6 @@ async function onDrawerDeleted() {
    else await refresh()
 }
 
-const confirmAction = useCmsConfirm()
 const confirmLinkedDelete = useCmsLinkedDelete()
 
 const selected = ref<RowKey[]>([])
@@ -838,12 +843,10 @@ async function runBulk(ids: string[], action: (id: string) => Promise<unknown>) 
 
 function reportBulk(done: string, total: number, failed: { reason: unknown }[]) {
    const succeeded = total - failed.length
-   if (succeeded) toast.add({ title: `${done}: ${entriesLabel(succeeded)}`, color: 'success' })
+   if (succeeded) toast.success(`${done}: ${entriesLabel(succeeded)}`)
    if (failed.length) {
-      toast.add({
-         title: `${entriesLabel(failed.length)} not changed`,
+      toast.error(`${entriesLabel(failed.length)} not changed`, {
          description: errorMessage(failed[0]!.reason),
-         color: 'error',
       })
    }
 }

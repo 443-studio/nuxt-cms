@@ -30,31 +30,33 @@ export function useCmsLinkedDelete() {
       titles: Record<string, string> = {}
    ): Promise<boolean> => {
       if (!ids.length || !isLinkTargetEntry((cmsConfig as CmsConfig)[entry]))
-         return confirmAction(question)
+         return confirmAction({ title: question })
       const usage = await loadUsage(entry, ids)
-      if (!usage) return confirmAction(`${question} Could not check where it is linked.`)
+      if (!usage)
+         return confirmAction({
+            title: question,
+            description: 'Could not check where it is linked.',
+         })
       const groups = ids
          .map((id) => ({ id, entries: groupMediaUsage(usage[linkTargetKey(entry, id)] ?? []) }))
          .filter((group) => group.entries.length > 0)
-      if (!groups.length) return confirmAction(question)
+      if (!groups.length) return confirmAction({ title: question })
       const single = ids.length === 1
       const linked = single
          ? `It is linked from ${linksLabel(groups[0]!.entries.length)}.`
          : `${groups.length} of ${ids.length} are linked from your content.`
-      return confirmAction(
-         `${question} ${linked} Those links disappear from the site until they point somewhere else.`,
-         {
-            title: single ? 'Item is linked' : 'Items are linked',
-            confirmLabel: 'Delete anyway',
-            groups: groups.map((group) => ({
-               title: titles[group.id] ?? `#${group.id}`,
-               links: group.entries.map((usageEntry) => ({
-                  title: usageEntry.title ?? usageEntry.label,
-                  meta: `${usageEntry.label} · ${usageEntry.fields.join(', ')}`,
-                  to: usageLink(usageEntry),
-               })),
+      return confirmAction({
+         title: single ? 'Item is linked' : 'Items are linked',
+         description: `${question} ${linked} Those links disappear from the site until they point somewhere else.`,
+         confirmLabel: 'Delete anyway',
+         groups: groups.map((group) => ({
+            title: titles[group.id] ?? `#${group.id}`,
+            links: group.entries.map((usageEntry) => ({
+               title: usageEntry.title ?? usageEntry.label,
+               meta: `${usageEntry.label} · ${usageEntry.fields.join(', ')}`,
+               to: usageLink(usageEntry),
             })),
-         }
-      )
+         })),
+      })
    }
 }
