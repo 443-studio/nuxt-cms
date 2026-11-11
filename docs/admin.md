@@ -236,7 +236,9 @@ The visual editor edits a body of blocks on top of the real site. It fills the w
   the site until then. Save stays in the editor; the first save of a new item moves to its URL.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
   layout and CSS apply. Every change is shown at once, before saving.
-- **Inspector** (right), with three tabs. **Content**: title, slug, publish date, excerpt, cover and
+- **Inspector** (right), with three tabs. **Content**: the page address when the entry has a
+  [`route`](schema.md#routes) (in the active language, with **Open** to the live page once the
+  saved item is published and not scheduled), then title, slug, publish date, excerpt, cover and
   the extra fields, in the order of the form layout. **Block**: the fields of the selected block,
   or, when no block is selected, the list of blocks and the palette to add one. **SEO**: the SEO
   fields. The language switch of the top bar drives every translatable field.

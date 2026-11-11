@@ -5,10 +5,12 @@ import {
    isCollectionKind,
    isPrivateField,
    isRequiredField,
+   isRoutedContent,
    isTranslatableField,
    mediaTypeFilter,
    pageFields,
    pageRoutes,
+   routedContentNames,
    selectOptionValues,
 } from './runtime/shared/index'
 
@@ -92,6 +94,7 @@ function blockTypesTs(entryName: string, key: string, field: FieldConfig): strin
 function entryTs(config: CmsConfig, name: string, entry: CmsEntry): string {
    const lines = ['  id: string']
    if (entry.kind === 'page') lines.push('  path: string')
+   if (isRoutedContent(entry)) lines.push('  path: string', '  paths: CmsLocalePath[]')
    for (const [key, field] of Object.entries(entryFieldsFor(entry))) {
       if (isPrivateField(field)) continue
       lines.push(`  ${key}: ${fieldTsType(config, name, key, field)}`)
@@ -165,6 +168,7 @@ function entryMapsTs(config: CmsConfig): string[] {
       else if (entry.kind === 'content') contents.push(line)
       else collections.push(line)
    }
+   const routed = routedContentNames(config)
    if (!pages.length) {
       pages.push(
          `export interface CmsPageTypes {\n  [path: string]: never\n}`,
@@ -178,6 +182,12 @@ function entryMapsTs(config: CmsConfig): string[] {
       `export type CmsSingleName = keyof CmsSingleTypes`,
       `export type CmsCollectionName = keyof CmsCollectionTypes`,
       `export type CmsContentName = keyof CmsContentTypes`,
+      `export type CmsRoutedContentName = ${routed.length ? quotedKeys(routed) : 'never'}`,
+      [
+         `export type CmsContentRouteMatch = {`,
+         `  [K in CmsRoutedContentName]: { entry: K; item: CmsContentTypes[K] }`,
+         `}[CmsRoutedContentName]`,
+      ].join('\n'),
       ...pages,
    ]
 }
@@ -212,6 +222,7 @@ function blockPropsMapTs(config: CmsConfig): string[] {
 
 export function renderTypesFile(config: CmsConfig): string {
    const parts = [
+      `export interface CmsLocalePath {\n  locale: string\n  path: string\n}`,
       `export type CmsMediaType = 'image' | 'video' | 'file'`,
       `export interface CmsMedia<T extends CmsMediaType = CmsMediaType> {
   key: string

@@ -46,7 +46,13 @@
 <script setup lang="ts">
 import type { CmsBlockEntryName } from '#cms-types'
 import type { CmsConfig } from '#nuxt-cms'
-import { canAddBlock, entryFieldsFor, isHiddenBlock } from '#nuxt-cms'
+import {
+   canAddBlock,
+   contentItemPath,
+   entryFieldsFor,
+   isHiddenBlock,
+   isRoutedContent,
+} from '#nuxt-cms'
 import {
    computed,
    definePageMeta,
@@ -116,17 +122,18 @@ const canAdd = computed(
    () => !!state.value && !!field.value && canAddBlock(field.value, state.value.blocks.length)
 )
 
-const item = computed(() =>
-   state.value?.item && entry.value?.kind === 'content'
-      ? previewItem(
-           fields.value,
-           state.value.item,
-           state.value.locale,
-           i18n.defaultLocale,
-           state.value.media
-        )
-      : null
-)
+const item = computed(() => {
+   if (!state.value?.item || entry.value?.kind !== 'content') return null
+   const preview = previewItem(
+      fields.value,
+      state.value.item,
+      state.value.locale,
+      i18n.defaultLocale,
+      state.value.media
+   )
+   if (!isRoutedContent(entry.value)) return preview
+   return { ...preview, path: contentItemPath(entry.value, state.value.item, state.value.locale) }
+})
 
 const wrapper = computed(() =>
    state.value && entry.value?.kind === 'content'

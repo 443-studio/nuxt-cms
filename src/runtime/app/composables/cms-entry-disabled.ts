@@ -3,6 +3,7 @@ import type {
    CmsCollectionName,
    CmsCollectionTypes,
    CmsContentName,
+   CmsContentRouteMatch,
    CmsContentTypes,
    CmsPagePath,
    CmsPageTypes,
@@ -39,6 +40,10 @@ export interface CmsContentOptions<ResT, DefaultT> extends CmsAsyncDataOptions<R
 }
 
 export type CmsContentsOptions<ResT, DefaultT, Entry> = CmsCollectionOptions<ResT, DefaultT, Entry>
+
+export interface CmsRouteOptions<ResT, DefaultT> extends CmsAsyncDataOptions<ResT, DefaultT> {
+   locale?: string
+}
 
 export function useCmsSingle<K extends CmsSingleName, DefaultT = null>(
    name: K,
@@ -93,4 +98,14 @@ export function useCmsPage<P extends CmsPagePath, DefaultT = null>(
    return useAsyncData(key ?? `cms-page:${String(path)}:${locale ?? ''}`, async () =>
       fallback ? fallback() : null
    ) as unknown as AsyncData<CmsPageTypes[P] | DefaultT | null, Error | undefined>
+}
+
+export function useCmsRoute<DefaultT = null>(
+   path: string,
+   options: CmsRouteOptions<CmsContentRouteMatch | null, DefaultT> = {}
+): AsyncData<CmsContentRouteMatch | DefaultT | null, Error | undefined> {
+   const { locale, key, default: fallback } = options
+   return useAsyncData(key ?? `cms-route:${path}:${locale ?? ''}`, async () =>
+      fallback ? fallback() : null
+   ) as unknown as AsyncData<CmsContentRouteMatch | DefaultT | null, Error | undefined>
 }

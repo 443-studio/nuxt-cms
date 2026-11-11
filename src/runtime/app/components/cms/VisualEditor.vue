@@ -181,6 +181,11 @@
                      </template>
 
                      <KStack v-else gap="md" class="cms-editor-fields">
+                        <slot
+                           v-if="activeTab === 'content'"
+                           name="content-start"
+                           :locale="locale"
+                        />
                         <template v-for="section in sections" :key="section.id">
                            <div v-if="section.title" class="cms-editor-section-title">
                               <span class="k-label">{{ section.title }}</span>

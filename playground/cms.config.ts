@@ -471,6 +471,7 @@ export default defineCmsConfig({
       kind: 'content',
       icon: 'newspaper',
       blocks: sections,
+      route: '/news/[slug]',
       labels: { excerpt: 'Summary' },
       fields: {
          category: { label: 'Category', type: 'relation', to: 'categories' },
@@ -484,6 +485,7 @@ export default defineCmsConfig({
       kind: 'content',
       icon: 'pencil-square',
       blocks: sections,
+      route: { en: '/blog/[slug]', it: '/it/blog/[slug]' },
       preview: { component: 'BlogPost' },
       labels: { cover: 'Header image', seoTitle: 'Search title' },
       tabs: [

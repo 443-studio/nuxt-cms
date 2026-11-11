@@ -5,7 +5,7 @@
          <p v-if="!posts.length" class="mt-6 text-(--k-text-muted)">Nothing published yet.</p>
          <ul class="mt-8 flex flex-col gap-6">
             <li v-for="post in posts" :key="post.id">
-               <NuxtLink :to="`/blog/${post.slug}`" class="site-card flex flex-col gap-2 p-5">
+               <NuxtLink :to="post.path" class="site-card flex flex-col gap-2 p-5">
                   <span class="site-label">
                      {{ post.publishedAt?.slice(0, 10) }}
                      <template v-if="post.author">· {{ post.author.name }}</template>

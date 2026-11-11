@@ -7,6 +7,7 @@ import {
    isMultiValueField,
    isPrivateField,
    isRequiredField,
+   isRoutedContent,
    isTranslatableField,
    pageAllFields,
    typeName,
@@ -80,6 +81,7 @@ function fieldSdl(config: CmsConfig, entryName: string, key: string, field: Fiel
 function entrySdl(config: CmsConfig, name: string, entry: CmsEntry): string {
    const lines = ['  id: ID!']
    if (entry.kind === 'page') lines.push(`  ${PAGE_PATH_FIELD}: String!`)
+   if (isRoutedContent(entry)) lines.push('  path: String!', '  paths: [CmsLocalePath!]!')
    for (const [key, field] of Object.entries(entryFields(entry))) {
       if (isPrivateField(field)) continue
       lines.push(fieldSdl(config, name, key, field))
@@ -155,6 +157,8 @@ const COMMON_SDL = [
 export function renderGraphqlSdl(config: CmsConfig): string {
    const queryLines: string[] = []
    const types: string[] = []
+   if (Object.values(config).some(isRoutedContent))
+      types.push('type CmsLocalePath {\n  locale: String!\n  path: String!\n}')
 
    for (const [name, entry] of Object.entries(config)) {
       const gqlType = typeName(name)
@@ -183,6 +187,8 @@ export function renderGraphqlSdl(config: CmsConfig): string {
       queryLines.push(`  ${name}Count(filters: ${gqlType}Filters): Int!`)
       if (entry.kind === 'content')
          queryLines.push(`  ${name}BySlug(slug: String!, locale: String): ${gqlType}`)
+      if (isRoutedContent(entry))
+         queryLines.push(`  ${name}ByPath(path: String!, locale: String): ${gqlType}`)
    }
 
    return [

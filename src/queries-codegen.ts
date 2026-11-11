@@ -4,8 +4,10 @@ import {
    entryFieldsFor,
    isCollectionKind,
    isPrivateField,
+   isRoutedContent,
    pageFields,
    pageRoutes,
+   routedContentNames,
 } from './runtime/shared/index'
 
 const MEDIA_SELECTION = 'key url type alt folder mime size width height focalX focalY'
@@ -31,6 +33,7 @@ function entrySelection(
 ): string {
    const parts = ['id']
    if (entry.kind === 'page') parts.push('path')
+   if (isRoutedContent(entry)) parts.push('path', 'paths { locale path }')
    for (const [key, field] of Object.entries(fields)) {
       if (isPrivateField(field)) continue
       if (field.type === 'relation') {
@@ -84,6 +87,21 @@ export function contentListQuery(config: CmsConfig, name: string, entry: CmsEntr
 export function contentItemQuery(config: CmsConfig, name: string, entry: CmsEntry): string {
    const selection = entrySelection(config, name, entry, true)
    return `query CmsContent($slug: String!, $locale: String) { item: ${name}BySlug(slug: $slug, locale: $locale) { ${selection} } }`
+}
+
+export function contentRouteQuery(config: CmsConfig): string | null {
+   const names = routedContentNames(config)
+   if (!names.length) return null
+   const fields = names.map(
+      (name) =>
+         `${name}: ${name}ByPath(path: $path, locale: $locale) { ${entrySelection(
+            config,
+            name,
+            config[name]!,
+            true
+         )} }`
+   )
+   return `query CmsRoute($path: String!, $locale: String) { ${fields.join(' ')} }`
 }
 
 export function pageQuery(config: CmsConfig, name: string, entry: CmsEntry, path: string): string {
@@ -145,6 +163,10 @@ export function renderQueriesFile(config: CmsConfig): string {
       `export const cmsContentItemQueries: Record<string, string> = {`,
       ...contentItems,
       `}`,
+      ``,
+      `export const cmsRouteEntries: string[] = ${JSON.stringify(routedContentNames(config))}`,
+      ``,
+      `export const cmsRouteQuery: string | null = ${JSON.stringify(contentRouteQuery(config))}`,
       ``,
    ].join('\n')
 }

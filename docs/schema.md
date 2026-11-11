@@ -237,6 +237,7 @@ export default defineCmsConfig({
   and publish date. In the visual editor, `layout` orders the fields of the Content tab.
 - `preview` (optional) sets the component that wraps the body in the visual editor, see
   [Preview component](#preview-component).
+- `route` (optional) is the public address of the items on the site, see [Routes](#routes).
 - `titleField`, `drafts`, `columns`, `routes`, `include`, `exclude`, `overrides` and a custom
   `table` are config errors on a content entry.
 
@@ -267,6 +268,47 @@ migrations as collections.
 
 Items are edited in the [visual editor](admin.md#visual-editor): the body is drawn by the block
 components of the site, with live updates, drag and drop and a palette of the blocks.
+
+### Routes
+
+`route` tells the CMS where the site shows the items of a content entry, so it can give each item
+its public path. It is a path pattern, the full path the site serves:
+
+```ts
+news: { id: 'news', kind: 'content', blocks: sections, route: '/news/[slug]' }
+```
+
+Placeholders fill a whole segment: `[slug]`, `[id]`, and `[year]`, `[month]`, `[day]` (from
+`publishedAt`, in UTC, `2026`, `04`, `01`). A pattern needs `[slug]` or `[id]`. With
+`cms.i18n.locales`, a single pattern is the path in every locale; a map gives each locale its own
+full path, prefix included, and must name every locale:
+
+```ts
+blog: {
+   id: 'blog',
+   kind: 'content',
+   blocks: sections,
+   route: { en: '/blog/[slug]', it: '/it/blog/[slug]' },
+}
+```
+
+The CMS does not add a locale prefix by itself: write the paths your router serves (with
+`@nuxtjs/i18n` and the `prefix_except_default` strategy, the map above). The slug is shared by
+every locale.
+
+With a route, the items get `path` (in the requested locale) and `paths` (one `{ locale, path }`
+per locale) in GraphQL and in `#cms-types`, the entry gets a `<entry>ByPath(path, locale)` query,
+and `useCmsRoute(path)` finds the item a site path shows, see
+[Routes in querying](querying.md#content-routes). The visual editor shows the address of the item
+in its Content tab, with an Open link once the item is live. `path` and `paths` are reserved field
+names on a routed entry.
+
+The build fails when a pattern does not start with `/`, has an empty segment or a trailing slash,
+holds `?`, `#`, spaces or an unknown placeholder, puts a placeholder inside a segment
+(`[slug].html`), repeats a placeholder, has neither `[slug]` nor `[id]`, or lives under `/cms`; when
+a map is used without `cms.i18n.locales`, names an unknown locale or misses one; when `route` is set
+on an entry that is not `kind: 'content'`; and when two entries have patterns that match the same
+paths (`/news/[slug]` and `/news/[id]`).
 
 ### Preview component
 
@@ -300,7 +342,8 @@ defineProps<{ item: Pick<News, 'title' | 'excerpt' | 'cover'>; locale?: string }
 ```
 
 The component receives `item` (every public field of the item in the active language, media as
-`CmsMedia` objects, relations as ids, values not saved yet included) and `locale`. Use the same
+`CmsMedia` objects, relations as ids, values not saved yet included, and `path` when the entry has
+a [route](#routes)) and `locale`. Use the same
 component on the site page, with `<CmsBlocks>` in the slot, and the preview matches the page.
 `cms.preview.component` in `nuxt.config` sets a default for every content entry. A `preview` option
 on an entry that is not `kind: 'content'` is a config error.

@@ -88,6 +88,7 @@ describe('module setup when disabled', () => {
          'useCmsContent',
          'useCmsContents',
          'useCmsPage',
+         'useCmsRoute',
          'useCmsSingle',
       ])
       for (const entry of imports) {
@@ -208,6 +209,7 @@ describe('module setup when enabled', () => {
          'useCmsContent',
          'useCmsContents',
          'useCmsPage',
+         'useCmsRoute',
          'useCmsSingle',
       ])
       for (const entry of imports) {

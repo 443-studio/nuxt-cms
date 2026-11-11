@@ -355,6 +355,32 @@ body:has(.cms-scope) {
    color: var(--k-text-muted);
 }
 
+.cms-editor-address {
+   display: flex;
+   flex-direction: column;
+   gap: 0.375rem;
+}
+
+.cms-editor-address-row {
+   display: flex;
+   align-items: center;
+   gap: 0.5rem;
+   min-height: 2rem;
+}
+
+.cms-editor-address-path {
+   flex: 1;
+   min-width: 0;
+   overflow: hidden;
+   font-size: 0.8125rem;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+.cms-editor-address-path.is-empty {
+   color: var(--k-text-muted);
+}
+
 .cms-editor-schedule-panel {
    display: flex;
    flex-direction: column;

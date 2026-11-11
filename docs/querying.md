@@ -39,7 +39,7 @@ const { data } = await useCms(query, { locale }, {
 ```
 
 With [`cms.enabled: false`](configuration.md#enabled) the composables stay defined but become
-no-ops: `useCms().data`, `useCmsSingle().data`, `useCmsPage().data` and `useCmsContent().data` are
+no-ops: `useCms().data`, `useCmsSingle().data`, `useCmsPage().data`, `useCmsContent().data` and `useCmsRoute().data` are
 `null`, `useCmsCollection().data` and `useCmsContents().data` are `[]` and `$cmsQuery()` resolves to
 `{}`. `<CmsBlocks>` stays registered too. The generated types stay available too, so the same code type-checks
 in both modes. Callers therefore never need a `typeof useCms === 'function'` guard, they just render
@@ -101,6 +101,34 @@ article.value?.body
 `null` when the slug is unknown, a draft, or scheduled. When the CMS is disabled both return their
 default without a request.
 
+### Content routes
+
+When a content entry has a [`route`](schema.md#routes), its items carry `path` (the public path in
+the requested locale) and `paths` (`[{ locale, path }]`, one per locale), and the content helpers
+select both, so a list links with `<NuxtLink :to="item.path">`.
+
+`useCmsRoute` finds the item a site path shows, across every routed content entry, so a site can
+serve all of them from one catch-all page:
+
+```vue
+<script setup lang="ts">
+const route = useRoute()
+const { data: match } = await useCmsRoute(route.path, { locale })
+if (!match.value) throw createError({ statusCode: 404, fatal: true })
+</script>
+
+<template>
+   <NewsArticle v-if="match?.entry === 'news'" :item="match.item" />
+   <BlogPost v-else-if="match?.entry === 'blog'" :item="match.item" />
+</template>
+```
+
+`data` is `{ entry, item }`, typed as a union on `entry` (`CmsContentRouteMatch` in `#cms-types`),
+or `null` when no published item has that path. The path is matched against the pattern of
+`locale` (the default locale when omitted), so pass the locale the site is showing; query string,
+hash and trailing slash are ignored. When two patterns could match the same path, the one with
+more fixed segments wins. It sends one request (`<entry>ByPath` per routed entry).
+
 Write a query with `useCms` when you need a count, a relation two levels deep, several entries in
 one request, or a narrower selection.
 
@@ -130,6 +158,16 @@ newsCount(filters: NewsFilters): Int!
 ```
 
 Without `sort`, the list is ordered by `publishedAt` descending.
+
+A content entry with a [`route`](schema.md#routes) also gets a query by public path, and its type
+gets `path: String!` and `paths: [CmsLocalePath!]!` (`type CmsLocalePath { locale: String! path: String! }`):
+
+```graphql
+newsByPath(path: String!, locale: String): News
+```
+
+It returns the published, non-scheduled item whose path in `locale` (default locale when omitted)
+is `path`, or `null`.
 
 For a **page** entry (e.g. `pages`):
 

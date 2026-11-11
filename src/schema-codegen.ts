@@ -1,10 +1,13 @@
 import { typeName } from './runtime/shared/graphql-sdl'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from './runtime/shared/index'
 import {
+   CONTENT_ROUTE_FIELDS,
    CONTENT_SYSTEM_FIELDS,
    PAGE_PATH_FIELD,
    CONDITION_GROUPS,
    CONDITION_OPERATORS,
+   contentRouteClashErrors,
+   contentRouteConfigErrors,
    isCollectionKind,
    isMultiSelect,
    isRequiredField,
@@ -71,6 +74,7 @@ const RESERVED_TYPE_NAMES = [
    'Mutation',
    'Subscription',
    'CmsMedia',
+   'CmsLocalePath',
    'JSON',
    'SortDirection',
    'IntFilter',
@@ -123,6 +127,11 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
          errors.push(`${at}: kind must be 'collection', 'single', 'page' or 'content'`)
       if (entry.kind === 'content') errors.push(...contentErrors(at, entry))
       else if (entry.preview !== undefined) errors.push(`${at}: preview needs kind 'content'`)
+      if (entry.route !== undefined) {
+         if (entry.kind === 'content')
+            errors.push(...contentRouteConfigErrors(at, entry.route, { locales }))
+         else errors.push(`${at}: route needs kind 'content'`)
+      }
       if (entry.kind === 'page') {
          if (pageEntry) {
             errors.push(
@@ -388,6 +397,8 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
       }
    }
 
+   errors.push(...contentRouteClashErrors(config))
+
    return errors
 }
 
@@ -397,6 +408,8 @@ function contentErrors(at: string, entry: CmsEntry): string[] {
    for (const key of entry.declared?.fields ?? []) {
       if (system.includes(key))
          errors.push(`${at}: '${key}' is a system field of content entries, remove it from fields`)
+      else if (entry.route !== undefined && CONTENT_ROUTE_FIELDS.includes(key))
+         errors.push(`${at}: '${key}' is reserved on content entries with a route`)
    }
    if (entry.declared?.titleField !== undefined)
       errors.push(`${at}: content entries use 'title' as titleField, remove titleField`)

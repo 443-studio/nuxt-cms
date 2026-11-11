@@ -558,6 +558,7 @@ export default defineNuxtModule<ModuleOptions>({
             { name: 'useCmsPage', from: entryStub },
             { name: 'useCmsContents', from: entryStub },
             { name: 'useCmsContent', from: entryStub },
+            { name: 'useCmsRoute', from: entryStub },
          ])
          const disabledConfig = await loadCmsConfig(
             nuxt,
@@ -673,6 +674,7 @@ export default defineNuxtModule<ModuleOptions>({
          { name: 'useCmsPage', from: entryComposables },
          { name: 'useCmsContents', from: entryComposables },
          { name: 'useCmsContent', from: entryComposables },
+         { name: 'useCmsRoute', from: entryComposables },
       ])
       addCmsBlocks(nuxt, resolver, cmsConfig, resolved.preview.component)
       addCmsImage(nuxt, resolver)

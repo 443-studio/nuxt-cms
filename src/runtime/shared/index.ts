@@ -1,6 +1,7 @@
 import type { PgTable } from 'drizzle-orm/pg-core'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { CmsShowIf } from './conditions'
+import type { CmsContentRoute } from './content-routes'
 import type { CmsLayoutBlock, CmsListInput } from './layout'
 
 export type CmsTable = SQLiteTable | PgTable
@@ -635,6 +636,7 @@ export interface CmsEntry {
    list?: CmsListInput
    blocks?: Record<string, BlockConfig>
    preview?: CmsPreviewOptions
+   route?: CmsContentRoute
    declared?: CmsContentDeclared
    validate?: CmsValidate
 }
@@ -1196,6 +1198,7 @@ export interface CmsContentInput {
    layout?: CmsLayoutBlock[]
    list?: CmsListInput
    preview?: CmsPreviewOptions
+   route?: string | Readonly<Record<string, string>>
    validate?: CmsValidate
    titleField?: never
    drafts?: never
@@ -1214,6 +1217,7 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
 }
 
 export * from './conditions'
+export * from './content-routes'
 export * from './layout'
 export * from './media-focal'
 export * from './users'

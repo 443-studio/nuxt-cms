@@ -26,11 +26,15 @@ import type { CmsConfig, CmsEntry, FieldConfig, MediaStorageMode } from '../../s
 import {
    CONTENT_SLUG_FIELD,
    CONTENT_PUBLISHED_AT_FIELD,
+   contentItemPath,
+   contentItemPaths,
+   contentRouteLocales,
    decodeTranslatableMedia,
    entryFieldsFor,
    hasTranslatableBlockFields,
    isMultiValueField,
    isPrivateField,
+   isRoutedContent,
    isTranslatableMediaField,
    localizeBlocks,
    mediaPublicUrl,
@@ -46,6 +50,7 @@ import {
    typeName,
 } from '../../shared/graphql-sdl'
 import { normalizeTimestampFields } from '../../shared/timestamps'
+import { findContentByPath } from './content-routes'
 import { useMediaIndex } from './media-index'
 import { readPages } from './page-storage'
 import type { JoinTable } from './list-filter'
@@ -440,6 +445,11 @@ function entryResolvers(config: CmsConfig, name: string, entry: CmsEntry) {
          resolvers[key] = (parent: Row, _args: unknown, ctx: Ctx) => resolveMedia(ctx, parent[key])
       }
    }
+   if (isRoutedContent(entry)) {
+      resolvers.path = (parent: Row) => contentItemPath(entry, parent, localeOf(parent))
+      resolvers.paths = (parent: Row) =>
+         contentItemPaths(entry, parent, contentRouteLocales(getContentI18n()))
+   }
    return resolvers
 }
 
@@ -567,6 +577,17 @@ export function buildCmsSchema() {
                .where(and(eq(slug, args.slug), ...publishedFilter(entry, table)))
                .limit(1)
             return row ? localizeRow(entry, row as Record<string, unknown>, locale) : null
+         }
+      }
+
+      if (isRoutedContent(entry)) {
+         queryResolvers[`${name}ByPath`] = async (
+            _: unknown,
+            args: { path: string; locale?: string }
+         ) => {
+            const locale = resolveLocaleArg(args.locale)
+            const row = await findContentByPath(name, args.path, locale)
+            return row ? localizeRow(entry, row, locale) : null
          }
       }
 

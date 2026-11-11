@@ -28,6 +28,33 @@
          <KBadge v-if="lock" size="sm" variant="outline" label="Read only" :title="lock" />
       </template>
 
+      <template v-if="config.route" #content-start="{ locale }">
+         <div class="cms-editor-address">
+            <span class="k-label">Page address</span>
+            <div class="cms-editor-address-row">
+               <span
+                  class="cms-editor-address-path k-mono"
+                  :class="{ 'is-empty': !addressOf(formState, locale) }"
+               >
+                  {{ addressOf(formState, locale) ?? 'No address yet' }}
+               </span>
+               <KButton
+                  v-if="livePath(locale)"
+                  :href="livePath(locale)!"
+                  target="_blank"
+                  label="Open"
+                  :icon="cmsIcon('arrow-top-right-on-square')"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+               />
+            </div>
+            <span v-if="addressHint(locale)" class="cms-field-hint">
+               {{ addressHint(locale) }}
+            </span>
+         </div>
+      </template>
+
       <template #actions>
          <KPopover
             v-if="!lock && canPublish"
@@ -108,6 +135,8 @@ import {
    CONTENT_BODY_FIELD,
    CONTENT_PUBLISHED_AT_FIELD,
    CONTENT_TITLE_FIELD,
+   contentItemPath,
+   contentRoutePattern,
    isScheduledContent,
 } from '#nuxt-cms'
 import {
@@ -268,6 +297,42 @@ const scheduledAt = computed(() => {
    if (!mounted.value || typeof value !== 'string' || !value) return ''
    return new Date(value).toLocaleString()
 })
+
+const savedState = computed<Record<string, unknown>>(() =>
+   isNew ? {} : (JSON.parse(snapshot.value) as Record<string, unknown>)
+)
+
+const live = computed(
+   () =>
+      mounted.value &&
+      savedState.value.status === 'published' &&
+      !isScheduledContent(savedState.value)
+)
+
+function addressOf(values: Record<string, unknown>, locale: string) {
+   return contentItemPath(config!, { ...values, id }, locale)
+}
+
+function livePath(locale: string) {
+   return live.value ? addressOf(savedState.value, locale) : null
+}
+
+function missingAddressHint(locale: string) {
+   const pattern = contentRoutePattern(config!.route, locale) ?? ''
+   if (isNew && pattern.includes('[id]')) return 'Save the item to get its address.'
+   if (/\[(?:year|month|day)\]/.test(pattern) && !formState.value[CONTENT_PUBLISHED_AT_FIELD])
+      return 'The address needs a publish date.'
+   return 'The address needs a slug.'
+}
+
+function addressHint(locale: string) {
+   const current = addressOf(formState.value, locale)
+   if (!current) return missingAddressHint(locale)
+   if (!live.value)
+      return scheduled.value ? 'Live from the scheduled date.' : 'Live once published.'
+   if (current !== livePath(locale)) return 'Save to move the page to this address.'
+   return ''
+}
 
 const publishedAtField = computed<FieldConfig>(() => ({
    ...config.fields[CONTENT_PUBLISHED_AT_FIELD]!,

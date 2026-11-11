@@ -3,6 +3,7 @@ import type {
    CmsCollectionName,
    CmsCollectionTypes,
    CmsContentName,
+   CmsContentRouteMatch,
    CmsContentTypes,
    CmsPagePath,
    CmsPageTypes,
@@ -14,6 +15,8 @@ import {
    cmsContentItemQueries,
    cmsContentQueries,
    cmsPageQueries,
+   cmsRouteEntries,
+   cmsRouteQuery,
    cmsSingleQueries,
 } from '#cms-queries'
 import { useAsyncData } from '#imports'
@@ -47,6 +50,10 @@ export interface CmsContentOptions<ResT, DefaultT> extends CmsAsyncDataOptions<R
 }
 
 export type CmsContentsOptions<ResT, DefaultT, Entry> = CmsCollectionOptions<ResT, DefaultT, Entry>
+
+export interface CmsRouteOptions<ResT, DefaultT> extends CmsAsyncDataOptions<ResT, DefaultT> {
+   locale?: string
+}
 
 function unknownEntry(name: string): never {
    throw new Error(`[nuxt-cms] no generated query for "${name}"; check cms.config.ts`)
@@ -181,4 +188,26 @@ export function useCmsPage<P extends CmsPagePath, DefaultT = null>(
          ...asyncDataOptions,
       }
    ) as AsyncData<CmsPageTypes[P] | DefaultT | null, Error | undefined>
+}
+
+export function useCmsRoute<DefaultT = null>(
+   path: string,
+   options: CmsRouteOptions<CmsContentRouteMatch | null, DefaultT> = {}
+): AsyncData<CmsContentRouteMatch | DefaultT | null, Error | undefined> {
+   const { locale, key, default: fallback, ...asyncDataOptions } = options
+
+   return useAsyncData(
+      key ?? `cms-route:${path}:${locale ?? ''}`,
+      async () => {
+         if (!cmsRouteQuery) return null
+         const result = await $cmsQuery(cmsRouteQuery, { path, locale })
+         const entry = cmsRouteEntries.find((name) => result?.[name])
+         if (!entry) return null
+         return { entry, item: result[entry] } as CmsContentRouteMatch
+      },
+      {
+         default: (fallback ?? (() => null)) as () => CmsContentRouteMatch | null,
+         ...asyncDataOptions,
+      }
+   ) as AsyncData<CmsContentRouteMatch | DefaultT | null, Error | undefined>
 }

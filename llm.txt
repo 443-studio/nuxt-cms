@@ -145,6 +145,7 @@ news: {
    labels: { excerpt: 'Summary' },                                          // optional system labels
    tabs, layout, list,                                                      // as on collections
    preview: { component: 'NewsArticle' },                                   // optional preview wrapper
+   route: '/news/[slug]',                                                   // optional public path pattern
 }
 ```
 
@@ -153,6 +154,7 @@ news: {
 - Public API: only `status = published` and `publishedAt <= now`. Drafts and scheduled items (published with a future date) are invisible to list, count, byId, bySlug and relations. Publishing with an empty `publishedAt` sets it to now.
 - Relations may target a content entry (`to: 'news'`).
 - Admin: sidebar group Content; list badge "Scheduled" for future items; items open in the visual editor (`/cms/<entry>/new`, `/cms/<entry>/<id>`): top bar (back, title, status, locale switch, desktop/mobile width, Schedule, Save, Publish/Unpublish, `...` menu with translation actions, Duplicate, Delete), center iframe of the site preview page with live updates, right inspector with tabs Content (system and extra fields, ordered by `layout`), Block (selected block form, or block list plus palette) and SEO. In the canvas: hover outline with label, click to select, drag handle and arrow keys to reorder, `+` between blocks opens the palette (label, icon, description), Duplicate, Hide, Delete. In the block list, Alt+ArrowUp/Down moves a block. Save validates and opens the tab/block of the first error.
+- `route` (content entries only) is the full path the site serves for an item: `'/news/[slug]'`, or with `cms.i18n` a map naming every locale, `{ en: '/blog/[slug]', it: '/it/blog/[slug]' }` (no automatic locale prefix: write what your router serves; a single string is the path in every locale). Placeholders fill whole segments: `[slug]`, `[id]`, `[year]` `[month]` `[day]` (UTC parts of `publishedAt`); `[slug]` or `[id]` required. Build errors: no leading `/`, empty segment or trailing slash, `?` `#` spaces, unknown, repeated or partial-segment placeholder, under `/cms`, map without i18n, unknown or missing locale, `route` on a non-content entry, two entries whose patterns match the same paths. With a route: GraphQL and `#cms-types` add `path: String!` (requested locale) and `paths: [CmsLocalePath!]!` (`{ locale, path }` per locale) to the item, generated queries select them, `<entry>ByPath(path, locale)` returns the published, non-scheduled item whose path in `locale` (default when omitted) is `path`; `path`/`paths` become reserved field names; the visual editor Content tab shows the address with an Open link when the saved item is live. Isomorphic helpers in `#nuxt-cms`: `contentItemPath(entry, item, locale)`, `contentItemPaths(entry, item, locales)`, `matchContentPath(config, path, locale)` (candidate `{ entry, pattern, params }`, most specific first), `matchContentPattern`, `contentPathParamsMatch`, `buildContentPath`; server: `findContentByPath(name, path, locale, { includeDrafts? })`.
 - `preview: { component }` (content entries only; `cms.preview.component` in nuxt.config is the default for all) names a site component that wraps the body in the visual editor. It gets `item` (public fields in the active locale, media as `CmsMedia`, relations as ids, unsaved values) and `locale`, and renders the body in its default slot. Reuse it on the site page with `<CmsBlocks>` in the slot.
 - Preview page: `cms.preview.path` (default `/cms/preview`, one lowercase segment under `/cms`, not `login`, `logout`, `media` or an entry name). Rendered in the site's default layout, admin session required, `X-Robots-Tag: noindex, nofollow`, `X-Frame-Options: SAMEORIGIN`. It never reads the public API: the admin posts the unsaved data via `postMessage` (origin and source checked both ways; the page asks again after a reload). Block components need a single root element (the editor finds blocks by `data-cms-block`). Keep `/cms/**` out of sitemaps.
 
@@ -205,6 +207,7 @@ const { data } = await useCmsCollection('events', { filters, sort, limit, offset
 const { data } = await useCmsPage('/about', { locale })
 const { data } = await useCmsContents('news', { filters, sort, limit, offset, locale }) // publishedAt desc by default
 const { data } = await useCmsContent('news', slug, { locale })                        // null when unknown, draft or scheduled
+const { data } = await useCmsRoute(route.path, { locale })   // { entry, item } of the routed content item at that path, or null
 
 // reactive, SSR-friendly (wraps useAsyncData): use in components/pages
 const { data, error, refresh } = useCms(`{ ... }`, variables?, options?)
@@ -243,7 +246,9 @@ For each **single** `homepage`:
 homepage(locale: String): Homepage
 ```
 
-For each **content** entry `news`: the collection queries plus `newsBySlug(slug: String!, locale: String): News`. Without `sort` the list is ordered by `publishedAt` desc.
+For each **content** entry `news`: the collection queries plus `newsBySlug(slug: String!, locale: String): News`. Without `sort` the list is ordered by `publishedAt` desc. With a `route`: also `newsByPath(path: String!, locale: String): News`, and `News.path` / `News.paths`.
+
+`useCmsRoute(path, { locale })` sends one request with `<entry>ByPath` for every routed content entry and returns `{ entry, item }` (`CmsContentRouteMatch`, a union on `entry`, items as in `useCmsContent`) or `null`; for one catch-all page serving every content type. It matches `path` against the pattern of `locale` (default locale when omitted), ignores query, hash and trailing slash, and prefers the pattern with more fixed segments.
 
 ### Filters, sort, pagination
 
