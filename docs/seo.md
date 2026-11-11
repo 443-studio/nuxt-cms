@@ -48,8 +48,13 @@ URLs. The module reads the site URL from, in order:
 4. the `NUXT_PUBLIC_SITE_URL` env variable at build time.
 
 The result is written to `runtimeConfig.public.siteUrl`, so `NUXT_PUBLIC_SITE_URL` also overrides it
-at runtime. Without any of them, the origin of the request is used (behind a proxy it follows
-`X-Forwarded-Host` / `X-Forwarded-Proto`). `cms.site.url` must be an absolute `http(s)` URL without
+at runtime. Without any of them, the origin of the request is used, from the `Host` header only:
+`X-Forwarded-Host` / `X-Forwarded-Proto` are ignored, because anyone can send them and the
+sitemap would then list their host. Set `cms.site.trustForwardedHost: true` (or
+`NUXT_PUBLIC_CMS_TRUST_FORWARDED_HOST=true`) only behind a proxy that overwrites those headers.
+Without a site URL, `/sitemap.xml` and `/robots.txt` are sent with `Cache-Control: private,
+no-store` so no shared cache keeps a copy built from one request, and `nuxt build` warns when either
+route is on. Set the site URL in production. `cms.site.url` must be an absolute `http(s)` URL without
 query, hash or credentials, or the build fails; a trailing slash is dropped.
 
 ## `useCmsSeo`
@@ -140,7 +145,8 @@ The sitemap lists, with absolute URLs:
 A hidden site gets an empty sitemap. Items are read in batches of 1000 and the XML is streamed.
 Above 50,000 URLs, `/sitemap.xml` becomes a sitemap index of parts `/sitemap.xml?part=1`,
 `?part=2`, ... (each part one source, at most 50,000 URLs). Responses carry
-`Cache-Control: public, max-age=600, s-maxage=600`.
+`Cache-Control: public, max-age=600, s-maxage=600` when a site URL is set, `private, no-store`
+otherwise.
 
 ## `/robots.txt`
 

@@ -12,7 +12,9 @@ import {
    EMPTY_SITE_SETTINGS,
    SITE_TEXT_LIMITS,
    coerceSiteSettings,
+   isForwardedHostTrusted,
    normalizeSiteUrl,
+   seoRouteCacheControl,
    titleTemplateErrors,
 } from '../../shared/index'
 
@@ -91,10 +93,24 @@ export async function writeSiteSettings(settings: CmsSiteSettings): Promise<void
    siteSettingsCache.invalidate()
 }
 
-export function resolveSiteUrl(event: H3Event): string {
+export function configuredSiteUrl(event: H3Event): string {
    const { siteUrl } = useRuntimeConfig(event).public as { siteUrl?: string }
+   return normalizeSiteUrl(siteUrl)
+}
+
+export function trustsForwardedHost(event: H3Event): boolean {
+   const config = useRuntimeConfig(event).public as { cmsTrustForwardedHost?: unknown }
+   return isForwardedHostTrusted(config.cmsTrustForwardedHost)
+}
+
+export function resolveSiteUrl(event: H3Event): string {
+   const trusted = trustsForwardedHost(event)
    return (
-      normalizeSiteUrl(siteUrl) ||
-      getRequestURL(event, { xForwardedHost: true, xForwardedProto: true }).origin
+      configuredSiteUrl(event) ||
+      getRequestURL(event, { xForwardedHost: trusted, xForwardedProto: trusted }).origin
    )
+}
+
+export function seoRouteCacheHeader(event: H3Event): string {
+   return seoRouteCacheControl(configuredSiteUrl(event))
 }

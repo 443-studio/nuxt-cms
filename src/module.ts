@@ -46,6 +46,7 @@ import {
    ROBOTS_PATH,
    SITEMAP_CONFLICT_MODULES,
    SITEMAP_PATH,
+   missingSiteUrlWarning,
    normalizeSiteUrl,
    resolveSeoSwitches,
    seoOptionErrors,
@@ -315,6 +316,8 @@ function setupSiteUrl(nuxt: Nuxt, options: ModuleOptions, logger: ReturnType<typ
       )
    }
    nuxt.options.runtimeConfig.public.siteUrl = siteUrl
+   nuxt.options.runtimeConfig.public.cmsTrustForwardedHost =
+      options.site?.trustForwardedHost === true
 }
 
 function setupSeoRoutes(
@@ -337,6 +340,10 @@ function setupSeoRoutes(
          robots: [...installed(ROBOTS_CONFLICT_MODULES), ...publicFile(ROBOTS_PATH.slice(1))],
       })
       for (const warning of switches.warnings) logger.warn(warning)
+      const siteUrlWarning = nuxt.options.runtimeConfig.public.siteUrl
+         ? null
+         : missingSiteUrlWarning(switches)
+      if (siteUrlWarning && !nuxt.options.dev) logger.warn(siteUrlWarning)
       const runtime = nuxt.options.runtimeConfig.cms as Record<string, unknown>
       runtime.seo = {
          sitemap: switches.sitemap,

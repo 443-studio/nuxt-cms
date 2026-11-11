@@ -16,7 +16,7 @@ import type {
    CmsSeoSource,
    CmsSite,
 } from '../../shared/index'
-import { normalizeSiteUrl, resolveSeoMeta } from '../../shared/index'
+import { isForwardedHostTrusted, normalizeSiteUrl, resolveSeoMeta } from '../../shared/index'
 
 export type CmsSeoOptions = {
    [K in keyof CmsSeoOverrides]?: MaybeRefOrGetter<CmsSeoOverrides[K]>
@@ -36,8 +36,12 @@ export function useCmsSeo(
    const { locale, ...overrides } = options
    const config = useRuntimeConfig().public
    const { i18n } = (config.cms ?? {}) as { i18n?: CmsI18n }
+   const trusted = isForwardedHostTrusted(
+      (config as { cmsTrustForwardedHost?: unknown }).cmsTrustForwardedHost
+   )
    const siteUrl =
-      normalizeSiteUrl((config as { siteUrl?: string }).siteUrl) || useRequestURL().origin
+      normalizeSiteUrl((config as { siteUrl?: string }).siteUrl) ||
+      useRequestURL({ xForwardedHost: trusted, xForwardedProto: trusted }).origin
    const route = useRoute()
    const { data: site } = useCmsSite({ locale })
 

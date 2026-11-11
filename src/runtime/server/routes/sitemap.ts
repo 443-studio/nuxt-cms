@@ -13,11 +13,9 @@ import {
    sitemapUrlCount,
 } from '../../shared/index'
 import { getContentI18n } from '../utils/registry'
-import { readSiteSettings, resolveSiteUrl } from '../utils/site'
+import { readSiteSettings, resolveSiteUrl, seoRouteCacheHeader } from '../utils/site'
 import type { SitemapContext, SitemapPlan } from '../utils/sitemap'
 import { planSitemap, sitemapChunkUrls } from '../utils/sitemap'
-
-const CACHE_CONTROL = 'public, max-age=600, s-maxage=600'
 
 async function* urlsetParts(batches: AsyncIterable<SitemapUrl[]>): AsyncGenerator<string> {
    yield SITEMAP_URLSET_OPEN
@@ -63,7 +61,7 @@ export default defineEventHandler(async (event) => {
    const part = requestedPart(event)
    setResponseHeaders(event, {
       'content-type': 'application/xml; charset=utf-8',
-      'cache-control': CACHE_CONTROL,
+      'cache-control': seoRouteCacheHeader(event),
    })
    const settings = await readSiteSettings()
    if (settings.hidden) return renderSitemap([])

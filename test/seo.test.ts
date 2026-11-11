@@ -7,6 +7,8 @@ import {
    applyTitleTemplate,
    coerceSiteSettings,
    hiddenSiteHeaderApplies,
+   isForwardedHostTrusted,
+   missingSiteUrlWarning,
    normalizeSiteUrl,
    pageSitemapUrls,
    planSitemapChunks,
@@ -18,6 +20,7 @@ import {
    resolveSeoSwitches,
    seoAlternates,
    seoOptionErrors,
+   seoRouteCacheControl,
    sitemapPartUrl,
    sitemapUrlCount,
    sitemapUrlsForPaths,
@@ -454,6 +457,38 @@ describe('seo module options', () => {
       expect(seoOptionErrors(undefined, { url: 3 })).toEqual(['cms.site.url must be a string'])
       expect(seoOptionErrors(undefined, { host: 'x' })[0]).toContain(
          'cms.site.host is not an option'
+      )
+   })
+
+   it('accepts trustForwardedHost as a boolean only', () => {
+      expect(seoOptionErrors(undefined, { trustForwardedHost: true })).toEqual([])
+      expect(seoOptionErrors(undefined, { trustForwardedHost: false, url: '' })).toEqual([])
+      expect(seoOptionErrors(undefined, { trustForwardedHost: 'yes' })).toEqual([
+         'cms.site.trustForwardedHost must be true or false',
+      ])
+   })
+
+   it('reads the forwarded host switch from config or env text', () => {
+      expect(isForwardedHostTrusted(true)).toBe(true)
+      expect(isForwardedHostTrusted('true')).toBe(true)
+      expect(isForwardedHostTrusted(undefined)).toBe(false)
+      expect(isForwardedHostTrusted(false)).toBe(false)
+      expect(isForwardedHostTrusted('false')).toBe(false)
+   })
+
+   it('keeps the sitemap and robots out of shared caches without a site URL', () => {
+      expect(seoRouteCacheControl('https://example.com')).toBe('public, max-age=600, s-maxage=600')
+      expect(seoRouteCacheControl('')).toBe('private, no-store')
+      expect(seoRouteCacheControl(undefined)).toBe('private, no-store')
+   })
+
+   it('warns when a route is served without a site URL', () => {
+      expect(missingSiteUrlWarning({ sitemap: false, robots: false })).toBeNull()
+      expect(missingSiteUrlWarning({ sitemap: true, robots: true })).toContain(
+         '/sitemap.xml and /robots.txt are served but no site URL is set'
+      )
+      expect(missingSiteUrlWarning({ sitemap: false, robots: true })).toContain(
+         '/robots.txt is served'
       )
    })
 

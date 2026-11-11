@@ -473,10 +473,37 @@ export interface CmsSeoModuleOptions {
 
 export interface CmsSiteModuleOptions {
    url?: string
+   trustForwardedHost?: boolean
 }
 
 const SEO_OPTION_KEYS = ['sitemap', 'robots']
-const SITE_OPTION_KEYS = ['url']
+const SITE_OPTION_KEYS = ['url', 'trustForwardedHost']
+
+export const SEO_ROUTE_CACHE_CONTROL = 'public, max-age=600, s-maxage=600'
+
+export const SEO_ROUTE_PRIVATE_CACHE_CONTROL = 'private, no-store'
+
+export function seoRouteCacheControl(configuredSiteUrl: string | null | undefined): string {
+   return configuredSiteUrl ? SEO_ROUTE_CACHE_CONTROL : SEO_ROUTE_PRIVATE_CACHE_CONTROL
+}
+
+export function isForwardedHostTrusted(value: unknown): boolean {
+   return value === true || value === 'true' || value === 1 || value === '1'
+}
+
+export function missingSiteUrlWarning(routes: {
+   sitemap: boolean
+   robots: boolean
+}): string | null {
+   const served = [
+      routes.sitemap ? '/sitemap.xml' : null,
+      routes.robots ? '/robots.txt' : null,
+   ].filter((path): path is string => !!path)
+   if (!served.length) return null
+   return `[nuxt-cms] ${served.join(' and ')} ${
+      served.length > 1 ? 'are' : 'is'
+   } served but no site URL is set: set cms.site.url (or NUXT_PUBLIC_SITE_URL), otherwise the URLs come from the request host and the responses are sent with Cache-Control: private, no-store.`
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
    return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -520,7 +547,10 @@ export function seoOptionErrors(seo: unknown, site: unknown): string[] {
          for (const [key, value] of Object.entries(site)) {
             if (!SITE_OPTION_KEYS.includes(key))
                errors.push(`cms.site.${key} is not an option (use ${SITE_OPTION_KEYS.join(', ')})`)
-            else if (value !== undefined) errors.push(...siteUrlErrors(value))
+            else if (key === 'trustForwardedHost') {
+               if (value !== undefined && typeof value !== 'boolean')
+                  errors.push('cms.site.trustForwardedHost must be true or false')
+            } else if (value !== undefined) errors.push(...siteUrlErrors(value))
          }
       }
    }

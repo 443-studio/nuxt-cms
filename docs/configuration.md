@@ -276,7 +276,8 @@ of the form need them. See [Roles and permissions](admin.md#roles-and-permission
 `site.url` is the absolute URL of the site, used for canonical links, share images, the sitemap
 and `robots.txt`. It becomes `runtimeConfig.public.siteUrl` (so `NUXT_PUBLIC_SITE_URL` overrides it
 at runtime); without it, the module falls back to an existing `runtimeConfig.public.siteUrl`, to
-`site.url` of `nuxt-site-config`, then to the request origin. `seo.sitemap` and `seo.robots` turn
+`site.url` of `nuxt-site-config`, then to the request origin (the `Host` header; forwarded
+headers only with `site.trustForwardedHost: true`, for a proxy that overwrites them). `seo.sitemap` and `seo.robots` turn
 the `/sitemap.xml` and `/robots.txt` routes on or off. Left unset, each is on unless the build finds
 `@nuxtjs/sitemap` / `@nuxtjs/robots` or a `public/sitemap.xml` / `public/robots.txt`. A bad URL,
 an unknown key or a non-boolean switch fails the build. See [SEO](seo.md).
