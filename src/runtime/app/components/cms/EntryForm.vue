@@ -1,10 +1,9 @@
 <template>
-   <KForm
-      :id="formId"
+   <component
+      :is="wrapper"
+      :id="external ? undefined : formId"
       ref="formRef"
-      :form="form"
-      :focus-on-error="false"
-      :disabled="lock ? true : undefined"
+      v-bind="formBinding"
       class="cms-form"
    >
       <KAlert v-if="lock" tone="neutral" :icon="cmsIcon('lock-closed')" :title="lock" />
@@ -55,11 +54,11 @@
             @click="togglePublished"
          />
       </KStack>
-   </KForm>
+   </component>
 </template>
 
 <script setup lang="ts">
-import type { CmsConfig, CmsEntry, CmsFormLayout, CmsTab, FieldConfig } from '#nuxt-cms'
+import type { CmsEntry, CmsFormLayout, CmsTab, FieldConfig } from '#nuxt-cms'
 import {
    fieldTab,
    hasTranslatableBlockFields,
@@ -77,13 +76,13 @@ import {
    FormField as KFormField,
    Stack as KStack,
    Tabs as KTabs,
-   useForm,
 } from '@xleddyl/443-components-vue'
+import type { Component } from 'vue'
 import { computed, nextTick, onMounted, ref, watch } from '#imports'
-import cmsConfig from '#cms-config'
 import type { CmsSearchFocus } from '../../../shared/search'
 import { translationProgress } from '../../../shared/translations'
-import { buildEntrySchema, entryValidationWarnings } from '../../../shared/validation'
+import type { CmsEntryForm } from '../../composables/cms-entry-form'
+import { useCmsEntryForm } from '../../composables/cms-entry-form'
 import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
@@ -104,13 +103,24 @@ const props = withDefaults(
       lock?: string | null
       canPublish?: boolean
       locked?: string[]
+      form?: CmsEntryForm
+      tab?: string
    }>(),
-   { footer: true, lock: null, canPublish: true, locked: () => [] }
+   {
+      footer: true,
+      lock: null,
+      canPublish: true,
+      locked: () => [],
+      form: undefined,
+      tab: undefined,
+   }
 )
 
 const state = defineModel<Record<string, unknown>>({ required: true })
 
-const emit = defineEmits<{ submit: []; error: [] }>()
+const emit = defineEmits<{ submit: []; error: []; 'update:tab': [tab: string] }>()
+
+const external = !!props.form
 
 const { i18n } = useCmsRuntime()
 
@@ -118,13 +128,21 @@ const activeLocale = ref<Record<string, string>>({})
 
 const tabList = computed(() => props.tabs ?? [])
 
-const activeTab = ref(tabList.value[0]?.id ?? '')
+const localTab = ref(tabList.value[0]?.id ?? '')
 
 watch(tabList, (tabs) => {
-   if (!tabs.some((tab) => tab.id === activeTab.value)) activeTab.value = tabs[0]?.id ?? ''
+   if (!tabs.some((tab) => tab.id === localTab.value)) localTab.value = tabs[0]?.id ?? ''
 })
 
-const tabbed = computed(() => tabList.value.length > 1)
+const activeTab = computed({
+   get: () => (props.tab !== undefined ? props.tab : localTab.value),
+   set: (value: string) => {
+      if (props.tab !== undefined) emit('update:tab', value)
+      else localTab.value = value
+   },
+})
+
+const tabbed = computed(() => props.tab === undefined && tabList.value.length > 1)
 
 const panelSlot = computed(() => (tabbed.value ? 'panel' : 'default'))
 
@@ -203,39 +221,23 @@ function setLocale(key: string, locale: string) {
    activeLocale.value = { ...activeLocale.value, [key]: locale }
 }
 
-const validate = computed(() =>
-   props.entryName ? (cmsConfig as CmsConfig)[props.entryName]?.validate : undefined
+const form =
+   props.form ??
+   useCmsEntryForm({
+      state,
+      fields: () => props.fields,
+      entryName: () => props.entryName,
+      drafts: () => props.drafts,
+      path: () => props.path,
+      onSubmit: () => emit('submit'),
+      onInvalid: (errors) => onError(firstErrorKey(errors)),
+   })
+
+const wrapper: Component | string = external ? 'div' : KForm
+
+const formBinding = computed<Record<string, unknown>>(() =>
+   external ? {} : { form, focusOnError: false, disabled: props.lock ? true : undefined }
 )
-
-const schema = computed(() =>
-   buildEntrySchema(
-      {
-         fields: props.fields,
-         drafts: props.drafts,
-         validate: validate.value,
-         path: props.path,
-         config: cmsConfig as CmsConfig,
-      },
-      i18n
-   )
-)
-
-function warnings(values: Record<string, unknown>) {
-   return entryValidationWarnings(
-      { fields: props.fields, validate: validate.value },
-      values,
-      i18n,
-      props.path
-   )
-}
-
-const form = useForm({
-   values: state,
-   validator: schema,
-   warnings,
-   onSubmit: () => emit('submit'),
-   onInvalid: (errors) => onError(firstErrorKey(errors)),
-})
 
 const published = computed({
    get: () => state.value.status === 'published',
@@ -248,7 +250,13 @@ function togglePublished() {
    published.value = !published.value
 }
 
-const formRef = ref<{ $el: HTMLFormElement } | null>(null)
+const formRef = ref<HTMLElement | { $el: HTMLElement } | null>(null)
+
+function formElement() {
+   const target = formRef.value
+   return target instanceof HTMLElement ? target : target?.$el
+}
+
 const { highlighted, reveal } = useCmsFieldFocus()
 
 function applyFocus(focus: CmsSearchFocus) {
@@ -263,7 +271,7 @@ function applyFocus(focus: CmsSearchFocus) {
    }
    void nextTick(() => {
       revealField(key)
-      reveal(() => formRef.value?.$el, key)
+      reveal(formElement, key)
    })
 }
 
@@ -278,5 +286,10 @@ function setIssues(issues: CmsResponseIssue[]) {
    onError(String(fieldIssues[0]!.path[0]))
 }
 
-defineExpose({ setIssues })
+function revealErrors(errors: FormErrors) {
+   const key = firstErrorKey(errors)
+   if (key) void nextTick(() => revealField(key))
+}
+
+defineExpose({ setIssues, revealErrors })
 </script>

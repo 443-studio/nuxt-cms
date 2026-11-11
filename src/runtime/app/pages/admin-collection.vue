@@ -255,11 +255,14 @@
             v-model:open="drawerOpen"
             :collection="name"
             :config="config"
-            v-model:entry-id="drawerEntryId"
-            :initial="drawerInitial"
-            @saved="refresh"
+            :entry-id="entryRecord.isNew.value ? null : entryRecord.id.value"
+            :duplicate-id="duplicateId"
+            :focus="drawerFocus"
+            @saved="() => refresh()"
+            @created="onCreated"
             @deleted="onDrawerDeleted"
-            @duplicate="openDuplicate"
+            @duplicate="(id: string) => openRecord(CMS_NEW_RECORD, { duplicate: id })"
+            @missing="entryRecord.close()"
          />
 
          <CmsImportModal
@@ -299,6 +302,8 @@ import {
 } from '#imports'
 import type { MenuEntry, RowKey, TableColumn, TableSort } from '@xleddyl/443-components-vue'
 import {
+   routeHashValue,
+   useRouteRecord,
    Button as KButton,
    Card as KCard,
    DropdownMenu as KDropdownMenu,
@@ -312,7 +317,6 @@ import {
    Table as KTable,
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
-import { duplicateEntryValues } from '../../shared/duplicate'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import type { CmsListFilters } from '../../shared/list-filters'
 import {
@@ -321,7 +325,12 @@ import {
    parseListFilters,
    withoutListFilterQuery,
 } from '../../shared/list-filters'
-import { readSearchFocus } from '../../shared/search'
+import {
+   CMS_ENTRY_FOCUS_KEYS,
+   CMS_ENTRY_ROUTE_KEY,
+   CMS_ENTRY_TAB_ROUTE_KEY,
+   readSearchFocus,
+} from '../../shared/search'
 import type { CmsTransferFormat } from '../../shared/transfer'
 import {
    TRANSLATIONS_COLUMN,
@@ -331,6 +340,7 @@ import {
 import { canTransferCsv, exportFileName } from '../../shared/transfer'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
+import { CMS_NEW_RECORD, useCmsRouteFlag } from '../composables/cms-route'
 import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
@@ -677,18 +687,35 @@ const filterKeys = computed(() => {
    return [...shown, ...active]
 })
 
-const drawerOpen = ref(false)
-const drawerEntryId = ref<string | null>(null)
-const drawerInitial = ref<Row | null>(null)
+const entryRecord = useRouteRecord(CMS_ENTRY_ROUTE_KEY, {
+   canCreate: () => canCreate.value,
+   linkedKeys: [CMS_ENTRY_TAB_ROUTE_KEY, 'duplicate', ...CMS_ENTRY_FOCUS_KEYS],
+})
+const { openRecord } = entryRecord
+
+const drawerOpen = computed({
+   get: () => !isContent && !!entryRecord.param.value,
+   set: (value: boolean) => {
+      if (!value) void entryRecord.close()
+   },
+})
+
+const duplicateId = computed(() =>
+   entryRecord.isNew.value ? routeHashValue(route.hash, 'duplicate') ?? null : null
+)
+
+const drawerFocus = computed(() =>
+   readSearchFocus(
+      Object.fromEntries(CMS_ENTRY_FOCUS_KEYS.map((key) => [key, routeHashValue(route.hash, key)]))
+   )
+)
 
 function onSelect(row: Row) {
    if (isContent) {
       void navigateTo(`/cms/${name}/${row.id}`)
       return
    }
-   drawerInitial.value = null
-   drawerEntryId.value = String(row.id)
-   drawerOpen.value = true
+   void openRecord(String(row.id))
 }
 
 function openCreate() {
@@ -696,37 +723,26 @@ function openCreate() {
       void navigateTo(`/cms/${name}/new`)
       return
    }
-   drawerInitial.value = null
-   drawerEntryId.value = null
-   drawerOpen.value = true
+   void openRecord(CMS_NEW_RECORD)
 }
 
-function openDuplicate(values: Row) {
-   drawerInitial.value = values
-   drawerEntryId.value = null
-   drawerOpen.value = true
+function onCreated(id: string) {
+   void refresh()
+   void entryRecord.replaceId(id)
 }
 
-async function duplicateSelected() {
+function duplicateSelected() {
    const id = selected.value.map(String)[0]
-   if (!id || saving.value) return
+   if (!id) return
    if (isContent) {
       void navigateTo({ path: `/cms/${name}/new`, query: { duplicate: id } })
       return
    }
-   saving.value = true
-   try {
-      const entry = await cmsApi<Row>(`${endpoint}/${id}`)
-      selected.value = []
-      openDuplicate(duplicateEntryValues(config!, entry))
-   } catch (error) {
-      toast.add({ title: 'Could not load entry', description: errorMessage(error), color: 'error' })
-   } finally {
-      saving.value = false
-   }
+   selected.value = []
+   void openRecord(CMS_NEW_RECORD, { duplicate: id })
 }
 
-const importOpen = ref(false)
+const importOpen = useCmsRouteFlag('import')
 const exporting = ref(false)
 const csvAvailable = canTransferCsv(config)
 

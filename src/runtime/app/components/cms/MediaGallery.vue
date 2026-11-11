@@ -548,6 +548,7 @@ import {
    Spinner as KSpinner,
    Stack as KStack,
    useFileDrop,
+   useRouteState,
 } from '@xleddyl/443-components-vue'
 import {
    isWithinMediaFolder,
@@ -577,6 +578,7 @@ import {
    uploadTreeFromFiles,
    useCmsMediaUploader,
 } from '../../composables/cms-media-uploader'
+import { CMS_MEDIA_ROUTE_KEY, useCmsOverlayFlag } from '../../composables/cms-route'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { useCmsToast } from '../../composables/cms-toast'
 import { cmsIcon } from '../../utils/ui'
@@ -961,7 +963,13 @@ function clearSelection() {
    lastSelected.value = null
 }
 
-const detailKey = ref<string | null>(null)
+const detailRoute = useRouteState(CMS_MEDIA_ROUTE_KEY, { location: 'hash' })
+const detailKey = computed<string | null>({
+   get: () => (props.selectable ? null : detailRoute.value ?? null),
+   set: (value) => {
+      if (!props.selectable) detailRoute.value = value ?? undefined
+   },
+})
 const detail = computed(
    () => library.items.value.find((item) => item.key === detailKey.value) ?? null
 )
@@ -1000,7 +1008,7 @@ async function run(action: () => Promise<boolean>) {
    }
 }
 
-const newFolderOpen = ref(false)
+const newFolderOpen = useCmsOverlayFlag('newfolder', !props.selectable)
 const folderName = ref('')
 const folderSlug = computed(() => slugify(folderName.value))
 const newFolderPath = computed(() =>
@@ -1012,9 +1020,16 @@ const newFolderPath = computed(() =>
 )
 
 function openNewFolder() {
-   folderName.value = ''
    newFolderOpen.value = true
 }
+
+watch(
+   newFolderOpen,
+   (open) => {
+      if (open) folderName.value = ''
+   },
+   { immediate: true }
+)
 
 async function createFolder() {
    const path = newFolderPath.value
@@ -1030,7 +1045,7 @@ async function createFolder() {
    openFolder(path)
 }
 
-const renameOpen = ref(false)
+const renameOpen = useCmsOverlayFlag('renamefolder', !props.selectable)
 const renameParent = ref<string | null>(null)
 
 const parentCandidates = computed(() => {
@@ -1052,11 +1067,22 @@ const renamePath = computed(() => {
 })
 
 function openRename() {
-   if (!folder.value) return
-   folderName.value = mediaFolderName(folder.value)
-   renameParent.value = mediaFolderParent(folder.value)
-   renameOpen.value = true
+   if (folder.value) renameOpen.value = true
 }
+
+watch(
+   renameOpen,
+   (open) => {
+      if (!open) return
+      if (!folder.value) {
+         renameOpen.value = false
+         return
+      }
+      folderName.value = mediaFolderName(folder.value)
+      renameParent.value = mediaFolderParent(folder.value)
+   },
+   { immediate: true }
+)
 
 async function renameFolder() {
    const from = folder.value
@@ -1134,13 +1160,25 @@ async function removeItems(items: MediaItem[]) {
    clearSelection()
 }
 
-const moveOpen = ref(false)
+const moveOpen = useCmsOverlayFlag('move', !props.selectable)
 const moveTarget = ref<string | null>(null)
 
 function openMove() {
-   moveTarget.value = folder.value
    moveOpen.value = true
 }
+
+watch(
+   moveOpen,
+   (open) => {
+      if (!open) return
+      if (!selection.value.length) {
+         moveOpen.value = false
+         return
+      }
+      moveTarget.value = folder.value
+   },
+   { immediate: true }
+)
 
 async function moveKeys(keys: string[], target: string | null) {
    const moving = keys.filter(
@@ -1166,7 +1204,7 @@ async function moveSelection() {
    clearSelection()
 }
 
-const uploadOpen = ref(false)
+const uploadOpen = useCmsOverlayFlag('upload', !props.selectable)
 
 async function afterUpload(uploaded: MediaItem[]) {
    if (!uploaded.length) {

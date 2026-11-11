@@ -65,9 +65,10 @@ import {
 import cmsConfig from '#cms-config'
 import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import { cloneState, mergeSavedState } from '../../shared/save-state'
-import { readSearchFocus } from '../../shared/search'
+import { cmsEntryLink, readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
+import { CMS_NEW_RECORD } from '../composables/cms-route'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
 import { useCmsToast } from '../composables/cms-toast'
@@ -97,6 +98,22 @@ if (!config || (config.kind !== 'collection' && config.kind !== 'page')) {
 
 const id = route.params.id as string | undefined
 const isPage = config.kind === 'page'
+
+if (!isPage) {
+   const text = (key: string) => {
+      const value = route.query[key]
+      return typeof value === 'string' ? value : undefined
+   }
+   await navigateTo(
+      cmsEntryLink(name, id ?? CMS_NEW_RECORD, {
+         field: text('field'),
+         locale: text('locale'),
+         block: text('block'),
+         tab: text('tab'),
+      }),
+      { replace: true }
+   )
+}
 const pageRoute = isPage && id ? pageRouteOf(config, id) : undefined
 if (isPage && !pageRoute) {
    throw createError({ statusCode: 404, statusMessage: 'Unknown page', fatal: true })
@@ -142,7 +159,7 @@ function pickFields(row: Record<string, unknown>) {
 
 const formState = ref<Record<string, unknown>>(emptyState())
 
-if (!isNew) {
+if (!isNew && isPage) {
    const { data, error } = await useFetch<Record<string, unknown> | null>(`${endpoint}/${id}`)
    if (error.value || !data.value) {
       const statusCode = error.value?.statusCode ?? 404

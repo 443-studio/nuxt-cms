@@ -180,6 +180,7 @@ import { cloneState, mergeSavedState } from '../../shared/save-state'
 import { readSearchFocus } from '../../shared/search'
 import { useCmsConfirm } from '../composables/cms-confirm'
 import { useCmsPermissions } from '../composables/cms-permissions'
+import { useCmsRouteFlag } from '../composables/cms-route'
 import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { useCmsSaveHandoff } from '../composables/cms-save-handoff'
@@ -276,7 +277,7 @@ const { items: translationItems } = useCmsTranslationActions({
    apply: (values) => editor.value?.applyChange(values),
 })
 const canShare = computed(() => !isNew && !!config.route && can(`${name}.update`))
-const shareOpen = ref(false)
+const shareOpen = useCmsRouteFlag('share')
 const itemActions = computed<MenuEntry[]>(() =>
    isNew
       ? []

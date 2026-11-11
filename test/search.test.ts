@@ -13,6 +13,7 @@ import { resolvePageRoutes } from '../src/runtime/shared/page-routes'
 import type { CmsSearchHit, CmsSearchResponse } from '../src/runtime/shared/search'
 import {
    cmsSearchLink,
+   cmsEntryLink,
    readSearchFocus,
    searchCmsLabels,
    searchLikePattern,
@@ -355,6 +356,16 @@ describe('search helpers', () => {
       expect(searchSnippet('nothing here', 'lake')).toBeNull()
    })
 
+   it('builds hash links to a collection entry', () => {
+      expect(cmsEntryLink('events', 'spring')).toBe('/cms/events#entry/spring')
+      expect(
+         cmsEntryLink('events', 'a&b', { field: 'body', locale: 'it', block: '2.items.0' })
+      ).toBe('/cms/events#entry/a%26b&field/body&locale/it&block/2.items.0')
+      expect(cmsEntryLink('events', 'new', { tab: 'seo' })).toBe(
+         '/cms/events#entry/new&entrytab/seo'
+      )
+   })
+
    it('builds and reads focus links', () => {
       const link = cmsSearchLink('/cms/pages/home', { field: 'intro', locale: 'de', block: 2 })
       expect(link).toBe('/cms/pages/home?field=intro&locale=de&block=2')
@@ -454,7 +465,7 @@ describe('value search', () => {
             id: 'spring',
             field: 'body',
             fieldLabel: 'Body › Group › Inner › Quote › Text',
-            to: '/cms/events/spring?field=body&block=2.inner.1',
+            to: '/cms/events#entry/spring&field/body&block/2.inner.1',
          }),
       ])
       expect(values(await search('pike season'))).toEqual([
@@ -497,7 +508,7 @@ describe('value search', () => {
          title: 'Spring fair',
          field: 'description',
          locale: 'en',
-         to: '/cms/events/spring?field=description&locale=en',
+         to: '/cms/events#entry/spring&field/description&locale/en',
       })
       expect(snippetText(hit!)).toBe('A lovely [fair by] the lake')
       const [tanz] = values(await search('tanz'))
@@ -535,12 +546,12 @@ describe('value search', () => {
          field: 'body',
          fieldLabel: 'Body › Hero › Heading',
          locale: 'it',
-         to: '/cms/events/spring?field=body&locale=it&block=0',
+         to: '/cms/events#entry/spring&field/body&locale/it&block/0',
       })
       expect(values(await search('friends'))[0]).toMatchObject({
          fieldLabel: 'Body › Quote › Text',
          locale: null,
-         to: '/cms/events/spring?field=body&block=1',
+         to: '/cms/events#entry/spring&field/body&block/1',
       })
       expect(values(await search('are clean'))[0]).toMatchObject({
          collection: 'pages',
@@ -576,7 +587,7 @@ describe('value search', () => {
             kind: 'media',
             id: 'library/sunset.webp',
             title: 'sunset.webp',
-            to: '/cms/media?folder=library',
+            to: '/cms/media?folder=library#media/library/sunset.webp',
          }),
       ])
    })

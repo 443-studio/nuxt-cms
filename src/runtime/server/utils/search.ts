@@ -20,12 +20,19 @@ import {
    selectOptionLabel,
    selectValuesMatching,
 } from '../../shared/index'
-import type { CmsSearchHit, CmsSearchResponse, CmsSearchSnippet } from '../../shared/search'
+import type {
+   CmsSearchHit,
+   CmsSearchLinkFocus,
+   CmsSearchResponse,
+   CmsSearchSnippet,
+} from '../../shared/search'
 import {
    CMS_SEARCH_HITS_PER_ROW,
    CMS_SEARCH_MIN_LENGTH,
    CMS_SEARCH_ROWS_PER_ENTRY,
    CMS_SEARCH_VALUE_LIMIT,
+   cmsEntryLink,
+   cmsHashLink,
    cmsSearchLink,
    normalizeSearchQuery,
    searchCmsLabels,
@@ -272,13 +279,20 @@ async function pageRows(
    return decodePageRows(entry, rows)
 }
 
-function itemPath(name: string, entry: CmsEntry, row: Row): string | null {
-   if (entry.kind === 'single') return `/cms/${name}`
+function itemLink(
+   name: string,
+   entry: CmsEntry,
+   row: Row
+): ((focus: CmsSearchLinkFocus) => string) | null {
+   if (entry.kind === 'single') return (focus) => cmsSearchLink(`/cms/${name}`, focus)
    if (entry.kind === 'page') {
       const route = pageRouteOf(entry, String(row.id))
-      return route ? `/cms/${name}/${route.key}` : null
+      return route ? (focus) => cmsSearchLink(`/cms/${name}/${route.key}`, focus) : null
    }
-   return row.id == null ? null : `/cms/${name}/${String(row.id)}`
+   if (row.id == null) return null
+   const id = String(row.id)
+   if (entry.kind === 'collection') return (focus) => cmsEntryLink(name, id, focus)
+   return (focus) => cmsSearchLink(`/cms/${name}/${id}`, focus)
 }
 
 function entryHits(
@@ -290,8 +304,8 @@ function entryHits(
    const { defaultLocale } = context.i18n
    const hits: CmsSearchHit[] = []
    for (const row of rows) {
-      const path = itemPath(name, entry, row)
-      if (!path) continue
+      const link = itemLink(name, entry, row)
+      if (!link) continue
       const route = entry.kind === 'page' ? pageRouteOf(entry, String(row.id)) : undefined
       const fields = route ? pageFields(entry, route.path) : entry.fields
       const title = route ? route.label : titleOf(entry, row, defaultLocale)
@@ -307,11 +321,7 @@ function entryHits(
             fieldLabel: hit.fieldLabel,
             locale: hit.locale,
             snippet: hit.snippet,
-            to: cmsSearchLink(path, {
-               field: hit.field,
-               locale: hit.locale,
-               block: hit.block,
-            }),
+            to: link({ field: hit.field, locale: hit.locale, block: hit.block }),
          })
       }
    }
@@ -348,7 +358,10 @@ async function mediaHits(context: SearchContext): Promise<CmsSearchHit[]> {
             fieldLabel: 'Alt text',
             locale: null,
             snippet,
-            to: folder ? `/cms/media?${new URLSearchParams({ folder })}` : '/cms/media',
+            to: cmsHashLink(
+               folder ? `/cms/media?${new URLSearchParams({ folder })}` : '/cms/media',
+               { media: row.key }
+            ),
          } satisfies CmsSearchHit,
       ]
    })

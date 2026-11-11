@@ -17,9 +17,29 @@ with `cms.admin.logo`, `cms.admin.title` and `cms.admin.subtitle`, see
 | `/cms/logout` | signs out, then opens the login page |
 | `/cms/media` | media library |
 | `/cms/:collection` | collection list, content list, single editor, or page list |
-| `/cms/:collection/new` | create entry or content item |
-| `/cms/:collection/:id` | edit entry, content item, or one page |
+| `/cms/:collection/new` | create a content item (a collection opens its drawer instead) |
+| `/cms/:collection/:id` | edit a content item or one page (a collection opens its drawer instead) |
 | `/cms/preview` | live preview inside the visual editor (path set by `cms.preview.path`) |
+
+Every drawer, modal and the settings modal is in the hash of the URL, so the back button closes
+it, forward opens it again, a reload keeps it open and a link opens it. One overlay is
+`#key/value`; overlays open together are joined with `&` in the order they were opened, for
+example `/cms/events#entry/42&editblock/gallery.0`:
+
+| Hash | Overlay |
+| --- | --- |
+| `#entry/<id>`, `#entry/new` | entry drawer of a collection (`entrytab/<tab>` keeps its tab) |
+| `#entry/new&duplicate/<id>` | drawer with a copy of an entry |
+| `#import/open` | import modal of a collection |
+| `#editblock/<field>.<index>` | block modal of a tile grid (`.<field>.<index>` for a nested one) |
+| `#visual/<field>` | full-screen visual editor of a blocks field |
+| `#media/<key>` | media detail drawer |
+| `#upload/open`, `#newfolder/open`, `#renamefolder/open`, `#move/open` | media library modals |
+| `#share/open` | share preview of a content item |
+| `#settings/<section>`, `#settings/<section>/<id>` | settings modal, see [Settings](#settings) |
+
+The state of a page stays in the query: filters (`?filter.<field>=`), the search of a list (`?q=`),
+the open media folder (`?folder=`).
 
 A [`page` entry](schema.md#pages) gets its own section in the sidebar. The list is a tree that
 follows the routes of the site: a child path sits under its parent, indented. On the right of each
@@ -114,8 +134,10 @@ uploaded again). Nothing is written until you save. So that the save does not hi
 - on an entry with `drafts` the copy starts as a draft, and a content item also loses its publish
   date.
 
-The drawer asks before it duplicates an entry with unsaved changes, and copies the saved version.
-In the visual editor the copy opens at `/cms/<entry>/new?duplicate=<id>`.
+**Duplicate** in the drawer is disabled while the entry has unsaved changes: save first, then
+duplicate the saved version. The copy of a collection entry opens in the drawer at
+`/cms/<entry>#entry/new&duplicate/<id>`; in the visual editor it opens at
+`/cms/<entry>/new?duplicate=<id>`.
 
 ### Filters
 
@@ -231,7 +253,8 @@ dialog. Results appear while you type, from 2 characters on, grouped by entry:
 Up and down move through the results, Enter opens one, Escape or a click outside closes the dialog.
 A hit opens the editor with `?field=`, `locale=` and `block=` in the URL: the editor switches to the
 tab and the language of the field, selects the block in the visual editor, scrolls to the field and
-highlights it.
+highlights it. A hit in a collection entry opens its drawer with the same keys in the hash
+(`/cms/events#entry/<id>&field/title`), a media hit opens its detail drawer.
 
 The dialog reads `GET /api/cms/search?q=`, which needs an admin session like every admin endpoint.
 Matching is a case-insensitive `LIKE` (`%` and `_` in the query are matched literally), with at

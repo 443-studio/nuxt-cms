@@ -328,6 +328,7 @@ import {
    blockSchemaPath,
    canAddBlock,
    formatBlockPath,
+   parseBlockPath,
    insertBlocks,
    moveBlock,
    removeBlock,
@@ -354,6 +355,7 @@ import {
    Stack as KStack,
    useFieldControl,
    useFormContext,
+   useRouteState,
 } from '@xleddyl/443-components-vue'
 import { computed, inject, nextTick, onMounted, ref, useState, watch } from '#imports'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
@@ -366,6 +368,7 @@ import { useCmsMediaKeys } from '../../composables/cms-media-keys'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsPresets } from '../../composables/cms-presets'
 import { useCmsRuntime } from '../../composables/cms-runtime'
+import { useCmsOverlayFlag } from '../../composables/cms-route'
 import type { CmsBlockEditorScope } from '../../utils/block-editor'
 import { CMS_BLOCK_EDITOR, CmsBlockEditorProvider } from '../../utils/block-editor'
 import { clipboardTarget } from '../../utils/keyboard'
@@ -455,7 +458,7 @@ const visual = computed(() => {
    )
 })
 
-const visualOpen = ref(false)
+const visualOpen = useCmsOverlayFlag('visual', !!props.fieldKey, props.fieldKey)
 
 function onVisualUpdate(state: Record<string, unknown>) {
    if (disabled.value) return
@@ -662,7 +665,21 @@ function onDragEnd() {
 
 const ROOT = '_'
 
-const editorPath = ref<CmsBlockPath | null>(null)
+const localEditorPath = ref<CmsBlockPath | null>(null)
+const editorRoute = useRouteState('editblock', { location: 'hash' })
+const editorRouted = computed(() => !nested.value && !!props.fieldKey)
+
+const editorPath = computed<CmsBlockPath | null>({
+   get: () => {
+      if (!editorRouted.value) return localEditorPath.value
+      const path = parseBlockPath(editorRoute.value)
+      return path && path[0] === props.fieldKey && path.length > 1 ? path.slice(1) : null
+   },
+   set: (path) => {
+      if (!editorRouted.value) localEditorPath.value = path
+      else editorRoute.value = path ? formatBlockPath([props.fieldKey!, ...path]) : undefined
+   },
+})
 
 const rootFields = computed(() => ({ [ROOT]: props.field }))
 const rootValues = computed(() => ({ [ROOT]: items.value }))
