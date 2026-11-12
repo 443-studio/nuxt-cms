@@ -6,6 +6,7 @@
       :field-key="CONTENT_BODY_FIELD"
       :fields="config.fields"
       :title="headerTitle"
+      :trail="[{ label: config.label, onClick: goBack }]"
       :focus="focus"
       :locked="locked"
       :readonly="!!lock"
@@ -62,7 +63,7 @@
          </div>
       </template>
 
-      <template #actions>
+      <template #actions="{ compact }">
          <KPopover
             v-if="!lock && canPublish"
             v-model:open="scheduleOpen"
@@ -75,7 +76,8 @@
                size="sm"
                variant="ghost"
                tone="neutral"
-               :label="scheduled ? 'Reschedule' : 'Schedule'"
+               :label="compact ? undefined : scheduleLabel"
+               :aria-label="scheduleLabel"
                :disabled="saving"
             />
             <template #content>
@@ -345,6 +347,8 @@ const published = computed(() => formState.value.status === 'published')
 
 const mounted = ref(false)
 const scheduled = computed(() => mounted.value && isScheduledContent(formState.value))
+
+const scheduleLabel = computed(() => (scheduled.value ? 'Reschedule' : 'Schedule'))
 
 const scheduledAt = computed(() => {
    const value = formState.value[CONTENT_PUBLISHED_AT_FIELD]

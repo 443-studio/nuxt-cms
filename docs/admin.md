@@ -276,8 +276,9 @@ and D1 the case folding only covers ASCII letters, and a phrase that spans forma
 The visual editor edits a body of blocks on top of the real site. It fills the window with a top
 bar and three panels:
 
-- **Top bar**: back, the title, the status badge (Draft, Published or Scheduled) and an "Unsaved
-  changes" note, the language switch, and the actions: **Undo** and **Redo**, **Schedule**,
+- **Top bar**: back, the content type and the title, the status badge (Draft, Published or
+  Scheduled) and an "Unsaved changes" note, the language switch, the preview width, and the
+  actions: **Undo** and **Redo**, **Schedule**,
   **Save**, **Publish** or **Unpublish**, and the `...` menu with the
   [translation actions](#translations), **Share preview**, **Duplicate** and **Delete**. The
   language switch marks how much of the item each language has.
@@ -295,10 +296,10 @@ bar and three panels:
   visible. **Add a block** at the bottom adds one at the end.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
   layout and CSS apply. Every change is shown at once, before saving. The bar above it shows or
-  hides each side panel, sets the preview width (desktop, tablet 768 px or mobile 390 px), shows
-  the current width in pixels and reloads the preview.
+  hides each side panel, shows the current width in pixels and reloads the preview. The preview
+  width (desktop, tablet 768 px or mobile 390 px) is set in the top bar.
 - **Inspector** (right). With a block selected, the form of that block (arranged by the
-  [block `layout`](schema.md#block-layout)) under a header with its icon, label and summary, a
+  [block `layout`](schema.md#block-layout)) under a header with its icon, label, summary and parent blocks, a
   `...` menu with the block actions and a close button that clears the selection. With no block
   selected, two tabs: **Content** (the page address when the entry has a
   [`route`](schema.md#routes), in the active language, with **Open** to the live page once the
@@ -313,8 +314,9 @@ block in the canvas, and hover a block in the canvas to mark its row in the tree
 Drag the inner edge of a side panel to resize it (the blocks panel from 260 to 440 px, the
 inspector from 300 to 560 px), or focus the edge and use the arrow keys, Home and End; a
 double-click restores the default width. The widths and the hidden panels are remembered in the
-browser. Below 1024 px the three panels become tabs (**Blocks**, **Preview**, **Fields**), with a
-count of errors on Blocks and Fields; picking a block in the tree opens Fields.
+browser. When the editor is narrower than 1024 px the three panels become tabs (**Blocks**,
+**Preview**, **Fields**), with a count of errors on Blocks and Fields; picking a block in the tree
+opens Fields, and Undo and Redo move next to the preview width.
 
 In the canvas, hover a block to outline it with its label; click it to select it and open its
 fields. The toolbar of a block has a drag handle, move up and down, **Duplicate**, **Hide** and
