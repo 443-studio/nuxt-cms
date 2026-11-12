@@ -13,7 +13,6 @@
          <slot name="start" />
          <KPageHeader
             size="sm"
-            class="cms-editor-head"
             :title="title"
             :trail="compact ? undefined : trail"
             :level="1"
@@ -58,13 +57,7 @@
       </template>
 
       <template #left-header>
-         <KPageHeader
-            size="sm"
-            class="cms-editor-head"
-            :title="blocksField.label"
-            :level="2"
-            truncate
-         >
+         <KPageHeader size="sm" :title="blocksField.label" :level="2" truncate>
             <template #badge>
                <KBadge size="sm" variant="outline" :label="blockCount" />
             </template>
@@ -176,7 +169,6 @@
       <template v-if="selectedItem && selected" #right-header>
          <KPageHeader
             size="sm"
-            class="cms-editor-head"
             :title="selectedBlock?.label ?? String(selectedItem.type)"
             :description="selectedSummary || selectedPosition"
             :icon="cmsIcon(selectedBlock?.icon ?? 'rectangle-stack')"

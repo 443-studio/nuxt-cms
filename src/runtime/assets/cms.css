@@ -377,11 +377,6 @@
    --k-workspace-height: 100%;
 }
 
-.cms-editor-head {
-   flex: 1;
-   min-width: 0;
-}
-
 .cms-editor-tree {
    display: flex;
    flex-direction: column;
