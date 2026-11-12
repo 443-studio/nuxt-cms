@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.11.0
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.10.1...v0.11.0)
+
+### 🚀 Enhancements
+
+- Plain promise forms of the entry helpers ($cmsSingle, $cmsCollection, $cmsPage, $cmsContents, $cmsContent, $cmsRoute) ([6f16514](https://github.com/443-studio/nuxt-cms/commit/6f16514))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.10.1
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.10.0...v0.10.1)
