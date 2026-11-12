@@ -2,7 +2,6 @@
    <component
       :is="wrapper"
       :id="external ? undefined : formId"
-      ref="formRef"
       v-bind="formBinding"
       class="cms-form"
    >
@@ -18,8 +17,7 @@
                      :icon="cmsIcon(fieldIcon(fields[key]!))"
                      :required="fields[key]!.required"
                      :disabled="locked.includes(key) || undefined"
-                     :data-cms-field="key"
-                     :class="{ 'cms-search-focus': highlighted === key }"
+                     :highlight="highlighted === key"
                   >
                      <template
                         v-if="hasLocaleSwitch(fields[key]!) && i18n.locales.length > 1"
@@ -64,6 +62,7 @@ import {
    Form as KForm,
    FormField as KFormField,
    Tabs as KTabs,
+   useFieldHighlight,
 } from '@xleddyl/443-components-vue'
 import type { Component } from 'vue'
 import { computed, nextTick, onMounted, ref } from '#imports'
@@ -71,7 +70,6 @@ import type { CmsSearchFocus } from '../../../shared/search'
 import { translationProgress } from '../../../shared/translations'
 import type { CmsEntryForm } from '../../composables/cms-entry-form'
 import { useCmsEntryForm } from '../../composables/cms-entry-form'
-import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsPageQuery } from '../../composables/cms-route'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
@@ -234,14 +232,7 @@ const formBinding = computed<Record<string, unknown>>(() =>
    external ? {} : { form, focusOnError: false, disabled: props.lock ? true : undefined }
 )
 
-const formRef = ref<HTMLElement | { $el: HTMLElement } | null>(null)
-
-function formElement() {
-   const target = formRef.value
-   return target instanceof HTMLElement ? target : target?.$el
-}
-
-const { highlighted, reveal } = useCmsFieldFocus()
+const { highlighted, highlight } = useFieldHighlight()
 
 function applyFocus(focus: CmsSearchFocus) {
    if (focus.tab && tabList.value.some((tab) => tab.id === focus.tab)) activeTab.value = focus.tab
@@ -255,7 +246,7 @@ function applyFocus(focus: CmsSearchFocus) {
    }
    void nextTick(() => {
       revealField(key)
-      reveal(formElement, key)
+      highlight(key)
    })
 }
 

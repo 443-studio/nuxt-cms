@@ -6,7 +6,7 @@
          description="Images, videos and files used across your content."
       >
          <template #badge>
-            <KBadge :label="runtime.mediaStorage" size="sm" class="cms-code-badge" />
+            <KBadge :label="runtime.mediaStorage" size="sm" class="cms-code" />
          </template>
       </KPageHeader>
 

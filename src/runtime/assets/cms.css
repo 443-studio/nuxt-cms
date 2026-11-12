@@ -20,106 +20,10 @@ body:has(.cms-scope) {
    border-radius: var(--k-radius-md);
 }
 
-.cms-media-drop-overlay > svg {
-   color: var(--k-accent-text);
-   animation: cms-float 1.6s ease-in-out infinite;
-}
-
-@keyframes cms-float {
-   0%,
-   100% {
-      transform: translateY(0);
-   }
-
-   50% {
-      transform: translateY(-3px);
-   }
-}
-
-.cms-search-option-icon {
-   margin-top: 0.125rem;
-   --k-icon-size: 1rem;
-   flex: none;
-   color: var(--k-text-dimmed);
-}
-
-.cms-search-option-text {
-   display: flex;
-   flex: 1;
-   flex-direction: column;
-   gap: 0.125rem;
-   min-width: 0;
-}
-
-.cms-search-option-head {
-   display: flex;
-   align-items: center;
-   gap: 0.5rem;
-   min-width: 0;
-}
-
-.cms-search-option-title {
-   overflow: hidden;
-   font-weight: 500;
-   text-overflow: ellipsis;
-   white-space: nowrap;
-   color: var(--k-text);
-}
-
-.cms-search-option-meta {
-   overflow: hidden;
-   font-size: 0.75rem;
-   text-overflow: ellipsis;
-   white-space: nowrap;
-   color: var(--k-text-dimmed);
-}
-
-.cms-search-snippet {
-   display: -webkit-box;
-   overflow: hidden;
-   -webkit-line-clamp: 2;
-   -webkit-box-orient: vertical;
-   font-size: 0.8125rem;
-   line-height: 1.45;
-   color: var(--k-text-toned);
-}
-
-.cms-search-mark {
-   border-radius: 2px;
-   background: color-mix(in oklab, var(--k-warning) 26%, transparent);
-   color: inherit;
-}
-
-.cms-code-badge {
+.cms-code {
    font-family: var(--k-font-mono);
    letter-spacing: 0.02em;
    text-transform: uppercase;
-}
-
-.cms-locale-control {
-   font-family: var(--k-font-mono);
-   letter-spacing: 0.04em;
-   text-transform: uppercase;
-}
-
-.cms-locale-dot {
-   flex: none;
-   width: 0.375rem;
-   height: 0.375rem;
-   margin-inline-start: -0.125rem;
-   border-radius: var(--k-radius-full);
-}
-
-.cms-locale-dot.is-complete {
-   background: var(--k-success);
-}
-
-.cms-locale-dot.is-partial {
-   background: var(--k-warning);
-}
-
-.cms-locale-dot.is-missing {
-   box-shadow: inset 0 0 0 1.5px var(--k-danger);
 }
 
 .cms-translation-badges {
@@ -158,10 +62,6 @@ body:has(.cms-scope) {
    color: var(--k-text-muted);
 }
 
-.cms-list-filter-panel {
-   width: 18rem;
-}
-
 .cms-confirm-group-title {
    overflow: hidden;
    font-family: var(--k-font-mono);
@@ -179,23 +79,8 @@ body:has(.cms-scope) {
    text-overflow: ellipsis;
 }
 
-.cms-import-list {
-   display: flex;
-   flex-direction: column;
-   gap: 0.125rem;
-   margin: 0;
-   padding: 0;
-   list-style: none;
-}
-
 .cms-import-issues {
-   font-size: 0.75rem;
    white-space: normal;
-   color: var(--k-danger);
-}
-
-.cms-file-input {
-   display: none;
 }
 
 .cms-settings-entry {
@@ -437,33 +322,6 @@ body:has(.cms-scope) {
    border-top: 1px solid var(--k-line);
 }
 
-.cms-media-drop-overlay {
-   --k-icon-size: 2rem;
-   position: absolute;
-   inset: -0.5rem;
-   z-index: 10;
-   display: flex;
-   flex-direction: column;
-   align-items: center;
-   justify-content: center;
-   gap: 0.5rem;
-   border: 1.5px dashed var(--k-accent);
-   border-radius: var(--k-radius-xl);
-   background: color-mix(in oklab, var(--k-surface) 84%, transparent);
-   backdrop-filter: blur(4px);
-   font-size: 0.875rem;
-   color: var(--k-text);
-   pointer-events: none;
-}
-
-.cms-media-drop-icon {
-   color: var(--k-accent-text);
-}
-
-.cms-media-drop-overlay strong {
-   color: var(--k-accent-text);
-}
-
 .cms-media-dropzone-hint {
    --k-icon-size: 0.875rem;
    display: inline-flex;
@@ -549,23 +407,6 @@ body:has(.cms-scope) {
    display: flex;
    flex-direction: column;
    gap: 1.375rem;
-}
-
-.cms-search-focus {
-   border-radius: var(--k-radius-md);
-   animation: cms-field-focus 2400ms var(--k-ease);
-}
-
-@keyframes cms-field-focus {
-   0%,
-   60% {
-      background: var(--k-accent-soft);
-      box-shadow: 0 0 0 6px var(--k-accent-soft);
-   }
-   100% {
-      background: transparent;
-      box-shadow: 0 0 0 6px transparent;
-   }
 }
 
 .cms-block-editor-actions {

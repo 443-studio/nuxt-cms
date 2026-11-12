@@ -12,21 +12,18 @@
                :loading="store.importing.value"
             />
          </KDropdownMenu>
-         <input
-            ref="fileInput"
-            type="file"
-            accept=".csv,.json,text/csv,application/json"
-            class="cms-file-input"
-            @change="importFile"
-         />
       </template>
    </CmsSettingsRecordActions>
 </template>
 
 <script setup lang="ts">
 import type { MenuEntry } from '@xleddyl/443-components-vue'
-import { Button as KButton, DropdownMenu as KDropdownMenu } from '@xleddyl/443-components-vue'
-import { computed, ref } from '#imports'
+import {
+   Button as KButton,
+   DropdownMenu as KDropdownMenu,
+   useFileDialog,
+} from '@xleddyl/443-components-vue'
+import { computed } from '#imports'
 import { useCmsRedirects } from '../../composables/cms-settings-stores'
 import { cmsIcon } from '../../utils/ui'
 import CmsSettingsRecordActions from './SettingsRecordActions.vue'
@@ -34,13 +31,11 @@ import CmsSettingsRecordActions from './SettingsRecordActions.vue'
 defineOptions({ inheritAttrs: false })
 
 const store = useCmsRedirects()
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileDialog = useFileDialog({ accept: '.csv,.json,text/csv,application/json' })
 
-function importFile(event: Event) {
-   const input = event.target as HTMLInputElement
-   const file = input.files?.[0]
-   input.value = ''
-   if (file) void store.importFile(file)
+async function importFile() {
+   const [file] = await fileDialog.open()
+   if (file) await store.importFile(file)
 }
 
 const empty = computed(() => !store.items.value.length)
@@ -49,7 +44,7 @@ const menuItems = computed<MenuEntry[]>(() => [
    {
       label: 'Import CSV or JSON',
       icon: cmsIcon('arrow-up-tray'),
-      onSelect: () => fileInput.value?.click(),
+      onSelect: () => void importFile(),
    },
    { type: 'separator' },
    {

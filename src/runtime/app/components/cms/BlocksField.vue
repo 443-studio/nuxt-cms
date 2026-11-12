@@ -133,6 +133,7 @@
                icon="plus"
                :title="mediaOnly ? addMediaLabel : 'Add'"
                :disabled="!canAdd || disabled"
+               :disabled-reason="disabled ? undefined : fullReason"
                @click="addFirst"
             />
          </template>
@@ -412,6 +413,11 @@ const blocks = computed(() => props.field.blocks ?? {})
 const items = computed(() => (Array.isArray(model.value) ? model.value : []))
 
 const canAdd = computed(() => canAddBlock(props.field, items.value.length))
+
+const fullReason = computed(() => {
+   const max = props.field.max ?? 0
+   return canAdd.value ? undefined : `This field holds at most ${blockCount(max)}.`
+})
 
 function blockCount(count: number) {
    return `${count} ${count === 1 ? 'block' : 'blocks'}`

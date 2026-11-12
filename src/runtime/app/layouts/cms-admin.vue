@@ -33,40 +33,6 @@
             <CmsBrandMark size="sm" />
          </template>
 
-         <template #search-item="{ item: { data: hit } }">
-            <template v-if="hit">
-               <KIcon :name="cmsIcon(iconOf(hit))" class="cms-search-option-icon" />
-               <span class="cms-search-option-text">
-                  <template v-if="isValueHit(hit)">
-                     <span class="cms-search-option-head">
-                        <span class="cms-search-option-title">{{
-                           hit.title ?? hit.entryLabel
-                        }}</span>
-                        <span v-if="hit.fieldLabel" class="cms-search-option-meta">
-                           {{ hit.fieldLabel }}
-                        </span>
-                        <KBadge v-if="hit.locale" size="sm" class="cms-code-badge">
-                           {{ hit.locale }}
-                        </KBadge>
-                     </span>
-                     <span class="cms-search-snippet">
-                        {{ hit.snippet.before
-                        }}<mark class="cms-search-mark">{{ hit.snippet.match }}</mark
-                        >{{ hit.snippet.after }}
-                     </span>
-                  </template>
-                  <template v-else>
-                     <span class="cms-search-option-title">
-                        {{ hit.snippet.before
-                        }}<mark class="cms-search-mark">{{ hit.snippet.match }}</mark
-                        >{{ hit.snippet.after }}
-                     </span>
-                     <span class="cms-search-option-meta">{{ labelMeta(hit) }}</span>
-                  </template>
-               </span>
-            </template>
-         </template>
-
          <slot />
 
          <template #settings-nav-footer>
@@ -104,14 +70,14 @@
 import type { CmsConfig, CmsEntryKind } from '#nuxt-cms'
 import type {
    CommandGroup,
+   CommandItem,
    DashboardSearchProps,
    NavSection,
    ShellContent,
+   TextRange,
 } from '@xleddyl/443-components-vue'
 import {
-   Badge as KBadge,
    DashboardLayout as KDashboardLayout,
-   Icon as KIcon,
    OverlayHost as KOverlayHost,
    Root as KRoot,
    provideFormConfig,
@@ -243,6 +209,35 @@ function isValueHit(hit: CmsSearchHit) {
    return hit.type === 'value' || hit.type === 'media'
 }
 
+function snippetText(hit: CmsSearchHit) {
+   const { before, match, after } = hit.snippet
+   return {
+      text: `${before}${match}${after}`,
+      ranges: [[before.length, before.length + match.length]] satisfies TextRange[],
+   }
+}
+
+function hitItem(hit: CmsSearchHit, index: number): CommandItem<CmsSearchHit> {
+   const snippet = snippetText(hit)
+   const base = { id: `hit-${index}`, icon: cmsIcon(iconOf(hit)), to: hit.to, data: hit }
+   if (!isValueHit(hit)) {
+      return {
+         ...base,
+         label: snippet.text,
+         description: labelMeta(hit),
+         highlight: { label: snippet.ranges },
+      }
+   }
+   return {
+      ...base,
+      label: hit.title ?? hit.entryLabel,
+      meta: hit.fieldLabel ?? undefined,
+      description: snippet.text,
+      badge: hit.locale ? hit.locale.toUpperCase() : undefined,
+      highlight: { description: snippet.ranges },
+   }
+}
+
 function iconOf(hit: CmsSearchHit) {
    return hit.type === 'entry' ? KIND_ICONS[hit.kind] : TYPE_ICONS[hit.type] ?? 'tag'
 }
@@ -268,12 +263,7 @@ async function search(term: string, signal: AbortSignal): Promise<CommandGroup<C
          group = { id: key, label: hit.entryLabel, description: KIND_LABELS[hit.kind], items: [] }
          groups.set(key, group)
       }
-      group.items.push({
-         id: `hit-${index}`,
-         label: hit.title ?? hit.entryLabel,
-         to: hit.to,
-         data: hit,
-      })
+      group.items.push(hitItem(hit, index))
    })
    truncated.value = response.truncated
    return [...groups.values()]

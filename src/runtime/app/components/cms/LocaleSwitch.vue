@@ -1,30 +1,20 @@
 <template>
    <KSegmentedControl
       v-model="model"
-      class="cms-locale-control"
+      class="cms-code"
       :options="options"
       size="sm"
       :disabled="false"
       required
       aria-label="Content language"
-   >
-      <template #option="{ option }">
-         <span>{{ option.label }}</span>
-         <span
-            v-if="stateOf(option.value)"
-            class="cms-locale-dot"
-            :class="`is-${stateOf(option.value)}`"
-            aria-hidden="true"
-         />
-      </template>
-   </KSegmentedControl>
+   />
 </template>
 
 <script setup lang="ts">
-import type { SegmentedOption } from '@xleddyl/443-components-vue'
+import type { SegmentedOption, Tone } from '@xleddyl/443-components-vue'
 import { SegmentedControl as KSegmentedControl } from '@xleddyl/443-components-vue'
 import { computed } from '#imports'
-import type { TranslationProgress } from '../../../shared/translations'
+import type { TranslationProgress, TranslationState } from '../../../shared/translations'
 import { translationSummary } from '../../../shared/translations'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 
@@ -50,12 +40,24 @@ function titleOf(locale: string) {
    return `${locale}: ${translationSummary(progress)}`
 }
 
+const DOT_TONES: Record<TranslationState, Tone> = {
+   complete: 'success',
+   partial: 'warning',
+   missing: 'danger',
+}
+
 const options = computed<SegmentedOption<string>[]>(() =>
-   i18n.locales.map((locale) => ({
-      value: locale,
-      label: locale,
-      title: titleOf(locale),
-      muted: !!props.progress && !props.progress[locale]?.values,
-   }))
+   i18n.locales.map((locale) => {
+      const state = stateOf(locale)
+      return {
+         value: locale,
+         label: locale,
+         title: titleOf(locale),
+         muted: !!props.progress && !props.progress[locale]?.values,
+         dot: !!state,
+         dotTone: state ? DOT_TONES[state] : undefined,
+         dotLabel: state ? titleOf(locale) : undefined,
+      }
+   })
 )
 </script>

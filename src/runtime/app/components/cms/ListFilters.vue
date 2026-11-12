@@ -10,13 +10,11 @@
       @update:model-value="onPillsUpdate"
    >
       <template v-for="key in relationKeys" #[`panel-${key}`]="{ close }" :key="key">
-         <div class="cms-list-filter-panel">
-            <CmsRelationField
-               :model-value="model[key] ?? null"
-               :to="relationTarget(config.fields[key]!)"
-               @update:model-value="(value) => pickRelation(key, value, close)"
-            />
-         </div>
+         <CmsRelationField
+            :model-value="model[key] ?? null"
+            :to="relationTarget(config.fields[key]!)"
+            @update:model-value="(value) => pickRelation(key, value, close)"
+         />
       </template>
    </KFilterPills>
 </template>
@@ -63,6 +61,7 @@ const pills = computed<FilterPillOption<string>[]>(() =>
          active: isActive(key),
          menu,
          panel: !menu,
+         panelWidth: menu ? undefined : '18rem',
       }
    })
 )

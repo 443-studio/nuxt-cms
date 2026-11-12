@@ -7,7 +7,7 @@
             :variant="badge.variant"
             size="sm"
             dot
-            class="cms-code-badge"
+            class="cms-code"
             :aria-label="badge.title"
          />
       </KTooltip>

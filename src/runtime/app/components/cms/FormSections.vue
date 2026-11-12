@@ -72,6 +72,7 @@ function sectionBinding(section: ShownSection) {
       items: [{ value: section.id, title: section.title, description: section.description }],
       variant: 'outline' as const,
       contentVariant: 'neutral' as const,
+      divided: true,
       modelValue: isCollapsed(section) ? null : section.id,
       'onUpdate:modelValue': () => toggleSection(section.id),
    }

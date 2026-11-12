@@ -220,7 +220,7 @@
             :disabled="readonly"
             class="cms-editor-inspector"
          >
-            <div v-if="selectedItem && selected" ref="panelBody" class="cms-editor-panel-body">
+            <div v-if="selectedItem && selected" class="cms-editor-panel-body">
                <KFormAlerts />
                <KFieldMessage
                   v-if="form.errors[selectedName]"
@@ -241,8 +241,7 @@
                         :description="selectedBlock.fields[blockKey]!.description"
                         :icon="cmsIcon(fieldIcon(selectedBlock.fields[blockKey]!))"
                         :required="selectedBlock.fields[blockKey]!.required"
-                        :data-cms-field="blockKey"
-                        :class="{ 'cms-search-focus': highlighted === blockKey }"
+                        :highlight="highlighted === blockKey"
                      >
                         <CmsNestedBlockList
                            v-if="selectedBlock.fields[blockKey]!.type === 'blocks'"
@@ -275,7 +274,7 @@
                class="cms-editor-tabs"
             >
                <template #[panelSlot]>
-                  <div ref="panelBody" class="cms-editor-panel-body">
+                  <div class="cms-editor-panel-body">
                      <KFormAlerts />
                      <slot v-if="activeTab === 'content'" name="content-start" :locale="locale" />
                      <CmsFormSections
@@ -292,8 +291,7 @@
                               :icon="cmsIcon(fieldIcon(fields[key]!))"
                               :required="fields[key]!.required"
                               :disabled="locked?.includes(key) || undefined"
-                              :data-cms-field="key"
-                              :class="{ 'cms-search-focus': highlighted === key }"
+                              :highlight="highlighted === key"
                            >
                               <CmsFieldInput
                                  :model-value="state[key]"
@@ -407,6 +405,7 @@ import {
    Tabs as KTabs,
    Tooltip as KTooltip,
    WorkspaceLayout as KWorkspaceLayout,
+   useFieldHighlight,
    useForm,
 } from '@xleddyl/443-components-vue'
 import {
@@ -467,7 +466,6 @@ import {
 } from '../../../shared/preview'
 import { translationProgress } from '../../../shared/translations'
 import { useCmsClipboard } from '../../composables/cms-clipboard'
-import { useCmsFieldFocus } from '../../composables/cms-field-focus'
 import { useCmsHistory } from '../../composables/cms-history'
 import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsPresets } from '../../composables/cms-presets'
@@ -532,7 +530,6 @@ const picker = shallowRef<{ list: CmsBlockPath; index: number }>({
 const paletteAnchor = shallowRef<OverlayAnchorTarget | null>(null)
 const frame = ref<HTMLIFrameElement | null>(null)
 const frameBox = ref<HTMLElement | null>(null)
-const panelBody = ref<HTMLElement | null>(null)
 const library = shallowRef(new Map<string, MediaItem>())
 
 const deviceWidth = computed(() => CMS_PREVIEW_DEVICE_WIDTHS[device.value])
@@ -725,7 +722,7 @@ function expandSection(key: string) {
 function revealInPanel(key: string) {
    void nextTick(() => {
       sectionsRef.value?.reveal(key)
-      reveal(() => panelBody.value, key)
+      highlightField(key)
    })
 }
 
@@ -1376,7 +1373,7 @@ async function loadLibrary() {
    }
 }
 
-const { highlighted, reveal } = useCmsFieldFocus()
+const { highlighted, highlight: highlightField } = useFieldHighlight()
 
 function workspaceElement() {
    const element: unknown = workspace.value?.$el

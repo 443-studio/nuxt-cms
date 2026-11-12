@@ -40,11 +40,8 @@
             tone="danger"
             role="alert"
             title="The file cannot be imported"
-         >
-            <ul class="cms-import-list">
-               <li v-for="message in fileErrors" :key="message">{{ message }}</li>
-            </ul>
-         </KAlert>
+            :description="fileErrors"
+         />
 
          <template v-else-if="preview">
             <KAlert :tone="invalidCount ? 'warning' : 'success'" role="status" :title="summary" />
@@ -63,11 +60,14 @@
                   <KBadge :label="row.action === 'update' ? 'Update' : 'New'" size="sm" />
                </template>
                <template #cell-errors="{ row }">
-                  <ul v-if="row.errors.length" class="cms-import-list cms-import-issues">
-                     <li v-for="(issue, index) in row.errors" :key="index">
-                        {{ issue.path ? `${issue.path}: ` : '' }}{{ issue.message }}
-                     </li>
-                  </ul>
+                  <KStack v-if="row.errors.length" gap="none" class="cms-import-issues">
+                     <KFieldMessage
+                        v-for="(issue, index) in row.errors"
+                        :key="index"
+                        :message="issue.path ? `${issue.path}: ${issue.message}` : issue.message"
+                        :icon="false"
+                     />
+                  </KStack>
                   <KBadge v-else label="Ready" tone="success" icon="check" size="sm" />
                </template>
             </KTable>
@@ -96,6 +96,7 @@ import {
    Alert as KAlert,
    Badge as KBadge,
    Button as KButton,
+   FieldMessage as KFieldMessage,
    FileInput as KFileInput,
    FormField as KFormField,
    Modal as KModal,

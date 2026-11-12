@@ -25,9 +25,7 @@
             >
                <p v-if="section.title" class="cms-layout-section-title">
                   {{ section.title }}
-                  <KBadge v-if="section.collapsed" size="sm" class="cms-code-badge"
-                     >Collapsed</KBadge
-                  >
+                  <KBadge v-if="section.collapsed" size="sm" class="cms-code">Collapsed</KBadge>
                </p>
                <template v-for="(row, rowIndex) in section.rows" :key="row.join('|')">
                   <div

@@ -341,12 +341,9 @@
          />
       </template>
 
-      <div v-if="fileDragActive" class="cms-media-drop-overlay">
-         <KIcon :name="cmsIcon('cloud-arrow-up')" class="cms-media-drop-icon" />
-         <span
-            >Drop to upload to <strong>{{ dropTargetLabel }}</strong></span
-         >
-      </div>
+      <KFileDropOverlay :active="fileDragActive" :icon="cmsIcon('cloud-arrow-up')">
+         Drop to upload to <strong>{{ dropTargetLabel }}</strong>
+      </KFileDropOverlay>
    </div>
 
    <template v-if="!notConfigured">
@@ -460,6 +457,7 @@ import {
    Card as KCard,
    DropdownMenu as KDropdownMenu,
    EmptyState as KEmptyState,
+   FileDropOverlay as KFileDropOverlay,
    FieldMessage as KFieldMessage,
    FilterPills as KFilterPills,
    FormField as KFormField,
