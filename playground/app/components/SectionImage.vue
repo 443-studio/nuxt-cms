@@ -1,12 +1,9 @@
 <template>
-   <figure class="mx-auto w-full max-w-5xl px-6 py-8">
-      <img
-         v-if="image?.url"
-         :src="image.url"
-         :alt="image.alt ?? caption ?? ''"
-         :width="image.width ?? undefined"
-         :height="image.height ?? undefined"
-         class="w-full rounded-xl object-cover"
+   <figure class="mx-auto w-full max-w-3xl px-6 py-8">
+      <CmsImage
+         :media="image"
+         :alt="image?.alt ?? caption ?? ''"
+         class="aspect-[3/2] w-full rounded-xl object-cover"
       />
       <figcaption v-if="caption" v-cms-field="'caption'" class="site-label mt-3 text-center">
          {{ caption }}

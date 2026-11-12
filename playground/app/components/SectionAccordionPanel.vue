@@ -5,7 +5,7 @@
          <span class="text-(--k-text-muted) transition group-open:rotate-180">⌄</span>
       </summary>
       <div
-         class="[&_section]:px-0 [&_section]:py-3 [&_figure]:px-0 [&_figure]:py-3 [&_blockquote]:py-3"
+         class="[&_section]:px-0 [&_section]:py-3 [&_figure]:px-0 [&_figure]:py-3 [&_blockquote]:px-0 [&_blockquote]:py-3"
       >
          <CmsBlocks :blocks="content" />
       </div>

@@ -13,10 +13,10 @@
                {{ item.excerpt }}
             </p>
          </header>
-         <figure v-if="item.cover?.url" class="mx-auto mt-8 w-full max-w-5xl px-6">
-            <img
-               :src="item.cover.url"
-               :alt="item.cover.alt ?? ''"
+         <figure v-if="item.cover?.url" class="mx-auto mt-8 w-full max-w-3xl px-6">
+            <CmsImage
+               :media="item.cover"
+               loading="eager"
                class="aspect-[21/9] w-full rounded-xl object-cover"
             />
          </figure>

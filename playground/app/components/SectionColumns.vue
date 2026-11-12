@@ -1,5 +1,5 @@
 <template>
-   <section class="mx-auto w-full max-w-5xl px-6 py-8">
+   <section class="mx-auto w-full max-w-3xl px-6 py-8">
       <CmsField v-if="heading" name="heading" as="h2" class="site-display text-2xl font-semibold">
          {{ heading }}
       </CmsField>
