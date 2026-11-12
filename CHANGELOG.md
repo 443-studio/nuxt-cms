@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.11.1
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.11.0...v0.11.1)
+
+### 🩹 Fixes
+
+- Inline the 443 tokens css instead of importing it as a url ([f041eeb](https://github.com/443-studio/nuxt-cms/commit/f041eeb))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.11.0
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.10.1...v0.11.0)
