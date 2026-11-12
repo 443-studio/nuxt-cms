@@ -67,6 +67,9 @@
       error-title="Could not load entries"
       :total="total"
       :page-sizes="PAGE_SIZES"
+      :all-ids="selectable ? allIds : undefined"
+      fill
+      count
       searchable
       :search-placeholder="isPages ? 'Search pages' : 'Search entries'"
       :search-label="isPages ? 'Search pages' : 'Search entries'"
@@ -82,7 +85,6 @@
       no-results-title="No matching entries"
       no-results-description="Try another search or clear the filters."
       clear-label="Clear filters"
-      :selected-text="(count: number) => `${count} selected`"
       :results-text="resultsLabel"
       @retry="reload"
       @clear="clearNarrowing"
@@ -907,6 +909,8 @@ const transferItems = computed<MenuEntry[]>(() => {
 })
 
 async function onDrawerDeleted() {
+   const id = entryRecord.id.value
+   if (id) selected.value = selected.value.filter((key) => String(key) !== id)
    if (rows.value.length === 1 && page.value > 1) page.value -= 1
    else await refresh()
 }
@@ -915,10 +919,21 @@ const confirmLinkedDelete = useCmsLinkedDelete()
 
 const selected = ref<RowKey[]>([])
 
-watch(rows, (current) => {
-   const ids = new Set(current.map((row) => String(row.id)))
-   selected.value = selected.value.filter((id) => ids.has(String(id)))
+watch([searchTerm, filterQueryKey], () => {
+   selected.value = []
 })
+
+async function allIds(): Promise<RowKey[]> {
+   const { ids } = await cmsApi<{ ids: string[] }>(endpoint, {
+      query: {
+         ids: true,
+         ...(searchTerm.value ? { search: searchTerm.value } : {}),
+         ...sortQuery.value,
+         ...filterQuery.value,
+      },
+   })
+   return ids
+}
 
 function entriesLabel(count: number) {
    return `${count} ${count === 1 ? 'entry' : 'entries'}`
@@ -928,10 +943,21 @@ function resultsLabel(count: number) {
    return isPages ? `${count} ${count === 1 ? 'page' : 'pages'}` : entriesLabel(count)
 }
 
+const BULK_CONCURRENCY = 6
+
+async function settleInBatches(ids: string[], action: (id: string) => Promise<unknown>) {
+   const results: PromiseSettledResult<unknown>[] = []
+   for (let start = 0; start < ids.length; start += BULK_CONCURRENCY)
+      results.push(
+         ...(await Promise.allSettled(ids.slice(start, start + BULK_CONCURRENCY).map(action)))
+      )
+   return results
+}
+
 async function runBulk(ids: string[], action: (id: string) => Promise<unknown>) {
    saving.value = true
    try {
-      const results = await Promise.allSettled(ids.map(action))
+      const results = await settleInBatches(ids, action)
       const failed = results.flatMap((result, index) =>
          result.status === 'rejected' ? [{ id: ids[index]!, reason: result.reason }] : []
       )
@@ -969,10 +995,10 @@ async function bulkDelete() {
    )
    if (!(await confirmLinkedDelete(name, ids, `Delete ${entriesLabel(ids.length)}?`, titles)))
       return
-   const emptiesPage = ids.length >= rows.value.length && page.value > 1
    const failed = await runBulk(ids, (id) => cmsApi(`${endpoint}/${id}`, { method: 'DELETE' }))
    reportBulk('Deleted', ids.length, failed)
-   if (!failed.length && emptiesPage) page.value -= 1
+   if (page.value > 1 && !rows.value.length)
+      page.value = Math.max(1, Math.ceil(total.value / limit.value))
 }
 
 async function bulkStatus(status: 'draft' | 'published') {

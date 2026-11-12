@@ -9,6 +9,8 @@ export const LIST_FILTER_STATUS = 'status'
 
 export const LIST_FILTER_ID_MAX = 256
 
+export const LIST_IDS_MAX = 1000
+
 export type CmsListFilters = Record<string, string>
 
 const STATUS_OPTIONS: SelectOption[] = [

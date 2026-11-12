@@ -120,7 +120,10 @@ separated by commas, and the search box of the sidebar finds them.
 
 **Bulk actions.** Every row of a collection table has a checkbox. When rows are selected, the
 toolbar shows **Delete**, **Duplicate** (enabled with one row selected) and, on a collection with
-`drafts`, **Publish** and **Draft**.
+`drafts`, **Publish** and **Draft**. The selection bar counts against the whole result
+(`3 of 42 selected`); with every row of the page selected, **Select all 42** selects every entry
+that matches the search and filters, across pages (up to 1000), and **Clear selection** empties
+it. A new search or filter clears the selection.
 
 **Duplicate.** **Duplicate** in the toolbar (one row selected), in the header of the entry drawer,
 or in the `...` menu of the visual editor opens a new, unsaved entry filled with a copy of the

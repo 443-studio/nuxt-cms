@@ -3,6 +3,7 @@ import { defineEventHandler, getValidatedQuery } from 'h3'
 import { z } from 'zod'
 import { cmsDialect, useDb } from '#cms-db'
 import { CONTENT_PUBLISHED_AT_FIELD, CONTENT_SLUG_FIELD, pageRoutes } from '../../shared/index'
+import { LIST_IDS_MAX } from '../../shared/list-filters'
 import { decodeRows, getRegistryEntry, idColumn, tableColumns } from '../utils/registry'
 import { listOrderBy, listWhere, readListFilters } from '../utils/list-query'
 import { readPages } from '../utils/page-storage'
@@ -16,6 +17,7 @@ const querySchema = z.object({
    sort: z.string().trim().max(64).optional(),
    order: z.enum(['asc', 'desc']).default('desc'),
    light: z.stringbool().default(false),
+   ids: z.stringbool().default(false),
 })
 
 export default defineEventHandler(async (event) => {
@@ -30,7 +32,7 @@ export default defineEventHandler(async (event) => {
       return decodeRows(entry, rows)[0] ?? null
    }
 
-   const { limit, offset, search, sort, order, light } = await getValidatedQuery(
+   const { limit, offset, search, sort, order, light, ids } = await getValidatedQuery(
       event,
       querySchema.parse
    )
@@ -50,6 +52,11 @@ export default defineEventHandler(async (event) => {
                  item.path.toLowerCase().includes(term) || item.label.toLowerCase().includes(term)
            )
          : items
+      if (ids)
+         return {
+            ids: matching.slice(0, LIST_IDS_MAX).map((item) => item.id),
+            total: matching.length,
+         }
       return {
          items: matching.slice(offset, offset + limit),
          total: matching.length,
@@ -66,6 +73,21 @@ export default defineEventHandler(async (event) => {
       search,
       filters: readListFilters(event, entry),
    })
+
+   const countRows = async () => {
+      const [counted] = await (where
+         ? db.select({ total: count() }).from(table).where(where)
+         : db.select({ total: count() }).from(table))
+      return counted?.total ?? 0
+   }
+
+   if (ids) {
+      const base = db.select({ id: idColumn(table) }).from(table)
+      const found = (await (where ? base.where(where) : base)
+         .orderBy(...listOrderBy(table, sort, order))
+         .limit(LIST_IDS_MAX)) as { id: unknown }[]
+      return { ids: found.map((row) => String(row.id)), total: await countRows() }
+   }
 
    const selection = light
       ? Object.fromEntries([
@@ -88,17 +110,15 @@ export default defineEventHandler(async (event) => {
       .limit(limit)
       .offset(offset)) as Record<string, unknown>[]
 
-   const [counted] = await (where
-      ? db.select({ total: count() }).from(table).where(where)
-      : db.select({ total: count() }).from(table))
+   const counted = await countRows()
 
-   if (light) return { items, total: counted?.total ?? 0, relations: {} }
+   if (light) return { items, total: counted, relations: {} }
 
    await attachManyToMany(db, name, entry, items)
    decodeRows(entry, items)
    return {
       items,
-      total: counted?.total ?? 0,
+      total: counted,
       relations: await relationTitles(db, entry, items),
    }
 })
