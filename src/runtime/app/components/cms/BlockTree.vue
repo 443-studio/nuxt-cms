@@ -29,10 +29,7 @@
             <span
                v-else
                class="cms-block-tree-text"
-               :class="{
-                  'is-hidden': rowOf(node)?.dimmed,
-                  'is-group': rowOf(node)?.kind === 'field',
-               }"
+               :class="{ 'is-group': rowOf(node)?.kind === 'field' }"
             >
                <span class="cms-block-tree-label">{{ node.label }}</span>
                <span v-if="node.description" class="cms-block-tree-summary">
@@ -241,6 +238,7 @@ const tree = computed(() => {
                label: subfield.label,
                icon: cmsIcon('queue-list'),
                invalid: listInvalid(list),
+               muted: dimmed,
                children: listNodes(list, subfield, item[key], fieldId, dimmed),
             }
          })
@@ -250,6 +248,7 @@ const tree = computed(() => {
          description: blockSummary(block, item, props.locale, i18n.defaultLocale, 60) || undefined,
          icon: cmsIcon(block?.icon ?? 'rectangle-stack'),
          invalid: props.errors.has(formatBlockPath(path)),
+         muted: dimmed,
          children,
       }
    }

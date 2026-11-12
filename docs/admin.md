@@ -43,9 +43,10 @@ the open media folder (`?folder=`), the open tab of a page or a single form and 
 the visual editor (`?tab=<tab>`; the first tab leaves it out).
 
 A [`page` entry](schema.md#pages) gets its own section in the sidebar. The list is a tree that
-follows the routes of the site: a child path sits under its parent, indented. On the right of each
-row is the date and time of the last save, or `Never saved` when the page has no row yet, because a
-page row is written the first time that page is saved. The stamp is rendered in the timezone of the
+follows the routes of the site: a child path sits under its parent, indented. Each row is a link to
+the page editor, so ⌘ click (Ctrl outside macOS) or a middle click opens it in a new tab. On the
+right of each row is the date and time of the last save, or `Never saved` when the page has no row
+yet, because a page row is written the first time that page is saved. The stamp is rendered in the timezone of the
 browser. With several languages, a badge per language shows how much of the page is
 [translated](#translations). The editor of a page shows the shared fields plus the
 fields of that path, and its title carries a breadcrumb back to each ancestor page and to the list.

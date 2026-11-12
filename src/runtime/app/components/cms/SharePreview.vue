@@ -83,7 +83,7 @@
                :skeleton-rows="2"
                label="Active links"
                empty-text="No active links for this item."
-               empty-variant="plain"
+               empty-variant="hint"
             >
                <template #action="{ item }">
                   <KButton

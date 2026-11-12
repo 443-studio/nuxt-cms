@@ -37,7 +37,7 @@ const KIND_LABELS: Record<CmsEntry['kind'], string> = {
    content: 'Content',
 }
 
-const KIND_ICONS: Record<CmsEntry['kind'], string> = {
+export const CMS_ENTRY_KIND_ICONS: Record<CmsEntry['kind'], string> = {
    collection: 'square-3-stack-3d',
    single: 'document-text',
    page: 'window',
@@ -58,7 +58,7 @@ export function useCmsSettingsEntries() {
                  name,
                  label: entry.label,
                  kind: KIND_LABELS[entry.kind],
-                 icon: entry.icon ?? KIND_ICONS[entry.kind],
+                 icon: entry.icon ?? CMS_ENTRY_KIND_ICONS[entry.kind],
               }))
          : []
    )

@@ -176,7 +176,6 @@
             :bordered="false"
             :selectable="false"
             label="Pages"
-            @select="(node: TreeNode) => navigateTo(`/cms/${name}/${node.id}`)"
          >
             <template #meta="{ node }">
                <KStack direction="row" gap="sm" align="center">
@@ -557,6 +556,7 @@ const pageTree = computed<TreeNode[]>(() => {
             description: String(row.path),
             meta: lastEdit(row.updatedAt),
             icon: cmsIcon('document-text'),
+            to: `/cms/${name}/${row.id}`,
             children: nested.length ? nested : undefined,
          }
       })

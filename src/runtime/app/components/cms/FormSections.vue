@@ -6,7 +6,7 @@
          :key="section.id"
          v-bind="sectionBinding(section)"
       >
-         <KStack gap="lg" :class="{ 'cms-form-section-body': section.title }">
+         <KStack gap="lg">
             <KGrid
                v-for="row in section.rows"
                :key="row.join('|')"

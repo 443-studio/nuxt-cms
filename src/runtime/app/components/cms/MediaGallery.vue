@@ -189,7 +189,7 @@
 
          <KStack v-if="visibleFolders.length" as="section" gap="sm">
             <KSeparator v-if="query" variant="heading" label="Folders" :level="3" :lines="false" />
-            <KGrid :columns="6" min-item-width="13rem" gap="sm">
+            <KGrid :columns="6" min-item-width="10rem" gap="sm">
                <KTooltip v-for="child in visibleFolders" :key="child" :text="child">
                   <KCard
                      as="button"
@@ -505,7 +505,7 @@ import {
 } from '#nuxt-cms'
 import { useCmsConfirm } from '../../composables/cms-confirm'
 import { useCmsPermissions } from '../../composables/cms-permissions'
-import { useCmsMediaLibrary, usageLink } from '../../composables/cms-media-library'
+import { useCmsMediaLibrary, usageItem } from '../../composables/cms-media-library'
 import type { UploadTree } from '../../composables/cms-media-uploader'
 import {
    uploadTreeFromDrop,
@@ -1059,11 +1059,7 @@ async function confirmDelete(keys: string[], question: string) {
       confirmLabel: 'Delete anyway',
       groups: groups.map((group) => ({
          title: group.key,
-         links: group.entries.map((entry) => ({
-            title: entry.title ?? entry.label,
-            meta: `${entry.label} · ${entry.fields.join(', ')}`,
-            to: usageLink(entry),
-         })),
+         items: group.entries.map(usageItem),
          note: group.hidden ? otherEntriesLabel(group.hidden) : undefined,
       })),
    })

@@ -68,6 +68,7 @@
             v-model:open="scheduleOpen"
             placement="bottom-end"
             label="Schedule"
+            width="18rem"
          >
             <KButton
                :icon="cmsIcon('clock')"
@@ -78,7 +79,7 @@
                :disabled="saving"
             />
             <template #content>
-               <KStack gap="md" class="cms-editor-schedule-panel">
+               <KStack gap="md">
                   <KFormField
                      label="Publish at"
                      description="The item stays hidden from the site until this moment."

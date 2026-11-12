@@ -1,5 +1,13 @@
+import type { RecordListItem } from '@xleddyl/443-components-vue'
 import { toast } from '@xleddyl/443-components-vue'
-import type { MediaItem, MediaSourceInfo, MediaUsage, MediaUsageReport } from '../../shared/index'
+import type { CmsConfig } from '#nuxt-cms'
+import type {
+   MediaItem,
+   MediaSourceInfo,
+   MediaUsage,
+   MediaUsageEntry,
+   MediaUsageReport,
+} from '../../shared/index'
 import {
    expandMediaFolders,
    isWithinMediaFolder,
@@ -7,7 +15,9 @@ import {
    mediaFolderParent,
 } from '../../shared/index'
 import { computed, ref } from '#imports'
-import { cmsSettingsLink, errorMessage } from '../utils/ui'
+import cmsConfig from '#cms-config'
+import { cmsIcon, cmsSettingsLink, errorMessage } from '../utils/ui'
+import { CMS_ENTRY_KIND_ICONS } from './cms-entry-settings'
 import { invalidateCmsMediaKeys } from './cms-media-keys'
 
 const endpoint = '/api/cms/admin/media'
@@ -182,4 +192,21 @@ export type CmsMediaLibrary = ReturnType<typeof useCmsMediaLibrary>
 export function usageLink(usage: Pick<MediaUsage, 'collection' | 'id' | 'kind'>) {
    if (usage.kind === 'site') return cmsSettingsLink('site', '/cms/media')
    return usage.id === null ? `/cms/${usage.collection}` : `/cms/${usage.collection}/${usage.id}`
+}
+
+function usageIcon(usage: Pick<MediaUsage, 'collection' | 'kind'>) {
+   if (usage.kind === 'site') return cmsIcon('globe-alt')
+   const entry = (cmsConfig as CmsConfig)[usage.collection]
+   return cmsIcon(entry?.icon ?? CMS_ENTRY_KIND_ICONS[usage.kind])
+}
+
+export function usageItem(entry: MediaUsageEntry, index: number): RecordListItem {
+   return {
+      id: index,
+      title: entry.title ?? entry.label,
+      description: entry.fields.join(', '),
+      meta: entry.title ? entry.label : undefined,
+      icon: usageIcon(entry),
+      to: usageLink(entry),
+   }
 }

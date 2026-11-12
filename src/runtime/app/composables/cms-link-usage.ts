@@ -3,7 +3,7 @@ import { groupMediaUsage, isLinkTargetEntry, linkTargetKey } from '#nuxt-cms'
 import cmsConfig from '#cms-config'
 import { cmsApi } from '../utils/api'
 import { useCmsConfirm } from './cms-confirm'
-import { usageLink } from './cms-media-library'
+import { usageItem } from './cms-media-library'
 
 function linksLabel(count: number) {
    return `${count} ${count === 1 ? 'entry' : 'entries'}`
@@ -51,11 +51,7 @@ export function useCmsLinkedDelete() {
          confirmLabel: 'Delete anyway',
          groups: groups.map((group) => ({
             title: titles[group.id] ?? `#${group.id}`,
-            links: group.entries.map((usageEntry) => ({
-               title: usageEntry.title ?? usageEntry.label,
-               meta: `${usageEntry.label} · ${usageEntry.fields.join(', ')}`,
-               to: usageLink(usageEntry),
-            })),
+            items: group.entries.map(usageItem),
          })),
       })
    }

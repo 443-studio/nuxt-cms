@@ -1,17 +1,12 @@
 import type { FunctionalComponent } from 'vue'
 import { h, markRaw } from 'vue'
+import type { RecordListItem } from '@xleddyl/443-components-vue'
 import { useConfirm } from '@xleddyl/443-components-vue'
 import CmsConfirmGroups from '../components/cms/ConfirmGroups.vue'
 
-export interface CmsConfirmLink {
-   title: string
-   meta: string
-   to: string
-}
-
 export interface CmsConfirmGroup {
    title: string
-   links: CmsConfirmLink[]
+   items: RecordListItem[]
    note?: string
 }
 

@@ -94,30 +94,27 @@
 
          <KStack as="section" gap="sm">
             <KSeparator variant="heading" label="Used in" :level="3" />
-            <KSkeletonList v-if="usageLoading" :rows="2" />
             <KFieldMessage
-               v-else-if="usageList === null"
+               v-if="!usageLoading && usageList === null"
                tone="neutral"
                :icon="false"
                message="Could not check where this file is used."
             />
+            <KRecordList
+               v-else-if="usageLoading || usageItems.length || !hiddenUsage"
+               :items="usageItems"
+               :loading="usageLoading"
+               :skeleton-rows="2"
+               label="Used in"
+               empty-text="Not used in any entry."
+               empty-variant="hint"
+            />
             <KFieldMessage
-               v-else-if="!usageList.length && !hiddenUsage"
+               v-if="!usageLoading && hiddenUsage"
                tone="neutral"
                :icon="false"
-               message="Not used in any entry."
+               :message="otherEntriesLabel(hiddenUsage)"
             />
-            <ul v-else class="cms-media-usage-list">
-               <li v-for="(entry, index) in usageList" :key="index">
-                  <NuxtLink :to="usageLink(entry)" class="cms-media-usage-link">
-                     <span class="cms-media-usage-title">{{ entry.title ?? entry.label }}</span>
-                     <span class="cms-media-usage-meta">{{ entry.label }} · {{ entry.field }}</span>
-                  </NuxtLink>
-               </li>
-               <li v-if="hiddenUsage" class="cms-media-usage-note">
-                  {{ otherEntriesLabel(hiddenUsage) }}
-               </li>
-            </ul>
          </KStack>
       </KStack>
    </KFormDrawer>
@@ -137,8 +134,8 @@ import {
    FormField as KFormField,
    Icon as KIcon,
    Input as KInput,
+   RecordList as KRecordList,
    Separator as KSeparator,
-   SkeletonList as KSkeletonList,
    Stack as KStack,
    toast,
    useForm,
@@ -147,12 +144,13 @@ import type { CmsFocalPoint } from '#nuxt-cms'
 import {
    focalPointOf,
    formatFileSize,
+   groupMediaUsage,
    mediaFilename,
    mediaIconFor,
    otherEntriesLabel,
 } from '#nuxt-cms'
 import type { CmsMediaLibrary } from '../../composables/cms-media-library'
-import { usageLink } from '../../composables/cms-media-library'
+import { usageItem } from '../../composables/cms-media-library'
 import { cmsIcon } from '../../utils/ui'
 
 const props = withDefaults(
@@ -183,6 +181,7 @@ const form = useForm({ values: draft, onSubmit: save })
 const usageList = ref<MediaUsage[] | null>([])
 const hiddenUsage = ref(0)
 const usageLoading = ref(false)
+const usageItems = computed(() => groupMediaUsage(usageList.value ?? []).map(usageItem))
 const requestUrl = useRequestURL()
 const lastItem = ref<MediaItem | null>(props.item)
 
