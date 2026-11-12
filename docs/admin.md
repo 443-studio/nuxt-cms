@@ -21,6 +21,11 @@ with `cms.admin.logo`, `cms.admin.title` and `cms.admin.subtitle`, see
 | `/cms/:collection/:id` | edit a content item or one page (a collection opens its drawer instead) |
 | `/cms/preview` | live preview inside the visual editor (path set by `cms.preview.path`) |
 
+Every page of the panel uses the full width of the window, with the same header: icon, title (a
+breadcrumb on a page of a `page` entry), description and the actions on the right. Lists, the media
+library and the single and page forms sit in a card that fills the rest of the height and scrolls
+inside, so the header and the actions stay in view.
+
 Every drawer, modal and the settings modal is in the hash of the URL, so the back button closes
 it, forward opens it again, a reload keeps it open and a link opens it. One overlay is
 `#key/value`; overlays open together are joined with `&` in the order they were opened, for
@@ -49,7 +54,8 @@ right of each row is the date and time of the last save, or `Never saved` when t
 yet, because a page row is written the first time that page is saved. The stamp is rendered in the timezone of the
 browser. With several languages, a badge per language shows how much of the page is
 [translated](#translations). The editor of a page shows the shared fields plus the
-fields of that path, and its title carries a breadcrumb back to each ancestor page and to the list.
+fields of that path, and its title carries a breadcrumb back to each ancestor page and to the list,
+with the path of the page under it.
 Pages cannot be deleted from the admin.
 
 [Content entries](schema.md#content) get a **Content** group in the sidebar, between Singles and

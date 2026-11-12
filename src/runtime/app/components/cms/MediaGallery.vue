@@ -225,7 +225,7 @@
          <KCard
             v-if="visibleFiles.length || !visibleFolders.length"
             :fill="fill"
-            variant="outline"
+            :variant="fill ? 'raised' : 'outline'"
             :padding="view === 'list' ? 'none' : 'sm'"
             :animated="false"
             :class="{ 'cms-media-files-fill': fill }"

@@ -11,26 +11,30 @@
          </template>
       </KPageHeader>
 
-      <KEmptyState
-         v-if="error"
-         :icon="cmsIcon('exclamation-triangle')"
-         title="Could not load entries"
-         :description="errorMessage(error)"
-      >
-         <template #actions>
-            <KButton
-               label="Retry"
-               :icon="cmsIcon('arrow-path')"
-               variant="soft"
-               tone="neutral"
-               size="sm"
-               :loading="status === 'pending'"
-               @click="reload"
-            />
-         </template>
-      </KEmptyState>
+      <KCard v-if="error" padding="lg" role="alert" fill>
+         <KEmptyState
+            variant="plain"
+            :icon="cmsIcon('exclamation-triangle')"
+            title="Could not load entry"
+            :description="errorMessage(error)"
+            :level="2"
+            fill
+         >
+            <template #actions>
+               <KButton
+                  label="Retry"
+                  :icon="cmsIcon('arrow-path')"
+                  variant="soft"
+                  tone="neutral"
+                  size="sm"
+                  :loading="status === 'pending'"
+                  @click="reload"
+               />
+            </template>
+         </KEmptyState>
+      </KCard>
 
-      <KCard v-else variant="outline" padding="lg">
+      <KCard v-else padding="lg" fill>
          <CmsEntryForm
             ref="singleForm"
             v-model="formState"
@@ -337,15 +341,8 @@ import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
 
 definePageMeta({
    layout: 'cms-admin',
-   middleware: [
-      'cms-auth',
-      (to) => {
-         if ((cmsConfig as CmsConfig)[to.params.collection as string]?.kind === 'single')
-            to.meta.content = 'page'
-      },
-   ],
+   middleware: 'cms-auth',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
-   content: 'fill',
    key: (route) =>
       cmsPageKey({ path: route.path, query: withoutListFilterQuery(route.query) }, [
          CMS_LIST_SEARCH_PARAM,

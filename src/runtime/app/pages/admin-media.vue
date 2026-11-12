@@ -21,7 +21,7 @@ import { normalizeMediaFolder } from '#nuxt-cms'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { cmsIcon } from '../utils/ui'
 
-definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth', content: 'fill' })
+definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth' })
 
 const runtime = useCmsRuntime()
 const route = useRoute()

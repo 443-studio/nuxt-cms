@@ -5,6 +5,7 @@
          trail-label="Page"
          :title="headerTitle"
          :icon="cmsIcon(config.icon ?? 'window')"
+         :description="pageRoute?.path"
       >
          <template #actions>
             <CmsTranslationMenu v-model="formState" :fields="fields" :disabled="!!lock" size="sm" />
@@ -19,7 +20,7 @@
          </template>
       </KPageHeader>
 
-      <KCard variant="outline" padding="lg">
+      <KCard padding="lg" fill>
          <CmsEntryForm
             ref="formRef"
             v-model="formState"
@@ -74,7 +75,6 @@ const FORM_ID = 'cms-entry-form'
 definePageMeta({
    layout: 'cms-admin',
    middleware: 'cms-auth',
-   content: 'page',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
    key: (route) => cmsPageKey(route, [CMS_TAB_QUERY]),
 })
