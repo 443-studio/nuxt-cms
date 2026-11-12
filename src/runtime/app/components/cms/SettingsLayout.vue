@@ -7,15 +7,15 @@
       />
       <div class="cms-layout-areas">
          <div v-for="area in AREAS" :key="area.id" class="cms-layout-area" :class="`is-${area.id}`">
-            <div
+            <KCard
                v-if="!model[area.id].some((section) => section.rows.length || section.title)"
-               class="cms-layout-empty"
-               :class="{ 'is-over': isOver({ type: 'area', area: area.id }) }"
+               variant="dashed"
+               :title="area.empty"
+               :selected="isOver({ type: 'area', area: area.id })"
+               :animated="false"
                @dragover.prevent="setTarget({ type: 'area', area: area.id })"
                @drop.prevent="drop"
-            >
-               {{ area.empty }}
-            </div>
+            />
             <div
                v-for="(section, sectionIndex) in model[area.id]"
                v-else
@@ -86,6 +86,7 @@ import type { CmsFormLayout, CmsLayoutSection, CmsTab, FieldConfig } from '#nuxt
 import { MAX_LAYOUT_ROW_FIELDS, fieldTab } from '#nuxt-cms'
 import {
    Badge as KBadge,
+   Card as KCard,
    FieldMessage as KFieldMessage,
    Icon as KIcon,
 } from '@xleddyl/443-components-vue'

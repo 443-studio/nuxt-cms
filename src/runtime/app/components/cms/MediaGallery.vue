@@ -181,22 +181,7 @@
                      :aria-label="mediaFilename(item.key)"
                      @click="emitSelect(item)"
                   >
-                     <div class="cms-media-preview">
-                        <img
-                           v-if="item.type === 'image' && item.url"
-                           :src="item.url"
-                           alt=""
-                           loading="lazy"
-                        />
-                        <video
-                           v-else-if="item.type === 'video' && item.url"
-                           :src="item.url"
-                           preload="metadata"
-                           muted
-                           playsinline
-                        />
-                        <KIcon v-else :name="cmsIcon(mediaIconFor(item.type))" />
-                     </div>
+                     <KThumbnail :src="item.url ?? undefined" :kind="item.type" rounded="none" />
                   </KCard>
                </KTooltip>
             </KGrid>
@@ -267,37 +252,24 @@
                   @dragstart="onItemDragStart($event, item)"
                   @dragend="onDragEnd"
                >
-                  <div class="cms-media-preview">
-                     <img
-                        v-if="item.type === 'image' && item.url"
-                        :src="item.url"
-                        alt=""
-                        loading="lazy"
-                        draggable="false"
-                     />
-                     <video
-                        v-else-if="item.type === 'video' && item.url"
-                        :src="item.url"
-                        preload="metadata"
-                        muted
-                        playsinline
-                     />
-                     <KIcon v-else :name="cmsIcon(mediaIconFor(item.type))" />
-                     <button
-                        v-if="canManage"
-                        type="button"
-                        class="cms-media-check"
-                        :class="{ 'is-on': isSelected(item.key), 'is-visible': selection.length }"
-                        :aria-label="isSelected(item.key) ? 'Deselect' : 'Select'"
-                        tabindex="-1"
-                        @click.stop="toggleSelect(item.key, $event)"
-                     >
-                        <KIcon :name="cmsIcon('check')" />
-                     </button>
-                     <div class="cms-media-info">
-                        {{ tileInfo(item) }}
-                     </div>
-                  </div>
+                  <KThumbnail
+                     :src="item.url ?? undefined"
+                     :kind="item.type"
+                     rounded="none"
+                     :caption="tileInfo(item)"
+                     :reveal="selection.length ? ['caption'] : ['caption', 'top-start']"
+                  >
+                     <template v-if="canManage" #top-start>
+                        <span @click.stop>
+                           <KCheckbox
+                              :model-value="isSelected(item.key)"
+                              :aria-label="`Select ${mediaFilename(item.key)}`"
+                              tabindex="-1"
+                              @update:model-value="toggleSelect(item.key)"
+                           />
+                        </span>
+                     </template>
+                  </KThumbnail>
                   <div class="cms-media-meta">
                      <KTooltip :text="item.key">
                         <div class="cms-media-name">{{ mediaFilename(item.key) }}</div>
@@ -507,6 +479,7 @@ import {
    Breadcrumbs as KBreadcrumbs,
    Button as KButton,
    Card as KCard,
+   Checkbox as KCheckbox,
    DropdownMenu as KDropdownMenu,
    EmptyState as KEmptyState,
    FieldMessage as KFieldMessage,
@@ -526,6 +499,7 @@ import {
    SkeletonList as KSkeletonList,
    Stack as KStack,
    Table as KTable,
+   Thumbnail as KThumbnail,
    Tooltip as KTooltip,
    toast,
    useFileDrop,
@@ -542,7 +516,6 @@ import {
    mediaFolderDepth,
    mediaFolderName,
    mediaFolderParent,
-   mediaIconFor,
    groupMediaUsage,
    mediaUsageGroups,
    otherEntriesLabel,

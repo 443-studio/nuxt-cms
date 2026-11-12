@@ -204,7 +204,7 @@ levels. In `'s3'` and `'filesystem'` mode you manage the folders from the panel:
   with all its subfolders. The library creates each folder with the same name (as a slug) in the
   open folder, empty folders included. Hidden files such as `.DS_Store` are skipped. Files deeper
   than 4 levels go into the deepest allowed folder.
-- Select files with the round check on a tile, or with Shift, Ctrl or Cmd and a click. The
+- Select files with the checkbox on a tile, or with Shift, Ctrl or Cmd and a click. The
   selection bar moves or deletes all the selected files.
 - Click a file to open its detail panel: preview, focal point, facts, alt text, folder, a **Copy URL** button,
   a **Download** button and the list of entries that use the file, with links to them.
@@ -316,9 +316,10 @@ can be replaced before saving. Collections and singles are not checked.
 ## Focal point
 
 An image can carry a focal point: the part of the picture that must stay visible when a layout
-crops it. In the media detail drawer, click or drag on the image to place it (with the drawer
-focused on the image, the arrow keys move it by 1%, with Shift by 10%), then **Save**. **Reset**
-clears it, which means the center. Setting it needs the `media.write` permission, and saving fires
+crops it. In the media detail drawer, click or drag on the image to place it (with the point
+focused, the arrow keys move it by 1%, with Shift by 10%, and Home, End, Page Up and Page Down move
+it to an edge), then **Save**. **Reset** (or Delete) clears it, which means the center. Setting it
+needs the `media.write` permission (without it the point shows read only), and saving fires
 `cms:media:change` with action `update`.
 
 The point is stored in `cms_media` (`focal_x`, `focal_y`, floats from 0 to 1 measured from the left

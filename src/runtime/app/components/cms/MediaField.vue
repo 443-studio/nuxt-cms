@@ -4,7 +4,7 @@
       variant="outline"
       padding="none"
       class="cms-media-single"
-      :class="{ 'is-missing': missing, 'is-disabled': disabled }"
+      :class="{ 'is-disabled': disabled }"
    >
       <button
          type="button"
@@ -13,15 +13,14 @@
          :disabled="disabled || undefined"
          @click="openGallery"
       >
-         <img v-if="kind === 'image' && url" :src="url" alt="" loading="lazy" />
-         <video
-            v-else-if="kind === 'video' && url"
-            :src="url"
-            preload="metadata"
-            muted
-            playsinline
+         <KThumbnail
+            :src="url ?? undefined"
+            :kind="kind"
+            aspect="4/3"
+            rounded="none"
+            :missing="missing"
+            missing-text="Not found in the media library"
          />
-         <KIcon v-else :name="cmsIcon(icon)" />
       </button>
       <div class="cms-media-single-bar">
          <KTooltip :text="model">
@@ -48,16 +47,16 @@
       </div>
    </KCard>
 
-   <button
+   <KCard
       v-else
-      type="button"
+      variant="dashed"
+      as="button"
+      :icon="cmsIcon('photo')"
+      title="Choose"
+      :disabled="disabled"
       class="cms-media-single-add"
-      :disabled="disabled || undefined"
       @click="openGallery"
-   >
-      <KIcon :name="cmsIcon('photo')" />
-      <span>Choose</span>
-   </button>
+   />
 
    <KFieldMessage v-if="missing" tone="warning" message="Not found in the media library" />
 
@@ -79,13 +78,13 @@ import {
    Button as KButton,
    Card as KCard,
    FieldMessage as KFieldMessage,
-   Icon as KIcon,
    Modal as KModal,
    Stack as KStack,
+   Thumbnail as KThumbnail,
    Tooltip as KTooltip,
    useFieldControl,
 } from '@xleddyl/443-components-vue'
-import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
+import { mediaFilename, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { cmsIcon } from '../../utils/ui'
@@ -124,5 +123,4 @@ function clear() {
 const missing = computed(() => mediaKeys.isMissing(model.value))
 const url = computed(() => (model.value ? mediaPublicUrl(mediaBaseUrl, model.value) : null))
 const kind = computed(() => (model.value ? mediaTypeForKey(model.value) : 'file'))
-const icon = computed(() => mediaIconFor(kind.value))
 </script>

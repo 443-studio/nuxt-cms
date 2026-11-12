@@ -39,43 +39,35 @@
                :aria-label="mediaOnly ? undefined : `Edit ${labelOf(item)}`"
                @click="onPreviewClick(index)"
             >
-               <img
-                  v-if="previewOf(item)?.kind === 'image'"
-                  :src="previewOf(item)!.url"
-                  alt=""
-                  loading="lazy"
-               />
-               <video
-                  v-else-if="previewOf(item)?.kind === 'video'"
-                  :src="previewOf(item)!.url"
-                  preload="metadata"
-                  muted
-                  playsinline
-               />
-               <span v-else-if="summaryOf(item)" class="cms-block-summary">
-                  {{ summaryOf(item) }}
-               </span>
-               <KIcon v-else :name="cmsIcon(iconOf(item))" class="cms-block-icon" />
-
-               <KIcon v-if="isHidden(item)" name="eye-slash" class="cms-block-hidden" />
-
-               <template v-if="mediaOnly">
-                  <KTooltip v-if="hasMissingMedia(item)" text="Not found in the media library">
-                     <span class="cms-block-missing">
-                        <KIcon name="exclamation-triangle" label="Not found in the media library" />
-                     </span>
-                  </KTooltip>
-                  <KTooltip v-if="!disabled" text="Remove">
-                     <button
-                        type="button"
-                        class="cms-block-remove"
+               <KThumbnail
+                  :src="previewOf(item)?.url"
+                  :kind="previewOf(item)?.kind ?? 'icon'"
+                  :icon="previewOf(item) ? undefined : cmsIcon(iconOf(item))"
+                  :aspect="mediaOnly ? 1 : '4/3'"
+                  rounded="none"
+                  :missing="mediaKeys.isMissing(mediaKeyOf(item))"
+                  missing-text="Not found in the media library"
+                  :reveal="['top-end']"
+               >
+                  <template v-if="!previewOf(item) && summaryOf(item)" #default>
+                     <span class="cms-block-summary">{{ summaryOf(item) }}</span>
+                  </template>
+                  <template v-if="isHidden(item)" #top-start>
+                     <KIcon name="eye-slash" label="Hidden" />
+                  </template>
+                  <template v-if="mediaOnly && !disabled" #top-end>
+                     <KButton
+                        icon="x-mark"
+                        size="xs"
+                        variant="solid"
+                        tone="neutral"
+                        square
+                        tooltip="Remove"
                         :aria-label="`Remove ${barTitle(item)}`"
                         @click.stop="remove(index)"
-                     >
-                        <KIcon name="x-mark" />
-                     </button>
-                  </KTooltip>
-               </template>
+                     />
+                  </template>
+               </KThumbnail>
             </component>
 
             <div v-if="!mediaOnly" class="cms-block-bar">
@@ -135,17 +127,15 @@
             @paste="paste(items.length, null)"
             @preset="insertPreset"
          >
-            <KButton label="Add" icon="plus" variant="soft" tone="neutral" block />
+            <KCard variant="dashed" as="button" icon="plus" title="Add" />
          </CmsBlockPickerPopover>
-         <KButton
+         <KCard
             v-else
-            :label="mediaOnly ? addMediaLabel : 'Add'"
+            variant="dashed"
+            as="button"
             icon="plus"
-            variant="soft"
-            tone="neutral"
-            block
+            :title="mediaOnly ? addMediaLabel : 'Add'"
             :disabled="!canAdd || disabled"
-            :disabled-reason="canAdd ? undefined : countHint"
             @click="addFirst"
          />
       </KGrid>
@@ -348,6 +338,7 @@ import {
 import type { MenuItems } from '@xleddyl/443-components-vue'
 import {
    Button as KButton,
+   Card as KCard,
    DropdownMenu as KDropdownMenu,
    FieldMessage as KFieldMessage,
    FormField as KFormField,
@@ -355,6 +346,7 @@ import {
    Icon as KIcon,
    Modal as KModal,
    Stack as KStack,
+   Thumbnail as KThumbnail,
    Tooltip as KTooltip,
    useFieldControl,
    useFormContext,

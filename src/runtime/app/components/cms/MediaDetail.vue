@@ -10,34 +10,27 @@
       @delete="item && emit('delete', item)"
    >
       <KStack v-if="shown" gap="lg">
-         <div class="cms-media-detail-preview">
-            <div
-               v-if="shown.type === 'image' && shown.url"
-               class="cms-media-focal"
-               :class="{ 'is-editable': focalEditable, 'is-dragging': focalDragging }"
-               :tabindex="focalEditable ? 0 : undefined"
-               :role="focalEditable ? 'application' : undefined"
-               :aria-label="
-                  focalEditable
-                     ? 'Focal point: click or drag on the image, or use the arrow keys'
-                     : undefined
-               "
-               @pointerdown="onFocalPointerDown"
-               @pointermove="onFocalPointerMove"
-               @pointerup="onFocalPointerUp"
-               @pointercancel="onFocalPointerUp"
-               @keydown="onFocalKey"
-            >
-               <img :src="shown.url" :alt="shown.alt ?? ''" draggable="false" />
-               <span
-                  v-if="focal"
-                  class="cms-media-focal-marker"
-                  :style="{ left: `${focal.x * 100}%`, top: `${focal.y * 100}%` }"
-                  aria-hidden="true"
-               />
-            </div>
+         <KFormField
+            v-if="shown.type === 'image' && shown.url"
+            label="Focal point"
+            :description="
+               focalEditable
+                  ? 'Click or drag on the image to mark the part that must stay visible when it is cropped.'
+                  : undefined
+            "
+         >
+            <KFocalPointInput
+               v-model="focal"
+               :src="shown.url"
+               :alt="shown.alt ?? ''"
+               :readonly="!focalEditable"
+               empty-text="Center (default)"
+               clearable
+            />
+         </KFormField>
+         <div v-else class="cms-media-detail-preview">
             <video
-               v-else-if="shown.type === 'video' && shown.url"
+               v-if="shown.type === 'video' && shown.url"
                :src="shown.url"
                controls
                preload="metadata"
@@ -87,28 +80,6 @@
          </KCard>
 
          <KStack gap="md">
-            <KFormField
-               v-if="shown.type === 'image' && shown.url"
-               label="Focal point"
-               :description="
-                  focalEditable
-                     ? 'Click or drag on the image to mark the part that must stay visible when it is cropped.'
-                     : undefined
-               "
-            >
-               <KStack direction="row" gap="sm" align="center" class="cms-media-focal-row">
-                  <span class="cms-media-focal-value k-mono">{{ focalLabel }}</span>
-                  <KButton
-                     v-if="focalEditable && focal"
-                     label="Reset"
-                     :icon="cmsIcon('arrow-path')"
-                     variant="ghost"
-                     tone="neutral"
-                     size="sm"
-                     @click="resetFocal"
-                  />
-               </KStack>
-            </KFormField>
             <KFormField label="Alt text" name="alt">
                <KInput
                   v-model="draft.alt"
@@ -161,6 +132,7 @@ import {
    CopyButton as KCopyButton,
    DescriptionList as KDescriptionList,
    FieldMessage as KFieldMessage,
+   FocalPointInput as KFocalPointInput,
    FormDrawer as KFormDrawer,
    FormField as KFormField,
    Icon as KIcon,
@@ -178,7 +150,6 @@ import {
    mediaFilename,
    mediaIconFor,
    otherEntriesLabel,
-   roundFocalCoordinate,
 } from '#nuxt-cms'
 import type { CmsMediaLibrary } from '../../composables/cms-media-library'
 import { usageLink } from '../../composables/cms-media-library'
@@ -245,9 +216,6 @@ watch(
    { immediate: true }
 )
 
-const FOCAL_STEP = 0.01
-const FOCAL_STEP_LARGE = 0.1
-
 const focal = computed<CmsFocalPoint | null>({
    get: () =>
       draft.value.focalX == null || draft.value.focalY == null
@@ -258,14 +226,7 @@ const focal = computed<CmsFocalPoint | null>({
       draft.value.focalY = point?.y ?? null
    },
 })
-const focalDragging = ref(false)
 const focalEditable = computed(() => props.canEdit && !!props.item)
-
-const focalLabel = computed(() =>
-   focal.value
-      ? `${Math.round(focal.value.x * 100)}% · ${Math.round(focal.value.y * 100)}%`
-      : 'Center (default)'
-)
 
 const focalChanged = computed(() => {
    const saved = focalPointOf(props.item)
@@ -273,57 +234,6 @@ const focalChanged = computed(() => {
    if (!saved || !current) return saved !== current
    return saved.x !== current.x || saved.y !== current.y
 })
-
-function setFocal(x: number, y: number) {
-   focal.value = { x: roundFocalCoordinate(x), y: roundFocalCoordinate(y) }
-}
-
-function focalFromPointer(event: PointerEvent) {
-   const image = (event.currentTarget as HTMLElement).querySelector('img')
-   if (!image) return
-   const rect = image.getBoundingClientRect()
-   if (!rect.width || !rect.height) return
-   setFocal((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height)
-}
-
-function onFocalPointerDown(event: PointerEvent) {
-   if (!focalEditable.value || event.button !== 0) return
-   event.preventDefault()
-   const target = event.currentTarget as HTMLElement
-   target.setPointerCapture(event.pointerId)
-   target.focus()
-   focalDragging.value = true
-   focalFromPointer(event)
-}
-
-function onFocalPointerMove(event: PointerEvent) {
-   if (focalDragging.value) focalFromPointer(event)
-}
-
-function onFocalPointerUp() {
-   focalDragging.value = false
-}
-
-const FOCAL_KEYS: Record<string, [number, number]> = {
-   ArrowLeft: [-1, 0],
-   ArrowRight: [1, 0],
-   ArrowUp: [0, -1],
-   ArrowDown: [0, 1],
-}
-
-function onFocalKey(event: KeyboardEvent) {
-   if (!focalEditable.value) return
-   const direction = FOCAL_KEYS[event.key]
-   if (!direction) return
-   event.preventDefault()
-   const step = event.shiftKey ? FOCAL_STEP_LARGE : FOCAL_STEP
-   const current = focal.value ?? { x: 0.5, y: 0.5 }
-   setFocal(current.x + direction[0] * step, current.y + direction[1] * step)
-}
-
-function resetFocal() {
-   focal.value = null
-}
 
 const downloadHref = computed(() =>
    shown.value ? `/api/cms/admin/media/download?key=${encodeURIComponent(shown.value.key)}` : ''

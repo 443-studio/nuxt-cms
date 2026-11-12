@@ -274,8 +274,8 @@ Sort: `[{ field: <fieldName>, direction: asc | desc }]` (direction defaults to `
 enum `CmsMediaType` (`image` / `video` / `file`) and `url` is `publicBaseUrl` + "/" + `key`, `null`
 only when `publicBaseUrl` is not configured. `focalX` / `focalY` (nullable floats, 0 to 1 from the
 left/top edge, both null = not set, which means center) are the focal point an editor marks by
-clicking or dragging on the image in the media detail drawer (Reset clears it; arrow keys nudge it;
-needs `media.write`; saved with `PUT /api/cms/admin/media` `{ key, focalX, focalY }`, both or
+clicking or dragging on the image in the media detail drawer (443 `FocalPointInput`: Reset or Delete clears it, arrow keys nudge it;
+needs `media.write`, read only without it; saved with `PUT /api/cms/admin/media` `{ key, focalX, focalY }`, both or
 neither, fires `cms:media:change` `update`). Stored in `cms_media` (`focal_x`, `focal_y`) in every
 storage mode, `local` included (like alt texts).
 
