@@ -222,7 +222,12 @@ const { data, error, refresh } = useCms(`{ ... }`, variables?, options?)
 
 // plain promise: use in event handlers or server-side logic
 const result = await $cmsQuery(`{ ... }`, variables?)
+
+// plain promise forms of the entry helpers (no useAsyncData): plugins, route guards, event handlers, prefetch
+const page = await $cmsPage('/about', { locale })            // also $cmsSingle, $cmsCollection, $cmsContents, $cmsContent, $cmsRoute
 ```
+
+`$cmsSingle` / `$cmsCollection` / `$cmsPage` / `$cmsContents` / `$cmsContent` / `$cmsRoute` take the same arguments as the `useCms*` helpers without the `useAsyncData` options, run the same generated query, forward the preview token, and resolve to the result (`null` / `[]` when the CMS is disabled). Calling `useAsyncData` after mount or outside setup triggers Nuxt `NUXT_E3003`; to warm the cache, write the result to `nuxtApp.payload.data[key]` and read it in the page with `getCachedData`.
 
 `useCmsSingle` / `useCmsCollection` / `useCmsPage` need no query string. `useCmsPage` takes a typed path of the `page` entry and returns the fields of that path (shared plus its own). They select every public field of the
 entry plus `id`, `updatedAt` and `createdAt`: media with all its keys, blocks with one inline
@@ -236,7 +241,7 @@ generated cache key), `default` (the value `data` holds before the query resolve
 fails), plus `server`, `lazy`, `immediate`, `deep`, `dedupe` and `watch`. The entry helpers take the
 same options next to their own.
 
-Queries started in the same tick (by any of these composables or `$cmsQuery`) go out as one batched HTTP request, and identical queries in flight share one request; keys and results are unchanged.
+Queries started in the same tick (by any of these helpers or `$cmsQuery`) go out as one batched HTTP request, and identical queries in flight share one request; keys and results are unchanged.
 
 ### Generated queries
 

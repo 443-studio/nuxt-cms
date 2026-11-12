@@ -18,31 +18,80 @@ export interface CmsSortInput<Entry> {
    direction?: 'asc' | 'desc'
 }
 
-export interface CmsSingleOptions<ResT, DefaultT> extends CmsAsyncDataOptions<ResT, DefaultT> {
+export interface CmsEntryQuery {
    locale?: string
 }
 
-export interface CmsPageOptions<ResT, DefaultT> extends CmsAsyncDataOptions<ResT, DefaultT> {
-   locale?: string
-}
-
-export interface CmsCollectionOptions<ResT, DefaultT, Entry>
-   extends CmsAsyncDataOptions<ResT, DefaultT> {
-   locale?: string
+export interface CmsListQuery<Entry> extends CmsEntryQuery {
    filters?: Record<string, unknown>
    sort?: CmsSortInput<Entry>[]
    limit?: number
    offset?: number
 }
 
-export interface CmsContentOptions<ResT, DefaultT> extends CmsAsyncDataOptions<ResT, DefaultT> {
-   locale?: string
-}
+export interface CmsSingleOptions<ResT, DefaultT>
+   extends CmsAsyncDataOptions<ResT, DefaultT>,
+      CmsEntryQuery {}
+
+export interface CmsPageOptions<ResT, DefaultT>
+   extends CmsAsyncDataOptions<ResT, DefaultT>,
+      CmsEntryQuery {}
+
+export interface CmsCollectionOptions<ResT, DefaultT, Entry>
+   extends CmsAsyncDataOptions<ResT, DefaultT>,
+      CmsListQuery<Entry> {}
+
+export interface CmsContentOptions<ResT, DefaultT>
+   extends CmsAsyncDataOptions<ResT, DefaultT>,
+      CmsEntryQuery {}
 
 export type CmsContentsOptions<ResT, DefaultT, Entry> = CmsCollectionOptions<ResT, DefaultT, Entry>
 
-export interface CmsRouteOptions<ResT, DefaultT> extends CmsAsyncDataOptions<ResT, DefaultT> {
-   locale?: string
+export interface CmsRouteOptions<ResT, DefaultT>
+   extends CmsAsyncDataOptions<ResT, DefaultT>,
+      CmsEntryQuery {}
+
+export async function $cmsSingle<K extends CmsSingleName>(
+   name: K,
+   query: CmsEntryQuery = {}
+): Promise<CmsSingleTypes[K] | null> {
+   return null
+}
+
+export async function $cmsCollection<K extends CmsCollectionName>(
+   name: K,
+   query: CmsListQuery<CmsCollectionTypes[K]> = {}
+): Promise<CmsCollectionTypes[K][]> {
+   return []
+}
+
+export async function $cmsContents<K extends CmsContentName>(
+   name: K,
+   query: CmsListQuery<CmsContentTypes[K]> = {}
+): Promise<CmsContentTypes[K][]> {
+   return []
+}
+
+export async function $cmsContent<K extends CmsContentName>(
+   name: K,
+   slug: string,
+   query: CmsEntryQuery = {}
+): Promise<CmsContentTypes[K] | null> {
+   return null
+}
+
+export async function $cmsPage<P extends CmsPagePath>(
+   path: P,
+   query: CmsEntryQuery = {}
+): Promise<CmsPageTypes[P] | null> {
+   return null
+}
+
+export async function $cmsRoute(
+   path: string,
+   query: CmsEntryQuery = {}
+): Promise<CmsContentRouteMatch | null> {
+   return null
 }
 
 export function useCmsSingle<K extends CmsSingleName, DefaultT = null>(

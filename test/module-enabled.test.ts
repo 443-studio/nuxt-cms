@@ -84,7 +84,13 @@ describe('module setup when disabled', () => {
       expect(kit.addImports).toHaveBeenCalledTimes(1)
       const imports = kit.addImports.mock.calls[0]![0] as { name: string; from: string }[]
       expect(imports.map((entry) => entry.name).sort()).toEqual([
+         '$cmsCollection',
+         '$cmsContent',
+         '$cmsContents',
+         '$cmsPage',
          '$cmsQuery',
+         '$cmsRoute',
+         '$cmsSingle',
          'useCms',
          'useCmsCollection',
          'useCmsContent',
@@ -218,7 +224,13 @@ describe('module setup when enabled', () => {
 
       const imports = kit.addImports.mock.calls[0]![0] as { name: string; from: string }[]
       expect(imports.map((entry) => entry.name).sort()).toEqual([
+         '$cmsCollection',
+         '$cmsContent',
+         '$cmsContents',
+         '$cmsPage',
          '$cmsQuery',
+         '$cmsRoute',
+         '$cmsSingle',
          'useCms',
          'useCmsCollection',
          'useCmsContent',

@@ -16,6 +16,7 @@ const { data, error, refresh } = useCms(`{ ... }`, variables?, options?)
 
 // plain promise: use in event handlers or server-side logic
 const result = await $cmsQuery(`{ ... }`, variables?)
+const page = await $cmsPage('/about', { locale })
 ```
 
 `useCms` and `$cmsQuery` are typed end-to-end from the query string via gql.tada, with no codegen
@@ -41,7 +42,7 @@ const { data } = await useCms(query, { locale }, {
 With [`cms.enabled: false`](configuration.md#enabled) the composables stay defined but become
 no-ops: `useCms().data`, `useCmsSingle().data`, `useCmsPage().data`, `useCmsContent().data` and `useCmsRoute().data` are
 `null`, `useCmsCollection().data` and `useCmsContents().data` are `[]` and `$cmsQuery()` resolves to
-`{}`. `<CmsBlocks>` stays registered too. The generated types stay available too, so the same code type-checks
+`{}`. The plain promise helpers resolve to the same empty values (`null` or `[]`). `<CmsBlocks>` stays registered too. The generated types stay available too, so the same code type-checks
 in both modes. Callers therefore never need a `typeof useCms === 'function'` guard, they just render
 their empty state.
 
@@ -101,6 +102,23 @@ article.value?.body
 `data` holds `[]` for the list and `null` for the item until the query resolves, and the item is
 `null` when the slug is unknown, a draft, or scheduled. When the CMS is disabled both return their
 default without a request.
+
+### Plain promise helpers
+
+`$cmsSingle`, `$cmsCollection`, `$cmsPage`, `$cmsContents`, `$cmsContent` and `$cmsRoute` run the
+same generated queries as the `useCms*` helpers and return a plain promise of the result, with no
+`useAsyncData`. They take the same arguments, without the `useAsyncData` options. Use them outside
+component setup: in event handlers, in plugins, in route guards, or to fill the payload ahead of a
+navigation.
+
+```ts
+const key = `cms-page:/about:${locale}`
+nuxtApp.payload.data[key] ??= await $cmsPage('/about', { locale })
+```
+
+A page that reads the same key with a `getCachedData` that returns `nuxtApp.payload.data[key]`
+then renders with no request. The helpers forward the preview token of the current route, and their
+queries are batched like the others. A failed query rejects the promise.
 
 ### Content routes
 
@@ -499,8 +517,8 @@ const { data } = useCms(`query ($cat: String!) {
   const { data } = await useCms(`{ ... }`)
   ```
 - In development a GraphiQL explorer is served at `/api/cms/graphql`.
-- **Batching:** `$cmsQuery` and every composable built on it (`useCms`, `useCmsSingle`,
-  `useCmsCollection`, `useCmsPage`, `useCmsContents`, `useCmsContent`) send the queries started in
+- **Batching:** `$cmsQuery` and every helper built on it (`useCms`, `useCmsSingle`,
+  `useCmsCollection`, `useCmsPage`, `useCmsContents`, `useCmsContent` and their `$cms*` forms) send the queries started in
   the same tick as one HTTP request (a JSON array, up to 20 queries per request), and a query identical to one already in flight
   shares its request. A single query is sent as before. The `useAsyncData` keys, and so the SSR
   payload keys, do not change.
