@@ -197,15 +197,18 @@ levels. In `'s3'` and `'filesystem'` mode you manage the folders from the panel:
   page keeps the open folder in the URL (`/cms/media?folder=blog/covers`).
 - **New folder** creates a subfolder in the open folder. **Rename** and **Delete folder** show
   only when a folder is open, and they apply to that folder.
-- Drag a file onto a folder or onto the breadcrumb to move it. Drag a folder onto another folder
+- Drag a file (a tile or a list row) onto a folder or onto the breadcrumb to move it; dragging a
+  selected file moves the whole selection. Drag a folder onto another folder
   to move it with all its contents. Drop files from your computer on the library to upload them to
   the open folder, or on a folder to upload them there.
 - Drop a folder from your computer, or use **Upload a folder** in the upload dialog, to upload it
   with all its subfolders. The library creates each folder with the same name (as a slug) in the
   open folder, empty folders included. Hidden files such as `.DS_Store` are skipped. Files deeper
   than 4 levels go into the deepest allowed folder.
-- Select files with the checkbox on a tile, or with Shift, Ctrl or Cmd and a click. The
-  selection bar moves or deletes all the selected files.
+- Select files with the check on a tile or the checkbox of a row, or with Shift, Ctrl or Cmd and a
+  click (Shift adds the range from the last one). In the grid, Space toggles the focused tile and
+  Ctrl or Cmd with A selects every file of the page. The selection bar moves or deletes all the
+  selected files.
 - Click a file to open its detail panel: preview, focal point, facts, alt text, folder, a **Copy URL** button,
   a **Download** button and the list of entries that use the file, with links to them.
 - Each tile and each list row shows how many entries use the file, or an "unused" mark. The share

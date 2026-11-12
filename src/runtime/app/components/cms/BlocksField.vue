@@ -1,145 +1,142 @@
 <template>
    <KStack gap="sm" class="cms-blocks-field">
-      <KGrid
-         ref="grid"
+      <KTileGrid
+         :items="items"
+         :item-key="(item: Record<string, unknown>) => uidFor(item)"
+         :item-label="barTitle"
+         :label="field.label"
          :columns="4"
          min-item-width="9rem"
-         gap="md"
+         sortable
+         :handle="mediaOnly ? undefined : '[data-cms-grip]'"
+         :disabled="disabled"
+         @update:items="onReorder"
+         @keydown="onTileKey"
          @copy="onClipboard"
          @cut="onClipboard"
          @paste="onClipboard"
       >
-         <div
-            v-for="(item, index) in items"
-            :key="uidFor(item)"
-            v-bind="sortable.itemProps(index)"
-            class="cms-block-tile"
-            :class="{
-               'is-muted': isHidden(item),
-               'is-dragging': sortable.dragging.value === index,
-               'is-missing': hasMissingMedia(item),
-               'is-media-only': mediaOnly,
-               'is-disabled': disabled,
-               'is-invalid': tileInvalid(index),
-            }"
-            :data-cms-tile="index"
-            :data-cms-grip="mediaOnly && !disabled ? '' : undefined"
-            :tabindex="mediaOnly && !disabled ? 0 : undefined"
-            :aria-label="
-               mediaOnly && !disabled
-                  ? `${barTitle(item)}, use the arrow keys to reorder`
-                  : undefined
-            "
-            @keydown.self="onTileKey($event, index)"
-         >
-            <component
-               :is="mediaOnly ? 'div' : 'button'"
-               :type="mediaOnly ? undefined : 'button'"
-               class="cms-block-preview"
-               :aria-label="mediaOnly ? undefined : `Edit ${labelOf(item)}`"
-               @click="onPreviewClick(index)"
+         <template #tile="{ item, index }">
+            <KCard
+               variant="outline"
+               padding="none"
+               :animated="false"
+               class="cms-block-tile"
+               :class="{
+                  'is-muted': isHidden(item),
+                  'is-missing': hasMissingMedia(item),
+                  'is-invalid': tileInvalid(index),
+               }"
+               :data-cms-tile="index"
             >
-               <KThumbnail
-                  :src="previewOf(item)?.url"
-                  :kind="previewOf(item)?.kind ?? 'icon'"
-                  :icon="previewOf(item) ? undefined : cmsIcon(iconOf(item))"
-                  :aspect="mediaOnly ? 1 : '4/3'"
-                  rounded="none"
-                  :missing="mediaKeys.isMissing(mediaKeyOf(item))"
-                  missing-text="Not found in the media library"
-                  :reveal="['top-end']"
+               <component
+                  :is="mediaOnly ? 'div' : 'button'"
+                  :type="mediaOnly ? undefined : 'button'"
+                  class="cms-block-preview"
+                  :aria-label="mediaOnly ? undefined : `Edit ${labelOf(item)}`"
+                  @click="onPreviewClick(index)"
                >
-                  <template v-if="!previewOf(item) && summaryOf(item)" #default>
-                     <span class="cms-block-summary">{{ summaryOf(item) }}</span>
-                  </template>
-                  <template v-if="isHidden(item)" #top-start>
-                     <KIcon name="eye-slash" label="Hidden" />
-                  </template>
-                  <template v-if="mediaOnly && !disabled" #top-end>
-                     <KButton
-                        icon="x-mark"
-                        size="xs"
-                        variant="solid"
-                        tone="neutral"
-                        square
-                        tooltip="Remove"
-                        :aria-label="`Remove ${barTitle(item)}`"
-                        @click.stop="remove(index)"
-                     />
-                  </template>
-               </KThumbnail>
-            </component>
+                  <KThumbnail
+                     :src="previewOf(item)?.url"
+                     :kind="previewOf(item)?.kind ?? 'icon'"
+                     :icon="previewOf(item) ? undefined : cmsIcon(iconOf(item))"
+                     :aspect="mediaOnly ? 1 : '4/3'"
+                     rounded="none"
+                     :missing="mediaKeys.isMissing(mediaKeyOf(item))"
+                     missing-text="Not found in the media library"
+                     :reveal="['top-end']"
+                  >
+                     <template v-if="!previewOf(item) && summaryOf(item)" #default>
+                        <span class="cms-block-summary">{{ summaryOf(item) }}</span>
+                     </template>
+                     <template v-if="isHidden(item)" #top-start>
+                        <KIcon name="eye-slash" label="Hidden" />
+                     </template>
+                     <template v-if="mediaOnly && !disabled" #top-end>
+                        <KButton
+                           icon="x-mark"
+                           size="xs"
+                           variant="solid"
+                           tone="neutral"
+                           square
+                           tooltip="Remove"
+                           :aria-label="`Remove ${barTitle(item)}`"
+                           @click.stop="remove(index)"
+                        />
+                     </template>
+                  </KThumbnail>
+               </component>
 
-            <div v-if="!mediaOnly" class="cms-block-bar">
-               <KButton
-                  v-if="!disabled"
-                  data-cms-grip
-                  :icon="cmsIcon('bars-2')"
-                  size="xs"
-                  variant="ghost"
-                  tone="neutral"
-                  :aria-label="`Reorder ${labelOf(item)}, use the arrow keys`"
-                  tooltip="Drag to reorder"
-                  @keydown.left.prevent="keyMove(index, -1)"
-                  @keydown.right.prevent="keyMove(index, 1)"
-               />
-               <KTooltip :text="barTitle(item)">
-                  <span class="cms-block-bar-name">{{ barLabel(item) }}</span>
-               </KTooltip>
-               <KTooltip v-if="hasMissingMedia(item)" text="Not found in the media library">
-                  <span class="cms-block-missing-icon">
-                     <KIcon name="exclamation-triangle" label="Not found in the media library" />
-                  </span>
-               </KTooltip>
-               <KDropdownMenu :items="tileMenu(index)" placement="bottom-end">
+               <div v-if="!mediaOnly" class="cms-block-bar">
                   <KButton
-                     :icon="cmsIcon('ellipsis-horizontal')"
+                     v-if="!disabled"
+                     data-cms-grip
+                     :icon="cmsIcon('bars-2')"
                      size="xs"
                      variant="ghost"
                      tone="neutral"
-                     :aria-label="`${labelOf(item)} actions`"
+                     :aria-label="`Reorder ${labelOf(item)}, Alt with the arrow keys moves it`"
+                     tooltip="Drag to reorder"
                   />
-               </KDropdownMenu>
-               <KButton
-                  v-if="!disabled"
-                  icon="trash"
-                  size="xs"
-                  variant="ghost"
-                  tone="danger"
-                  aria-label="Remove block"
-                  @click="remove(index)"
-               />
-            </div>
-         </div>
+                  <KTooltip :text="barTitle(item)">
+                     <span class="cms-block-bar-name">{{ barLabel(item) }}</span>
+                  </KTooltip>
+                  <KTooltip v-if="hasMissingMedia(item)" text="Not found in the media library">
+                     <span class="cms-block-missing-icon">
+                        <KIcon name="exclamation-triangle" label="Not found in the media library" />
+                     </span>
+                  </KTooltip>
+                  <KDropdownMenu :items="tileMenu(index)" placement="bottom-end">
+                     <KButton
+                        :icon="cmsIcon('ellipsis-horizontal')"
+                        size="xs"
+                        variant="ghost"
+                        tone="neutral"
+                        :aria-label="`${labelOf(item)} actions`"
+                     />
+                  </KDropdownMenu>
+                  <KButton
+                     v-if="!disabled"
+                     icon="trash"
+                     size="xs"
+                     variant="ghost"
+                     tone="danger"
+                     aria-label="Remove block"
+                     @click="remove(index)"
+                  />
+               </div>
+            </KCard>
+         </template>
 
-         <CmsBlockPickerPopover
-            v-if="
-               canAdd &&
-               !disabled &&
-               !mediaOnly &&
-               (Object.keys(blocks).length > 1 || presets.length)
-            "
-            v-model:open="pickerMenuOpen"
-            :blocks="blocks"
-            :paste-count="pasteCount"
-            :presets="presets"
-            @pick="add"
-            @paste="paste(items.length, null)"
-            @preset="insertPreset"
-         >
-            <KCard variant="dashed" as="button" icon="plus" title="Add" />
-         </CmsBlockPickerPopover>
-         <KCard
-            v-else
-            variant="dashed"
-            as="button"
-            icon="plus"
-            :title="mediaOnly ? addMediaLabel : 'Add'"
-            :disabled="!canAdd || disabled"
-            @click="addFirst"
-         />
-      </KGrid>
-      <span class="k-visually-hidden" aria-live="polite">{{ sortable.announcement.value }}</span>
+         <template #add>
+            <CmsBlockPickerPopover
+               v-if="
+                  canAdd &&
+                  !disabled &&
+                  !mediaOnly &&
+                  (Object.keys(blocks).length > 1 || presets.length)
+               "
+               v-model:open="pickerMenuOpen"
+               :blocks="blocks"
+               :paste-count="pasteCount"
+               :presets="presets"
+               @pick="add"
+               @paste="paste(items.length, null)"
+               @preset="insertPreset"
+            >
+               <KCard variant="dashed" as="button" icon="plus" title="Add" />
+            </CmsBlockPickerPopover>
+            <KCard
+               v-else
+               variant="dashed"
+               as="button"
+               icon="plus"
+               :title="mediaOnly ? addMediaLabel : 'Add'"
+               :disabled="!canAdd || disabled"
+               @click="addFirst"
+            />
+         </template>
+      </KTileGrid>
 
       <KFieldMessage v-if="countHint" tone="neutral" :icon="false" :message="countHint" />
 
@@ -342,27 +339,17 @@ import {
    DropdownMenu as KDropdownMenu,
    FieldMessage as KFieldMessage,
    FormField as KFormField,
-   Grid as KGrid,
    Icon as KIcon,
    Modal as KModal,
    Stack as KStack,
    Thumbnail as KThumbnail,
+   TileGrid as KTileGrid,
    Tooltip as KTooltip,
    useFieldControl,
    useFormContext,
    useRouteState,
-   useSortable,
 } from '@xleddyl/443-components-vue'
-import {
-   computed,
-   inject,
-   nextTick,
-   onMounted,
-   ref,
-   useState,
-   useTemplateRef,
-   watch,
-} from '#imports'
+import { computed, inject, nextTick, onMounted, ref, useState, watch } from '#imports'
 import { copyNotice, pasteBlocks, pasteNotice, pasteableCount } from '../../../shared/clipboard'
 import type { CmsPresetDetails } from '../../../shared/presets'
 import { CMS_PRESET_ICON, presetInsertNotice } from '../../../shared/presets'
@@ -583,23 +570,17 @@ function add(type: string) {
    openEditor(index)
 }
 
-function keyMove(index: number, delta: number) {
-   sortable.move(index, index + delta, { announce: true, source: 'keyboard' })
+function onReorder(next: Record<string, unknown>[]) {
+   if (!disabled.value) model.value = next
 }
 
-function onTileKey(event: KeyboardEvent, index: number) {
+function onTileKey(event: KeyboardEvent) {
    if (!mediaOnly.value || disabled.value || event.altKey) return
-   const action =
-      event.key === 'ArrowLeft'
-         ? () => keyMove(index, -1)
-         : event.key === 'ArrowRight'
-           ? () => keyMove(index, 1)
-           : event.key === 'Delete' || event.key === 'Backspace'
-             ? () => remove(index)
-             : null
-   if (!action) return
+   if (event.key !== 'Delete' && event.key !== 'Backspace') return
+   const index = focusedTileIndex(event.target)
+   if (index === null) return
    event.preventDefault()
-   action()
+   remove(index)
 }
 
 function onPreviewClick(index: number) {
@@ -630,19 +611,6 @@ function duplicate(index: number) {
    next.splice(index + 1, 0, copy)
    model.value = next
 }
-
-const grid = useTemplateRef<{ $el: HTMLElement }>('grid')
-
-const sortable = useSortable(() => grid.value?.$el, {
-   items,
-   orientation: 'horizontal',
-   handle: '[data-cms-grip]',
-   disabled: () => disabled.value,
-   label: (item) => barTitle(item),
-   onMove: (next) => {
-      model.value = next
-   },
-})
 
 const ROOT = '_'
 
@@ -881,10 +849,20 @@ async function paste(index: number, text?: string | null) {
    clipboard.notify(pasteNotice(result, props.field))
 }
 
-function tileIndexOf(target: EventTarget | null) {
-   const tile = target instanceof Element ? target.closest<HTMLElement>('[data-cms-tile]') : null
+function tileIndex(tile: HTMLElement | null | undefined) {
    const index = tile ? Number(tile.dataset.cmsTile) : NaN
    return Number.isInteger(index) ? index : null
+}
+
+function focusedTileIndex(target: EventTarget | null) {
+   return target instanceof Element
+      ? tileIndex(target.querySelector<HTMLElement>(':scope > * > [data-cms-tile]'))
+      : null
+}
+
+function tileIndexOf(target: EventTarget | null) {
+   if (!(target instanceof Element)) return null
+   return tileIndex(target.closest<HTMLElement>('[data-cms-tile]')) ?? focusedTileIndex(target)
 }
 
 function onClipboard(event: ClipboardEvent) {

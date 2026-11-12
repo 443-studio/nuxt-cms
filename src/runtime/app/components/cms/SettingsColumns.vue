@@ -1,59 +1,47 @@
 <template>
-   <div class="cms-settings-columns">
+   <KStack gap="sm">
       <KFieldMessage
          tone="neutral"
          :icon="false"
          message="Choose the columns of the table. Drag the visible columns to change their order."
       />
-      <ul ref="list" class="cms-settings-list">
-         <li
-            v-for="(key, index) in model"
-            :key="key"
-            v-bind="sortable.itemProps(index)"
-            class="cms-settings-item is-draggable"
-            :class="{ 'is-dragging': sortable.dragging.value === index }"
-            tabindex="0"
-         >
-            <KIcon :name="cmsIcon('bars-2')" class="cms-settings-grip" />
-            <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
-            <span class="cms-settings-item-label">{{ labelOf(key) }}</span>
+      <KSortableList v-model="visible" label="Visible columns" size="sm">
+         <template #trailing="{ item }">
             <KSwitch
                :model-value="true"
-               :aria-label="`Hide ${labelOf(key)}`"
+               :aria-label="`Hide ${item.label}`"
                :disabled="model.length === 1"
-               @update:model-value="hide(key)"
+               @update:model-value="hide(String(item.value))"
             />
-         </li>
-      </ul>
-      <span class="k-visually-hidden" aria-live="polite">{{ sortable.announcement.value }}</span>
+         </template>
+      </KSortableList>
 
       <template v-if="hidden.length">
          <KSeparator variant="heading" label="Hidden" :level="3" />
-         <ul class="cms-settings-list">
-            <li v-for="key in hidden" :key="key" class="cms-settings-item is-muted">
-               <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
-               <span class="cms-settings-item-label">{{ labelOf(key) }}</span>
+         <KSortableList :model-value="hidden" label="Hidden columns" size="sm" disabled>
+            <template #trailing="{ item }">
                <KSwitch
                   :model-value="false"
-                  :aria-label="`Show ${labelOf(key)}`"
-                  @update:model-value="show(key)"
+                  :aria-label="`Show ${item.label}`"
+                  @update:model-value="show(String(item.value))"
                />
-            </li>
-         </ul>
+            </template>
+         </KSortableList>
       </template>
-   </div>
+   </KStack>
 </template>
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
+import type { SortableListItem } from '@xleddyl/443-components-vue'
 import {
    FieldMessage as KFieldMessage,
-   Icon as KIcon,
    Separator as KSeparator,
+   SortableList as KSortableList,
+   Stack as KStack,
    Switch as KSwitch,
-   useSortable,
 } from '@xleddyl/443-components-vue'
-import { computed, useTemplateRef } from '#imports'
+import { computed } from '#imports'
 import { TRANSLATIONS_COLUMN } from '../../../shared/translations'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
@@ -65,7 +53,20 @@ const props = defineProps<{
 const model = defineModel<string[]>({ required: true })
 
 const available = computed(() => [...Object.keys(props.fields), ...props.extra])
-const hidden = computed(() => available.value.filter((key) => !model.value.includes(key)))
+function columnItem(key: string): SortableListItem {
+   return { value: key, label: labelOf(key), icon: cmsIcon(iconOf(key)) }
+}
+
+const hidden = computed(() =>
+   available.value.filter((key) => !model.value.includes(key)).map(columnItem)
+)
+
+const visible = computed<SortableListItem[]>({
+   get: () => model.value.map(columnItem),
+   set: (items) => {
+      model.value = items.map((item) => String(item.value))
+   },
+})
 
 const EXTRA_COLUMNS: Record<string, { label: string; icon: string }> = {
    status: { label: 'Status', icon: 'check-circle' },
@@ -89,14 +90,4 @@ function hide(key: string) {
 function show(key: string) {
    model.value = [...model.value, key]
 }
-
-const list = useTemplateRef<HTMLElement>('list')
-
-const sortable = useSortable(list, {
-   items: model,
-   label: labelOf,
-   onMove: (next) => {
-      model.value = next
-   },
-})
 </script>

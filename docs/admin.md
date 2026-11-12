@@ -72,8 +72,9 @@ the allowed count under it. Once the field holds `max` blocks, the add tile and 
 disabled, and so are the block picker, the `+` buttons and **Duplicate** of the visual editor.
 
 **Order.** Drag a tile onto another one to move it there. The target tile is outlined while you
-drag. For a keyboard, focus the grip at the bottom left of a tile and press the left or right arrow
-key; the block editor also carries two move buttons, which is the way on a touch screen.
+drag. The tiles are one tab stop: the arrow keys move the focus between them, and Alt with an arrow
+key moves the focused tile; the block editor also carries two move buttons, which is the way on a
+touch screen.
 
 **Copy and paste.** The `...` menu of a tile has **Copy**, **Cut**, **Paste after** and
 **Duplicate**. With a tile focused, ⌘ C, ⌘ X and ⌘ V (Ctrl outside macOS) do the same; ⌘ V on the
@@ -92,7 +93,8 @@ directly: see [Nested blocks in the visual editor](#nested-blocks-in-the-visual-
 
 **Media lists.** A `blocks` field with one block type that has one `media` field (for example a
 photo gallery) is edited as a media list. **+** opens the media library and adds the file you pick.
-The X on a tile removes it, and a drag changes the order. No editor opens.
+The X on a tile removes it (Delete or Backspace on a focused tile too), and a drag or Alt with an
+arrow key changes the order. No editor opens.
 
 **Visual editor for a field.** When every block of a `blocks` field names a `component`, the field
 also shows **Open visual editor**. It opens the [visual editor](#visual-editor) over the form, on

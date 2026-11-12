@@ -177,7 +177,7 @@
                      variant="outline"
                      padding="none"
                      :animated="false"
-                     class="cms-media-tile is-selectable"
+                     class="cms-media-tile"
                      :aria-label="mediaFilename(item.key)"
                      @click="emitSelect(item)"
                   >
@@ -225,69 +225,49 @@
                :lines="false"
             />
 
-            <KGrid
+            <KTileGrid
                v-if="view === 'grid'"
+               :selected="selection"
+               :items="paged"
+               item-key="key"
+               :item-label="(item: MediaItem) => mediaFilename(item.key)"
+               label="Files"
                :columns="selectable ? 3 : 5"
                min-item-width="10rem"
-               class="cms-media-grid"
+               :selectable="canManage"
+               :drag-data="canMove ? mediaDragData : undefined"
+               @update:selected="setSelection"
+               @activate="(item: MediaItem) => openItem(item)"
+               @item-drag-start="({ items }) => startItemDrag(items)"
+               @item-drag-end="onDragEnd"
             >
-               <KCard
-                  v-for="item in paged"
-                  :key="item.key"
-                  variant="outline"
-                  padding="none"
-                  :animated="false"
-                  :selected="canManage ? isSelected(item.key) : undefined"
-                  role="button"
-                  tabindex="0"
-                  class="cms-media-tile is-selectable"
-                  :class="{ 'is-dragging': draggingKeys.includes(item.key) }"
-                  :draggable="canMove"
-                  :aria-pressed="canManage ? isSelected(item.key) : undefined"
-                  @click="onItemClick(item, $event)"
-                  @keydown.enter.prevent="onItemClick(item, $event)"
-                  @keydown.space.prevent="
-                     canManage ? toggleSelect(item.key, $event) : onItemClick(item, $event)
-                  "
-                  @dragstart="onItemDragStart($event, item)"
-                  @dragend="onDragEnd"
-               >
-                  <KThumbnail
-                     :src="item.url ?? undefined"
-                     :kind="item.type"
-                     rounded="none"
-                     :caption="tileInfo(item)"
-                     :reveal="selection.length ? ['caption'] : ['caption', 'top-start']"
-                  >
-                     <template v-if="canManage" #top-start>
-                        <span @click.stop>
-                           <KCheckbox
-                              :model-value="isSelected(item.key)"
-                              :aria-label="`Select ${mediaFilename(item.key)}`"
-                              tabindex="-1"
-                              @update:model-value="toggleSelect(item.key)"
+               <template #tile="{ item }">
+                  <KCard variant="outline" padding="none" :animated="false" class="cms-media-tile">
+                     <KThumbnail
+                        :src="item.url ?? undefined"
+                        :kind="item.type"
+                        rounded="none"
+                        :caption="tileInfo(item)"
+                     />
+                     <div class="cms-media-meta">
+                        <KTooltip :text="item.key">
+                           <div class="cms-media-name">{{ mediaFilename(item.key) }}</div>
+                        </KTooltip>
+                        <div v-if="query && item.folder" class="cms-media-folder">
+                           <KIcon :name="cmsIcon('folder')" />{{ item.folder }}
+                        </div>
+                        <KStack v-if="!selectable" direction="row">
+                           <KBadge
+                              v-if="usageCount(item.key) !== null"
+                              v-bind="usageBadge(item.key)"
+                              size="sm"
                            />
-                        </span>
-                     </template>
-                  </KThumbnail>
-                  <div class="cms-media-meta">
-                     <KTooltip :text="item.key">
-                        <div class="cms-media-name">{{ mediaFilename(item.key) }}</div>
-                     </KTooltip>
-                     <div v-if="query && item.folder" class="cms-media-folder">
-                        <KIcon :name="cmsIcon('folder')" />{{ item.folder }}
+                           <KSkeleton v-else width="5rem" />
+                        </KStack>
                      </div>
-                     <KStack v-if="!selectable" direction="row">
-                        <KBadge
-                           v-if="usageCount(item.key) !== null"
-                           v-bind="usageBadge(item.key)"
-                           size="sm"
-                        />
-                        <KSkeleton v-else width="5rem" />
-                     </KStack>
-                  </div>
-               </KCard>
-            </KGrid>
+                  </KCard>
+               </template>
+            </KTileGrid>
 
             <KTable
                v-else
@@ -297,19 +277,17 @@
                row-key="key"
                link-key="name"
                :selectable="canManage"
+               :row-draggable="canMove"
+               :drag-data="mediaDragData"
                label="Files"
+               @row-drag-start="({ rows }) => startItemDrag(rows)"
+               @row-drag-end="onDragEnd"
                @row-click="
                   (item: MediaItem, _index: number, event: MouseEvent) => onItemClick(item, event)
                "
             >
                <template #cell-thumb="{ row }">
-                  <span
-                     :draggable="canMove || undefined"
-                     @dragstart="onItemDragStart($event, row)"
-                     @dragend="onDragEnd"
-                  >
-                     <CmsMediaThumb :value="row.key" />
-                  </span>
+                  <CmsMediaThumb :value="row.key" />
                </template>
                <template #cell-name="{ row }">
                   {{ mediaFilename(row.key) }}
@@ -471,6 +449,7 @@ import type {
    BreadcrumbItem,
    ChoiceOption,
    FilterPillOption,
+   RowKey,
    TableColumn,
 } from '@xleddyl/443-components-vue'
 import { computed, onMounted, ref, useTemplateRef, watch } from '#imports'
@@ -479,7 +458,6 @@ import {
    Breadcrumbs as KBreadcrumbs,
    Button as KButton,
    Card as KCard,
-   Checkbox as KCheckbox,
    DropdownMenu as KDropdownMenu,
    EmptyState as KEmptyState,
    FieldMessage as KFieldMessage,
@@ -500,6 +478,7 @@ import {
    Stack as KStack,
    Table as KTable,
    Thumbnail as KThumbnail,
+   TileGrid as KTileGrid,
    Tooltip as KTooltip,
    toast,
    useFileDrop,
@@ -906,6 +885,10 @@ function toggleSelect(key: string, event?: Event) {
    lastSelected.value = key
 }
 
+function setSelection(keys: RowKey[]) {
+   selection.value = keys.map(String)
+}
+
 function selectAll() {
    selection.value = visibleFiles.value.map((item) => item.key)
 }
@@ -928,6 +911,11 @@ const detail = computed(
 
 function emitSelect(item: MediaItem) {
    emit('select', { key: item.key, url: item.url })
+}
+
+function openItem(item: MediaItem) {
+   if (props.selectable) emitSelect(item)
+   else detailKey.value = item.key
 }
 
 function onItemClick(item: MediaItem, event: Event) {
@@ -1227,12 +1215,12 @@ function hasFiles(event: DragEvent) {
    return !!event.dataTransfer?.types.includes('Files')
 }
 
-function onItemDragStart(event: DragEvent, item: MediaItem) {
-   if (!canMove.value || !event.dataTransfer) return
-   const keys = isSelected(item.key) ? [...selection.value] : [item.key]
-   draggingKeys.value = keys
-   event.dataTransfer.effectAllowed = 'move'
-   event.dataTransfer.setData(MEDIA_DRAG, JSON.stringify(keys))
+function mediaDragData(_item: MediaItem, items: MediaItem[]) {
+   return { [MEDIA_DRAG]: JSON.stringify(items.map((entry) => entry.key)) }
+}
+
+function startItemDrag(items: MediaItem[]) {
+   draggingKeys.value = items.map((item) => item.key)
 }
 
 function onFolderDragStart(event: DragEvent, path: string) {
