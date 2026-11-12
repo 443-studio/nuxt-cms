@@ -31,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import tokensHref from '@xleddyl/443-components-vue/tokens.css?url'
+import tokensCss from '@xleddyl/443-components-vue/tokens.css?inline'
 import { computed, onMounted, ref, watch } from 'vue'
 import type { CmsPreviewMode } from '../../shared/index'
 
@@ -40,12 +40,11 @@ const props = defineProps<{ mode: CmsPreviewMode }>()
 const dismissed = ref(false)
 
 onMounted(() => {
-   if (document.querySelector('link[data-cms-tokens]')) return
-   const link = document.createElement('link')
-   link.rel = 'stylesheet'
-   link.href = tokensHref
-   link.dataset.cmsTokens = ''
-   document.head.appendChild(link)
+   if (document.querySelector('style[data-cms-tokens]')) return
+   const style = document.createElement('style')
+   style.textContent = tokensCss
+   style.dataset.cmsTokens = ''
+   document.head.appendChild(style)
 })
 
 watch(

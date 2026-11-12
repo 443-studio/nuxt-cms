@@ -88,7 +88,7 @@ import {
    watch,
 } from '#imports'
 import { Icon as KIcon } from '@xleddyl/443-components-vue'
-import tokensHref from '@xleddyl/443-components-vue/tokens.css?url'
+import tokensCss from '@xleddyl/443-components-vue/tokens.css?inline'
 import cmsConfig from '#cms-config'
 import { cmsPreviewComponents } from '#cms-blocks'
 import type { CmsBlockValue, CmsPreviewFrameMessage, CmsPreviewState } from '../../shared/preview'
@@ -126,7 +126,7 @@ const inline = shallowRef<CmsInlineOverride | null>(null)
 useHead({
    title: 'Preview',
    meta: [{ name: 'robots', content: 'noindex, nofollow' }],
-   link: [{ rel: 'stylesheet', href: tokensHref }],
+   style: [{ key: 'cms-tokens', innerHTML: tokensCss }],
    htmlAttrs: { lang: computed(() => state.value?.locale) },
 })
 
