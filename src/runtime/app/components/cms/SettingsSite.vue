@@ -22,7 +22,7 @@
                   <KFormField
                      label="Title template"
                      name="titleTemplate"
-                     :description="`${TITLE_PLACEHOLDER} is the page title, ${SITE_NAME_PLACEHOLDER} the site name.`"
+                     :help="`${TITLE_PLACEHOLDER} is the page title, ${SITE_NAME_PLACEHOLDER} the site name.`"
                   >
                      <KInput v-model="titleTemplate" :placeholder="DEFAULT_TITLE_TEMPLATE" />
                   </KFormField>

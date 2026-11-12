@@ -13,8 +13,7 @@
                   <KFormField
                      :name="key"
                      :label="fields[key]!.label"
-                     :description="fields[key]!.description"
-                     :icon="cmsIcon(fieldIcon(fields[key]!))"
+                     :help="fields[key]!.description"
                      :required="fields[key]!.required"
                      :disabled="locked.includes(key) || undefined"
                      :highlight="highlighted === key"
@@ -74,7 +73,7 @@ import { useCmsPageQuery } from '../../composables/cms-route'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { entryFormLayout, useCmsSettingsState } from '../../composables/cms-settings'
 import type { CmsResponseIssue } from '../../utils/ui'
-import { cmsIcon, fieldIcon } from '../../utils/ui'
+import { cmsIcon } from '../../utils/ui'
 
 const props = withDefaults(
    defineProps<{

@@ -27,7 +27,7 @@
 
       <template #status>
          <CmsStatusBadge :published="published" :scheduled="scheduled" :at="scheduledAt" />
-         <KBadge v-if="dirty" label="Unsaved changes" tone="warning" dot />
+         <KBadge v-if="dirty" label="Unsaved changes" tone="warning" />
          <KTooltip v-if="lock" :text="lock">
             <KBadge size="sm" variant="outline" label="Read only" />
          </KTooltip>
@@ -84,7 +84,7 @@
                <KStack gap="md">
                   <KFormField
                      label="Publish at"
-                     description="The item stays hidden from the site until this moment."
+                     help="The item stays hidden from the site until this moment."
                   >
                      <CmsFieldInput v-model="scheduleDraft" :field="publishedAtField" />
                   </KFormField>

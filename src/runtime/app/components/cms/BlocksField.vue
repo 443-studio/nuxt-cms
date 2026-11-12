@@ -224,8 +224,7 @@
                   <KFormField
                      :name="editorFieldName(blockKey)"
                      :label="editorBlock.fields[blockKey]!.label"
-                     :description="editorBlock.fields[blockKey]!.description"
-                     :icon="cmsIcon(fieldIcon(editorBlock.fields[blockKey]!))"
+                     :help="editorBlock.fields[blockKey]!.description"
                      :required="editorBlock.fields[blockKey]!.required"
                   >
                      <CmsFieldInput
@@ -365,7 +364,7 @@ import { useCmsOverlayFlag } from '../../composables/cms-route'
 import type { CmsBlockEditorScope } from '../../utils/block-editor'
 import { CMS_BLOCK_EDITOR, CmsBlockEditorProvider } from '../../utils/block-editor'
 import { clipboardTarget } from '../../utils/keyboard'
-import { cmsIcon, fieldIcon } from '../../utils/ui'
+import { cmsIcon } from '../../utils/ui'
 
 const props = defineProps<{
    field: FieldConfig
