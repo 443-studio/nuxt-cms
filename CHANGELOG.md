@@ -1,6 +1,100 @@
 # Changelog
 
 
+## v0.10.0
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.4...v0.10.0)
+
+### 🚀 Enhancements
+
+- Server lifecycle hooks and signed webhooks ([47548c4](https://github.com/443-studio/nuxt-cms/commit/47548c4))
+- Code-first roles and permissions for admin accounts ([38669f8](https://github.com/443-studio/nuxt-cms/commit/38669f8))
+- Media focal point and CmsImage component ([7a1ac8e](https://github.com/443-studio/nuxt-cms/commit/7a1ac8e))
+- Richer showIf operators, groups and block-level conditions ([05671ca](https://github.com/443-studio/nuxt-cms/commit/05671ca))
+- Default, unique, immutable and min/max field options ([f7fa077](https://github.com/443-studio/nuxt-cms/commit/f7fa077))
+- Translation progress, copy and clear actions in the admin ([ddea692](https://github.com/443-studio/nuxt-cms/commit/ddea692))
+- Route patterns for content entries with path, byPath and useCmsRoute ([99b06f2](https://github.com/443-studio/nuxt-cms/commit/99b06f2))
+- SEO kit with site settings, useCmsSeo, sitemap.xml, robots.txt and per-item noindex ([d2d56c2](https://github.com/443-studio/nuxt-cms/commit/d2d56c2))
+- Redirects with automatic 301 when a content slug changes ([2fc3c3d](https://github.com/443-studio/nuxt-cms/commit/2fc3c3d))
+- Shareable expiring draft preview links ([a1c9a55](https://github.com/443-studio/nuxt-cms/commit/a1c9a55))
+- Link field with internal targets resolved to live paths ([4d7bc47](https://github.com/443-studio/nuxt-cms/commit/4d7bc47))
+- Roles and field features cover routes, redirects, preview links and links ([11f1f2f](https://github.com/443-studio/nuxt-cms/commit/11f1f2f))
+- Undo, redo and keyboard shortcuts in the visual editor ([629212a](https://github.com/443-studio/nuxt-cms/commit/629212a))
+- Three-panel visual editor with a persistent block tree ([2771d6f](https://github.com/443-studio/nuxt-cms/commit/2771d6f))
+- Copy, cut and paste blocks across editors and entries ([6f2f2af](https://github.com/443-studio/nuxt-cms/commit/6f2f2af))
+- Searchable block picker with groups, tags and an anchored popover ([55559f5](https://github.com/443-studio/nuxt-cms/commit/55559f5))
+- Click a marked field in the visual editor canvas to open it in the inspector ([509a0ca](https://github.com/443-studio/nuxt-cms/commit/509a0ca))
+- Edit text fields in place in the visual editor canvas ([a33f0d9](https://github.com/443-studio/nuxt-cms/commit/a33f0d9))
+- Block tree and picker on the KTree, Popover and KCommandList APIs ([ef0d578](https://github.com/443-studio/nuxt-cms/commit/ef0d578))
+- Layout option on blocks for the tile modal and the visual editor inspector ([0af9224](https://github.com/443-studio/nuxt-cms/commit/0af9224))
+- Block presets saved from a block and inserted from the block picker ([1d58460](https://github.com/443-studio/nuxt-cms/commit/1d58460))
+- Block presets match fields by block schema signature ([8ec3af5](https://github.com/443-studio/nuxt-cms/commit/8ec3af5))
+- Visual editor follows roles, field options and translation actions ([999408d](https://github.com/443-studio/nuxt-cms/commit/999408d))
+- Nested blocks in config, storage, GraphQL and the block form ([9595664](https://github.com/443-studio/nuxt-cms/commit/9595664))
+- Nested blocks in the visual editor ([29ee115](https://github.com/443-studio/nuxt-cms/commit/29ee115))
+- Admin footer shows the nuxt-cms version with a link to GitHub ([f26dd4b](https://github.com/443-studio/nuxt-cms/commit/f26dd4b))
+
+### 🩹 Fixes
+
+- Custom admin fields follow the disabled state of the form ([19bd668](https://github.com/443-studio/nuxt-cms/commit/19bd668))
+- Locale switch stays usable in a read-only form ([b36189c](https://github.com/443-studio/nuxt-cms/commit/b36189c))
+- Site share image counts as media usage, hidden site keeps robots.txt open ([6a42af4](https://github.com/443-studio/nuxt-cms/commit/6a42af4))
+- Tags and multi-select fields resolve to an empty list on rows saved before the field existed ([ae61579](https://github.com/443-studio/nuxt-cms/commit/ae61579))
+- Playground home page uses KIcon instead of the removed CmsIcon ([97b7e53](https://github.com/443-studio/nuxt-cms/commit/97b7e53))
+- Entry form tabs name their tab list ([7003f5d](https://github.com/443-studio/nuxt-cms/commit/7003f5d))
+- Media usage names only the entries the role can read ([3021193](https://github.com/443-studio/nuxt-cms/commit/3021193))
+- Generate the roles template as JavaScript so production builds parse it ([a32d01e](https://github.com/443-studio/nuxt-cms/commit/a32d01e))
+- Paste and presets keep values that break the target field rules ([665e6ce](https://github.com/443-studio/nuxt-cms/commit/665e6ce))
+- Hidden blocks on page entries ([8ed9354](https://github.com/443-studio/nuxt-cms/commit/8ed9354))
+- Editor shortcuts and async races ([32179b7](https://github.com/443-studio/nuxt-cms/commit/32179b7))
+- Sitemap and robots ignore forwarded hosts by default ([3682a30](https://github.com/443-studio/nuxt-cms/commit/3682a30))
+- Unique, publish and redirect edge cases ([43a0627](https://github.com/443-studio/nuxt-cms/commit/43a0627))
+- Pre-bundle zod for the admin so Vite does not reload the page ([cdb651e](https://github.com/443-studio/nuxt-cms/commit/cdb651e))
+- Catch-all page 404s are fatal only on the client so the server does not log them ([63b37e9](https://github.com/443-studio/nuxt-cms/commit/63b37e9))
+- Lists do not reload when only the URL hash changes ([16b9337](https://github.com/443-studio/nuxt-cms/commit/16b9337))
+- Media folder cards keep the icon beside the name in the picker ([cdfa1fb](https://github.com/443-studio/nuxt-cms/commit/cdfa1fb))
+- Playground site loads the 443 styles and its blocks share one column ([278ed62](https://github.com/443-studio/nuxt-cms/commit/278ed62))
+
+### 💅 Refactors
+
+- Block tree on 443-components 0.16.91 ([aa2d25f](https://github.com/443-studio/nuxt-cms/commit/aa2d25f))
+- Admin layout, sidebar and settings modal on the KDashboardLayout pattern ([dcb19fd](https://github.com/443-studio/nuxt-cms/commit/dcb19fd))
+- Every admin overlay lives in the URL hash ([6ce97e9](https://github.com/443-studio/nuxt-cms/commit/6ce97e9))
+- Drawers and form modals on KFormDrawer and KFormModal ([7d757af](https://github.com/443-studio/nuxt-cms/commit/7d757af))
+- Page headers with breadcrumbs as titles ([c0a7846](https://github.com/443-studio/nuxt-cms/commit/c0a7846))
+- Lists with toolbars, full-width pagination and remembered filters ([59009ef](https://github.com/443-studio/nuxt-cms/commit/59009ef))
+- Forms, buttons, headings and loading states ([6c99228](https://github.com/443-studio/nuxt-cms/commit/6c99228))
+- Admin on 443-components 0.16.92 page header trail, list filters and navigation composables ([1ff5b51](https://github.com/443-studio/nuxt-cms/commit/1ff5b51))
+- Editor tabs in the URL and unused form props ([c881a9d](https://github.com/443-studio/nuxt-cms/commit/c881a9d))
+- Admin layout and stacks on KRoot, KStack and KGrid ([e72e857](https://github.com/443-studio/nuxt-cms/commit/e72e857))
+- Page tree and nested block list on KTree ([e2940db](https://github.com/443-studio/nuxt-cms/commit/e2940db))
+- Media library badges, progress, folders, list view and facts on 443 components ([2f3496a](https://github.com/443-studio/nuxt-cms/commit/2f3496a))
+- Import, share, hints, status and warnings on 443 components ([50e5de5](https://github.com/443-studio/nuxt-cms/commit/50e5de5))
+- Drag and drop on useSortable and tooltips on KTooltip ([2e7a141](https://github.com/443-studio/nuxt-cms/commit/2e7a141))
+- Footer link on KButton and brand glyph as a registered icon ([1e4377b](https://github.com/443-studio/nuxt-cms/commit/1e4377b))
+- Cms.css cleanup of duplicates, overrides and token bypasses ([fbad340](https://github.com/443-studio/nuxt-cms/commit/fbad340))
+- Admin lists fill the page height with a row count and select all ([d4d9d4f](https://github.com/443-studio/nuxt-cms/commit/d4d9d4f))
+- Media thumbnails, focal point and add tiles on 443 components ([98bd125](https://github.com/443-studio/nuxt-cms/commit/98bd125))
+- Block tiles and media grid on TileGrid, settings columns on SortableList ([697d213](https://github.com/443-studio/nuxt-cms/commit/697d213))
+- Link rows on RecordList and Tree, accordion, popover width ([7cd54e6](https://github.com/443-studio/nuxt-cms/commit/7cd54e6))
+- Visual editor workspace on WorkspaceLayout ([f9ddb58](https://github.com/443-studio/nuxt-cms/commit/f9ddb58))
+- Block picker popover as a sheet on phones ([b185706](https://github.com/443-studio/nuxt-cms/commit/b185706))
+- Admin on 443-components 0.16.98 field highlight, search items, locale dots and file dialogs ([97a880d](https://github.com/443-studio/nuxt-cms/commit/97a880d))
+- Media library fills the page height ([bcce6f6](https://github.com/443-studio/nuxt-cms/commit/bcce6f6))
+- Admin root and site-side styles on 443 tokens ([3f4752b](https://github.com/443-studio/nuxt-cms/commit/3f4752b))
+- Editor headers on 443-components 0.16.99 ([44a5bbc](https://github.com/443-studio/nuxt-cms/commit/44a5bbc))
+- Every admin page is full width with the same header and spacing ([711254f](https://github.com/443-studio/nuxt-cms/commit/711254f))
+
+### 🏡 Chore
+
+- Playground migrations for routes, SEO, redirects, preview links and link field ([989af98](https://github.com/443-studio/nuxt-cms/commit/989af98))
+- Bump 443-components to 0.16.100 ([74d27d1](https://github.com/443-studio/nuxt-cms/commit/74d27d1))
+- Bump 443-components to 0.16.101 ([d0fa605](https://github.com/443-studio/nuxt-cms/commit/d0fa605))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.9.4
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.3...v0.9.4)
