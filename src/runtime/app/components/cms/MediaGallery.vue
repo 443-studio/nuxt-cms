@@ -258,7 +258,7 @@
                         <KTooltip :text="item.key">
                            <div class="cms-media-name">{{ mediaFilename(item.key) }}</div>
                         </KTooltip>
-                        <div v-if="query && item.folder" class="cms-media-folder">
+                        <div v-if="query && item.folder" class="cms-icon-hint">
                            <KIcon :name="cmsIcon('folder')" />{{ item.folder }}
                         </div>
                         <KStack v-if="!selectable" direction="row">
@@ -297,7 +297,7 @@
                </template>
                <template #cell-name="{ row }">
                   {{ mediaFilename(row.key) }}
-                  <span v-if="query && row.folder" class="cms-media-folder">
+                  <span v-if="query && row.folder" class="cms-icon-hint">
                      <KIcon :name="cmsIcon('folder')" />{{ row.folder }}
                   </span>
                </template>

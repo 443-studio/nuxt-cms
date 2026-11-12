@@ -13,7 +13,7 @@
                :field="state.field"
                annotate
             />
-            <div v-if="!visibleCount && canAdd" class="cms-preview-empty">
+            <div v-if="!visibleCount && canAdd" class="cms-preview-empty" v-bind="tokenRoot">
                <button
                   type="button"
                   class="cms-preview-empty-button"
@@ -31,7 +31,7 @@
                :field="state.field"
                annotate
             />
-            <div v-if="!visibleCount && canAdd" class="cms-preview-empty">
+            <div v-if="!visibleCount && canAdd" class="cms-preview-empty" v-bind="tokenRoot">
                <button
                   type="button"
                   class="cms-preview-empty-button"
@@ -59,7 +59,7 @@
             @inline="inline = $event"
          />
       </template>
-      <p v-else-if="standalone" class="cms-preview-notice">
+      <p v-else-if="standalone" class="cms-preview-notice" v-bind="tokenRoot">
          This page shows the live preview of the visual editor. Open an item in the admin to use it.
       </p>
    </div>
@@ -88,6 +88,7 @@ import {
    watch,
 } from '#imports'
 import { Icon as KIcon } from '@xleddyl/443-components-vue'
+import tokensHref from '@xleddyl/443-components-vue/tokens.css?url'
 import cmsConfig from '#cms-config'
 import { cmsPreviewComponents } from '#cms-blocks'
 import type { CmsBlockValue, CmsPreviewFrameMessage, CmsPreviewState } from '../../shared/preview'
@@ -104,7 +105,12 @@ import type { CmsBlockItem } from '../blocks/resolve'
 import { useCmsLinkTargets } from '../composables/cms-link-targets'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import PreviewOverlay from '../preview/PreviewOverlay.vue'
-import { cmsFieldMarking, cmsPreviewEditable } from '../preview/field-marker'
+import {
+   cmsFieldMarking,
+   cmsPreviewEditable,
+   cmsPreviewTheme,
+   cmsTokenRoot,
+} from '../preview/field-marker'
 
 definePageMeta({ middleware: 'cms-auth' })
 
@@ -120,12 +126,15 @@ const inline = shallowRef<CmsInlineOverride | null>(null)
 useHead({
    title: 'Preview',
    meta: [{ name: 'robots', content: 'noindex, nofollow' }],
+   link: [{ rel: 'stylesheet', href: tokensHref }],
    htmlAttrs: { lang: computed(() => state.value?.locale) },
 })
 
 const entry = computed(() =>
    state.value ? (cmsConfig as CmsConfig)[state.value.entry] : undefined
 )
+
+const tokenRoot = computed(() => cmsTokenRoot(cmsPreviewTheme.value))
 
 const blockEntry = computed(() => state.value?.entry as CmsBlockEntryName | undefined)
 
@@ -208,6 +217,7 @@ function onMessage(event: MessageEvent) {
       case 'render':
          if (inline.value?.settled) inline.value = null
          state.value = message.state
+         cmsPreviewTheme.value = message.state.theme
          version.value++
          break
       case 'highlight':
@@ -242,21 +252,11 @@ onBeforeUnmount(() => {
 
 <style>
 .cms-preview-overlay {
-   --cms-preview-accent: #5b5bd6;
-   --cms-preview-ink: #111114;
-   --cms-preview-surface: #ffffff;
-   --cms-preview-line: rgb(17 17 20 / 0.12);
-   --cms-preview-danger: #d9383a;
    position: fixed;
    inset: 0;
    z-index: 2147483000;
    pointer-events: none;
-   font-family:
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      sans-serif;
+   font-family: var(--k-font-sans);
    font-size: 12px;
    line-height: 1;
 }
@@ -264,23 +264,23 @@ onBeforeUnmount(() => {
 .cms-preview-outline {
    position: absolute;
    box-sizing: border-box;
-   border: 1px dashed color-mix(in oklab, var(--cms-preview-accent) 70%, transparent);
-   border-radius: 2px;
+   border: 1px dashed color-mix(in oklab, var(--k-accent) 70%, transparent);
+   border-radius: var(--k-radius-xs);
 }
 
 .cms-preview-outline.is-highlighted {
    border-style: solid;
-   background: color-mix(in oklab, var(--cms-preview-accent) 8%, transparent);
+   background: color-mix(in oklab, var(--k-accent) 8%, transparent);
 }
 
 .cms-preview-outline.is-selected {
-   border: 2px solid var(--cms-preview-accent);
-   box-shadow: 0 0 0 4px color-mix(in oklab, var(--cms-preview-accent) 14%, transparent);
+   border: 2px solid var(--k-accent);
+   box-shadow: 0 0 0 4px var(--k-ring-soft);
 }
 
 .cms-preview-outline.is-drop-target {
-   border: 2px dashed var(--cms-preview-accent);
-   background: color-mix(in oklab, var(--cms-preview-accent) 6%, transparent);
+   border: 2px dashed var(--k-accent);
+   background: color-mix(in oklab, var(--k-accent) 6%, transparent);
 }
 
 .cms-preview-label {
@@ -288,9 +288,9 @@ onBeforeUnmount(() => {
    top: -1px;
    left: -1px;
    padding: 4px 7px;
-   border-radius: 2px 0 6px 0;
-   background: var(--cms-preview-accent);
-   color: #ffffff;
+   border-radius: var(--k-radius-xs) 0 var(--k-radius-sm) 0;
+   background: var(--k-accent);
+   color: var(--k-accent-contrast);
    font-weight: 600;
    letter-spacing: 0.01em;
    white-space: nowrap;
@@ -299,14 +299,14 @@ onBeforeUnmount(() => {
 .cms-preview-field {
    position: absolute;
    box-sizing: border-box;
-   outline: 1px solid color-mix(in oklab, var(--cms-preview-accent) 55%, transparent);
+   outline: 1px solid color-mix(in oklab, var(--k-accent) 55%, transparent);
    outline-offset: 2px;
-   border-radius: 2px;
-   background: color-mix(in oklab, var(--cms-preview-accent) 5%, transparent);
+   border-radius: var(--k-radius-xs);
+   background: color-mix(in oklab, var(--k-accent) 5%, transparent);
 }
 
 .cms-preview-field.is-editing {
-   outline: 2px solid var(--cms-preview-accent);
+   outline: 2px solid var(--k-accent);
    background: none;
 }
 
@@ -316,10 +316,10 @@ onBeforeUnmount(() => {
    left: -3px;
    margin-top: 6px;
    padding: 3px 6px;
-   border-radius: 4px;
-   background: var(--cms-preview-surface);
-   color: var(--cms-preview-accent);
-   box-shadow: 0 0 0 1px color-mix(in oklab, var(--cms-preview-accent) 40%, transparent);
+   border-radius: var(--k-radius-xs);
+   background: var(--k-elevated);
+   color: var(--k-accent-text);
+   box-shadow: 0 0 0 1px var(--k-accent-line);
    font-size: 11px;
    font-weight: 600;
    white-space: nowrap;
@@ -338,11 +338,9 @@ onBeforeUnmount(() => {
    gap: 2px;
    padding: 3px;
    transform: translateX(-100%);
-   border-radius: 8px;
-   background: var(--cms-preview-surface);
-   box-shadow:
-      0 0 0 1px var(--cms-preview-line),
-      0 8px 24px -8px rgb(17 17 20 / 0.28);
+   border-radius: var(--k-radius-md);
+   background: var(--k-elevated);
+   box-shadow: var(--k-shadow-overlay);
    pointer-events: auto;
 }
 
@@ -364,12 +362,13 @@ onBeforeUnmount(() => {
 .cms-preview-tool {
    width: 28px;
    height: 28px;
-   border-radius: 6px;
-   color: var(--cms-preview-ink);
+   border-radius: var(--k-radius-sm);
+   color: var(--k-text);
+   transition: background-color var(--k-duration) var(--k-ease);
 }
 
 .cms-preview-tool:hover:not(:disabled) {
-   background: rgb(17 17 20 / 0.06);
+   background: var(--k-hover);
 }
 
 .cms-preview-tool:disabled {
@@ -378,7 +377,7 @@ onBeforeUnmount(() => {
 }
 
 .cms-preview-tool.is-danger {
-   color: var(--cms-preview-danger);
+   color: var(--k-danger-text);
 }
 
 .cms-preview-handle {
@@ -388,8 +387,8 @@ onBeforeUnmount(() => {
 
 .cms-preview-overlay .cms-preview-tool:focus-visible,
 .cms-preview-overlay .cms-preview-insert:focus-visible,
-.cms-preview .cms-preview-empty .cms-preview-empty-button:focus-visible {
-   outline: 2px solid var(--cms-preview-accent);
+.cms-preview .cms-preview-empty-button:focus-visible {
+   outline: 2px solid var(--k-ring);
    outline-offset: 2px;
 }
 
@@ -397,7 +396,7 @@ onBeforeUnmount(() => {
    width: 1px;
    height: 18px;
    margin: 0 2px;
-   background: var(--cms-preview-line);
+   background: var(--k-line);
 }
 
 .cms-preview-overlay svg {
@@ -411,15 +410,15 @@ onBeforeUnmount(() => {
    width: 26px;
    height: 26px;
    margin: -13px 0 0 -13px;
-   border-radius: 999px;
-   background: var(--cms-preview-accent);
-   color: #ffffff;
-   box-shadow: 0 2px 8px -2px rgb(17 17 20 / 0.4);
+   border-radius: var(--k-radius-full);
+   background: var(--k-accent);
+   color: var(--k-accent-contrast);
+   box-shadow: var(--k-shadow-sm);
    opacity: 0;
    transform: scale(0.85);
    transition:
-      opacity 140ms ease,
-      transform 140ms ease;
+      opacity var(--k-duration) var(--k-ease),
+      transform var(--k-duration) var(--k-ease);
    pointer-events: auto;
 }
 
@@ -439,9 +438,9 @@ onBeforeUnmount(() => {
    position: absolute;
    height: 3px;
    margin-top: -1.5px;
-   border-radius: 3px;
-   background: var(--cms-preview-accent);
-   box-shadow: 0 0 0 3px color-mix(in oklab, var(--cms-preview-accent) 20%, transparent);
+   border-radius: var(--k-radius-full);
+   background: var(--k-accent);
+   box-shadow: 0 0 0 3px var(--k-ring-soft);
 }
 
 .cms-preview-dropline.is-vertical {
@@ -469,17 +468,17 @@ onBeforeUnmount(() => {
 .cms-preview-empty-button {
    gap: 8px;
    padding: 12px 18px;
-   border: 1px dashed #5b5bd6;
-   border-radius: 10px;
-   color: #5b5bd6;
-   font-family:
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      sans-serif;
+   border: 1px dashed var(--k-accent-line);
+   border-radius: var(--k-radius-lg);
+   color: var(--k-accent-text);
+   font-family: var(--k-font-sans);
    font-size: 14px;
    font-weight: 600;
+   transition: background-color var(--k-duration) var(--k-ease);
+}
+
+.cms-preview-empty-button:hover {
+   background: color-mix(in oklab, var(--k-accent) 6%, transparent);
 }
 
 .cms-preview-empty-button svg {
@@ -498,7 +497,6 @@ onBeforeUnmount(() => {
 
 .cms-preview-empty-button.is-nested:hover {
    opacity: 1;
-   background: color-mix(in oklab, #5b5bd6 6%, transparent);
 }
 
 .cms-preview-empty-button.is-nested svg {
@@ -510,13 +508,8 @@ onBeforeUnmount(() => {
    max-width: 32rem;
    margin: 64px auto;
    padding: 0 16px;
-   font-family:
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      sans-serif;
-   color: #6b6b75;
+   font-family: var(--k-font-sans);
+   color: var(--k-text-muted);
    text-align: center;
 }
 </style>

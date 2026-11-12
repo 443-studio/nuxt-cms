@@ -20,15 +20,11 @@
             role="status"
             :icon="cmsIcon('link')"
             title="Link ready"
-            class="cms-share-created"
          >
-            <p>Copy it now: for security it is stored hashed and does not show again.</p>
-            <KInput
-               :model-value="created"
-               readonly
-               aria-label="Preview link"
-               class="cms-share-url k-mono"
-            />
+            <KStack gap="sm">
+               <span>Copy it now: for security it is stored hashed and does not show again.</span>
+               <KInput :model-value="created" readonly aria-label="Preview link" class="k-mono" />
+            </KStack>
             <template #actions>
                <KCopyButton
                   :value="created"

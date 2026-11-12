@@ -1,6 +1,5 @@
-import { createApp, h } from 'vue'
+import { createApp, defineAsyncComponent, h } from 'vue'
 import { defineNuxtPlugin } from '#imports'
-import CmsPreviewBanner from '../preview/CmsPreviewBanner.vue'
 import { useCmsPreviewState } from '../composables/cms-preview-mode'
 
 export default defineNuxtPlugin({
@@ -8,6 +7,7 @@ export default defineNuxtPlugin({
    dependsOn: ['nuxt-cms:preview'],
    setup(nuxtApp) {
       const state = useCmsPreviewState()
+      const CmsPreviewBanner = defineAsyncComponent(() => import('../preview/CmsPreviewBanner.vue'))
       nuxtApp.hook('app:mounted', () => {
          const host = document.createElement('div')
          host.setAttribute('data-cms-preview-banner', '')

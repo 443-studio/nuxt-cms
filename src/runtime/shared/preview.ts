@@ -93,6 +93,14 @@ export interface CmsPreviewMedia {
    focalY: number | null
 }
 
+export type CmsPreviewTheme = 'system' | 'light' | 'dark'
+
+const PREVIEW_THEMES: readonly CmsPreviewTheme[] = ['system', 'light', 'dark']
+
+export function readPreviewTheme(value: unknown): CmsPreviewTheme {
+   return PREVIEW_THEMES.find((theme) => theme === value) ?? 'system'
+}
+
 export interface CmsPreviewState {
    entry: string
    field: string
@@ -103,6 +111,7 @@ export interface CmsPreviewState {
    selected: CmsBlockPath | null
    editable: boolean
    lockedFields: string[]
+   theme: CmsPreviewTheme
 }
 
 export type CmsPreviewHostMessage =
@@ -279,6 +288,7 @@ export function parseHostMessage(data: unknown): CmsPreviewHostMessage | null {
          lockedFields: Array.isArray(state.lockedFields)
             ? state.lockedFields.filter((path): path is string => typeof path === 'string')
             : [],
+         theme: readPreviewTheme(state.theme),
       },
    }
 }

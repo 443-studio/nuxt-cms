@@ -1,5 +1,5 @@
 <template>
-   <KRoot class="cms-scope is-canvas" :theme="theme" preset="default">
+   <KRoot class="is-canvas" document :theme="theme" preset="default">
       <KAuthLogout :logout="clear" :account="account" login-to="/cms/login">
          <template #brand>
             <CmsBrandMark size="lg" hide-text />

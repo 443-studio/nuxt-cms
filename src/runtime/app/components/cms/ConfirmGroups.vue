@@ -2,7 +2,7 @@
    <KStack gap="md">
       <KStack v-for="group in groups" :key="group.title" as="section" gap="xs">
          <KTooltip :text="group.title">
-            <h3 class="cms-confirm-group-title">{{ group.title }}</h3>
+            <h3 class="cms-confirm-group-title k-mono">{{ group.title }}</h3>
          </KTooltip>
          <KRecordList :items="group.items" :label="group.title" @row-click="emit('close')" />
          <KFieldMessage v-if="group.note" tone="neutral" :icon="false" :message="group.note" />

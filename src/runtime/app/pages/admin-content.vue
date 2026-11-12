@@ -34,9 +34,9 @@
       </template>
 
       <template v-if="config.route" #content-start="{ locale }">
-         <div class="cms-editor-address">
+         <KStack gap="xs">
             <span class="k-label">Page address</span>
-            <div class="cms-editor-address-row">
+            <KStack direction="row" align="center" gap="sm">
                <span
                   class="cms-editor-address-path k-mono"
                   :class="{ 'is-empty': !addressOf(formState, locale) }"
@@ -53,14 +53,14 @@
                   variant="ghost"
                   tone="neutral"
                />
-            </div>
+            </KStack>
             <KFieldMessage
                v-if="addressHint(locale)"
                tone="neutral"
                :icon="false"
                :message="addressHint(locale)"
             />
-         </div>
+         </KStack>
       </template>
 
       <template #actions="{ compact }">

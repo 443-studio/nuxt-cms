@@ -1,6 +1,6 @@
 <template>
-   <div class="cms-link-field">
-      <div class="cms-link-target">
+   <KStack gap="sm">
+      <KStack direction="row" align="center" gap="sm" wrap>
          <KFieldBoundary v-if="modeOptions.length > 1" auxiliary>
             <KSegmentedControl
                v-model="mode"
@@ -27,10 +27,10 @@
             class="cms-link-input k-mono"
             :placeholder="field.placeholder ?? 'https://, /path, mailto:, tel: or #anchor'"
          />
-      </div>
+      </KStack>
       <KFieldMessage v-if="warning" tone="warning" :message="warning" />
       <KFieldBoundary auxiliary>
-         <div class="cms-link-extra">
+         <KStack direction="row" align="center" gap="md" wrap>
             <KInput
                v-if="field.withLabel"
                v-model="labelValue"
@@ -39,9 +39,9 @@
                placeholder="Link text"
             />
             <KSwitch v-model="newTabValue" size="sm" label="Open in a new tab" />
-         </div>
+         </KStack>
       </KFieldBoundary>
-   </div>
+   </KStack>
 </template>
 
 <script setup lang="ts">
@@ -65,6 +65,7 @@ import {
    FieldMessage as KFieldMessage,
    Input as KInput,
    SegmentedControl as KSegmentedControl,
+   Stack as KStack,
    Switch as KSwitch,
    toast,
 } from '@xleddyl/443-components-vue'

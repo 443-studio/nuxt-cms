@@ -32,7 +32,7 @@
                <component
                   :is="mediaOnly ? 'div' : 'button'"
                   :type="mediaOnly ? undefined : 'button'"
-                  class="cms-block-preview"
+                  class="cms-tile-preview"
                   :aria-label="mediaOnly ? undefined : `Edit ${labelOf(item)}`"
                   @click="onPreviewClick(index)"
                >
@@ -67,7 +67,7 @@
                   </KThumbnail>
                </component>
 
-               <div v-if="!mediaOnly" class="cms-block-bar">
+               <div v-if="!mediaOnly" class="cms-tile-bar">
                   <KButton
                      v-if="!disabled"
                      data-cms-grip
@@ -79,7 +79,7 @@
                      tooltip="Drag to reorder"
                   />
                   <KTooltip :text="barTitle(item)">
-                     <span class="cms-block-bar-name">{{ barLabel(item) }}</span>
+                     <span class="cms-tile-name">{{ barLabel(item) }}</span>
                   </KTooltip>
                   <KTooltip v-if="hasMissingMedia(item)" text="Not found in the media library">
                      <span class="cms-block-missing-icon">

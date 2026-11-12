@@ -507,6 +507,11 @@ reads nothing from the public API: the admin sends the unsaved item with `postMe
 sides check the origin and the sender window of every message. A reload of the iframe, or a hot
 reload in development, asks the admin for the data again.
 
+The outlines, toolbars and "Add a block" placeholders that the editor draws in the canvas use the
+design tokens of the admin (`@xleddyl/443-components-vue/tokens.css`, loaded only on this page and
+scoped to the `.k-root` elements of the overlay), and follow the light or dark theme of the admin,
+which comes with the data. The styles of the site are not touched.
+
 The preview resolves translations like the GraphQL API does, and the admin sends the media objects
 (`url`, `alt`, `type`, `width`, `height`) of the media library, so a block component receives the
 same props as on the site. Relations are passed as ids. Each block root gets `data-cms-block`

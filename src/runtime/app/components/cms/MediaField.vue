@@ -8,7 +8,7 @@
    >
       <button
          type="button"
-         class="cms-media-single-preview"
+         class="cms-tile-preview"
          aria-label="Replace media"
          :disabled="disabled || undefined"
          @click="openGallery"
@@ -22,9 +22,9 @@
             missing-text="Not found in the media library"
          />
       </button>
-      <div class="cms-media-single-bar">
+      <div class="cms-tile-bar">
          <KTooltip :text="model">
-            <span class="cms-media-single-name">{{ mediaFilename(model) }}</span>
+            <span class="cms-tile-name">{{ mediaFilename(model) }}</span>
          </KTooltip>
          <KStack v-if="!disabled" direction="row" gap="none" align="center">
             <KButton

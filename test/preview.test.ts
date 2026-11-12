@@ -259,8 +259,37 @@ describe('preview message protocol', () => {
       }
       expect(parseHostMessage(previewEnvelope({ type: 'render', state }))).toEqual({
          type: 'render',
-         state: { ...state, blocks: [{ type: 'text' }], editable: true, lockedFields: [] },
+         state: {
+            ...state,
+            blocks: [{ type: 'text' }],
+            editable: true,
+            lockedFields: [],
+            theme: 'system',
+         },
       })
+   })
+
+   it('reads the admin theme of a render message, system unless light or dark', () => {
+      const state = {
+         entry: 'news',
+         field: 'body',
+         locale: 'en',
+         blocks: [],
+         item: null,
+         media: {},
+         selected: null,
+      }
+      const parse = (theme: unknown) => {
+         const message = parseHostMessage(
+            previewEnvelope({ type: 'render', state: { ...state, theme } })
+         )
+         return message?.type === 'render' ? message.state.theme : undefined
+      }
+      expect(parse('dark')).toBe('dark')
+      expect(parse('light')).toBe('light')
+      expect(parse('system')).toBe('system')
+      expect(parse('sepia')).toBe('system')
+      expect(parse(undefined)).toBe('system')
    })
 
    it('keeps the string paths of the locked fields of a render message', () => {

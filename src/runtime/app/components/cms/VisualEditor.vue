@@ -407,6 +407,7 @@ import {
    WorkspaceLayout as KWorkspaceLayout,
    useFieldHighlight,
    useForm,
+   useTheme,
 } from '@xleddyl/443-components-vue'
 import {
    computed,
@@ -1251,6 +1252,8 @@ const media = computed(() =>
 
 const blocksFields = computed(() => ({ [props.fieldKey]: blocksField.value }))
 
+const { resolved: adminTheme } = useTheme()
+
 const previewState = computed<CmsPreviewState>(() => ({
    entry: props.entryName,
    field: props.fieldKey,
@@ -1260,6 +1263,7 @@ const previewState = computed<CmsPreviewState>(() => ({
    media: media.value,
    selected: selected.value,
    editable: !props.readonly,
+   theme: adminTheme.value,
    lockedFields: lockedInlineFields({
       fields: props.content ? props.fields : null,
       values: state.value,

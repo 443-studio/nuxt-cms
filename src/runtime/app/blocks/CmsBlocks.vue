@@ -10,6 +10,7 @@
       v-if="placeholder"
       type="button"
       class="cms-preview-empty-button is-nested"
+      v-bind="cmsTokenRoot(cmsPreviewTheme)"
       :data-cms-insert="placeholder"
    >
       <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -25,7 +26,7 @@
 import type { PropType } from 'vue'
 import type { CmsBlockEntryName } from '#cms-types'
 import { computed, inject, toRaw } from '#imports'
-import { cmsPreviewEditable } from '../preview/field-marker'
+import { cmsPreviewEditable, cmsPreviewTheme, cmsTokenRoot } from '../preview/field-marker'
 import { CMS_BLOCK_PARENT, CmsBlockNode } from './node'
 import type { CmsBlockItem, CmsBlockParent, ResolvedCmsBlock } from './resolve'
 import { cmsBlockAnnotation, cmsBlockScope, cmsBlockTypeName, resolveCmsBlocks } from './resolve'

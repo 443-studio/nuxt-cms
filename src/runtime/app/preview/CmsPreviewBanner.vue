@@ -1,5 +1,11 @@
 <template>
-   <div v-if="!dismissed" class="cms-preview-banner" role="status">
+   <div
+      v-if="!dismissed"
+      class="cms-preview-banner k-root"
+      data-preset="default"
+      data-theme="dark"
+      role="status"
+   >
       <span class="cms-preview-banner-badge">Preview</span>
       <span class="cms-preview-banner-text">
          Unpublished version, not visible to visitors.
@@ -25,12 +31,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import tokensHref from '@xleddyl/443-components-vue/tokens.css?url'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { CmsPreviewMode } from '../../shared/index'
 
 const props = defineProps<{ mode: CmsPreviewMode }>()
 
 const dismissed = ref(false)
+
+onMounted(() => {
+   if (document.querySelector('link[data-cms-tokens]')) return
+   const link = document.createElement('link')
+   link.rel = 'stylesheet'
+   link.href = tokensHref
+   link.dataset.cmsTokens = ''
+   document.head.appendChild(link)
+})
 
 watch(
    () => props.mode.id,
@@ -60,23 +76,19 @@ const expires = computed(() => {
    max-width: calc(100vw - 32px);
    margin-inline: auto;
    padding: 8px 8px 8px 10px;
-   border-radius: 18px;
-   background: #18181b;
-   color: #fafafa;
-   box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
-   font:
-      500 13px/1.4 system-ui,
-      -apple-system,
-      'Segoe UI',
-      sans-serif;
+   border-radius: var(--k-radius-xl);
+   background: var(--k-elevated);
+   color: var(--k-text);
+   box-shadow: var(--k-shadow-overlay);
+   font: 500 13px/1.4 var(--k-font-sans);
 }
 
 .cms-preview-banner-badge {
    flex: none;
    padding: 2px 8px;
-   border-radius: 999px;
-   background: #f59e0b;
-   color: #18181b;
+   border-radius: var(--k-radius-full);
+   background: var(--k-warning);
+   color: var(--k-text-inverted);
    font-size: 11px;
    font-weight: 700;
    letter-spacing: 0.04em;
@@ -95,16 +107,23 @@ const expires = computed(() => {
    height: 24px;
    padding: 0;
    border: 0;
-   border-radius: 999px;
+   border-radius: var(--k-radius-full);
    background: transparent;
-   color: inherit;
+   color: var(--k-text-muted);
    cursor: pointer;
-   opacity: 0.7;
+   transition:
+      background-color var(--k-duration) var(--k-ease),
+      color var(--k-duration) var(--k-ease);
 }
 
 .cms-preview-banner-close:hover,
 .cms-preview-banner-close:focus-visible {
-   background: rgb(255 255 255 / 0.12);
-   opacity: 1;
+   background: var(--k-hover);
+   color: var(--k-text);
+}
+
+.cms-preview-banner-close:focus-visible {
+   outline: 2px solid var(--k-ring);
+   outline-offset: 2px;
 }
 </style>

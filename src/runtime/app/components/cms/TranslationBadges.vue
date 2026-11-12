@@ -1,5 +1,5 @@
 <template>
-   <span v-if="badges.length" class="cms-translation-badges">
+   <KStack v-if="badges.length" as="span" direction="row" gap="xs" wrap>
       <KTooltip v-for="badge in badges" :key="badge.locale" :text="badge.title">
          <KBadge
             :label="badge.locale"
@@ -11,11 +11,11 @@
             :aria-label="badge.title"
          />
       </KTooltip>
-   </span>
+   </KStack>
 </template>
 
 <script setup lang="ts">
-import { Badge as KBadge, Tooltip as KTooltip } from '@xleddyl/443-components-vue'
+import { Badge as KBadge, Stack as KStack, Tooltip as KTooltip } from '@xleddyl/443-components-vue'
 import { computed } from '#imports'
 import type { TranslationProgress, TranslationState } from '../../../shared/translations'
 import { translationSummary } from '../../../shared/translations'

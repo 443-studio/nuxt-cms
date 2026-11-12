@@ -1,5 +1,10 @@
 <template>
-   <div ref="root" class="cms-preview-overlay" :class="{ 'is-dragging': drag?.moved }">
+   <div
+      ref="root"
+      class="cms-preview-overlay"
+      :class="{ 'is-dragging': drag?.moved }"
+      v-bind="cmsTokenRoot(cmsPreviewTheme)"
+   >
       <div
          v-for="box in outlined"
          :key="`outline-${box.key}`"
@@ -193,6 +198,7 @@ import {
 import { clipboardTarget, onApplePlatform, shortcutTarget } from '../utils/keyboard'
 import type { CmsInlineTextSession } from './inline-text'
 import { startInlineText } from './inline-text'
+import { cmsPreviewTheme, cmsTokenRoot } from './field-marker'
 
 interface Box extends CmsDropBox {
    key: string
