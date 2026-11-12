@@ -1,6 +1,19 @@
 # Changelog
 
 
+## v0.10.1
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.10.0...v0.10.1)
+
+### 💅 Refactors
+
+- Field labels have no icon and show the description in a help tooltip ([24913c4](https://github.com/443-studio/nuxt-cms/commit/24913c4))
+- Remove the dots from badges and the language switch ([e3449fd](https://github.com/443-studio/nuxt-cms/commit/e3449fd))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.10.0
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.9.4...v0.10.0)
