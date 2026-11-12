@@ -425,7 +425,7 @@ only editor nested blocks can be selected and copied, nothing more.
 The block picker opens in a popover next to what opened it: under the **+** of a tree row, **Add a
 block** or the add tile of a `blocks` field, under the **+** of the canvas, and for the menus and
 Enter or ⇧ Enter at the edge of the selected block in the canvas (after or before it). On a screen
-narrower than 640 px it opens as a dialog. The search box has the focus: type to filter
+640 px wide or less the same picker opens as a sheet from the bottom. The search box has the focus: type to filter
 by label, description, [group and tags](schema.md#block-components) (case and accents do not
 matter), move with ↑ and ↓, pick with Enter or a click, close with Escape. Blocks with a `group`
 are listed under its heading. Each block shows its icon, label and description. When the field is

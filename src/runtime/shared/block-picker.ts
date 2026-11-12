@@ -1,7 +1,5 @@
 import type { BlockConfig } from './index'
 
-export const CMS_BLOCK_PICKER_MODAL_QUERY = '(max-width: 639px)'
-
 export const CMS_BLOCK_PICKER_OTHER_GROUP = 'Other'
 
 export const CMS_BLOCK_ICON = 'rectangle-stack'

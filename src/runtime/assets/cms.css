@@ -780,10 +780,6 @@ body:has(.cms-scope) {
    color: var(--k-text-muted);
 }
 
-.cms-picker-trigger {
-   display: contents;
-}
-
 .cms-share-created p {
    margin: 0 0 0.5rem;
 }

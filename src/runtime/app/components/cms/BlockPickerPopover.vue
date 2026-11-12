@@ -1,11 +1,5 @@
 <template>
-   <KPopover
-      v-if="!narrow"
-      v-model:open="open"
-      :anchor="anchor"
-      :label="label"
-      placement="bottom-start"
-   >
+   <KPopover v-model:open="open" :anchor="anchor" :label="label" placement="bottom-start" sheet>
       <template v-if="$slots.default" #default><slot /></template>
       <template #content>
          <CmsBlockPicker
@@ -21,29 +15,12 @@
          />
       </template>
    </KPopover>
-   <template v-else>
-      <span v-if="$slots.default" class="cms-picker-trigger" @click="open = true"><slot /></span>
-      <KModal v-model:open="open" :title="label">
-         <CmsBlockPicker
-            v-if="open"
-            :blocks="blocks"
-            :disabled-reason="disabledReason"
-            :paste-count="pasteCount"
-            :presets="presets"
-            @pick="pick"
-            @paste="paste"
-            @preset="preset"
-         />
-      </KModal>
-   </template>
 </template>
 
 <script setup lang="ts">
 import type { BlockConfig } from '#nuxt-cms'
 import type { OverlayAnchorTarget } from '@xleddyl/443-components-vue'
-import { Modal as KModal, Popover as KPopover } from '@xleddyl/443-components-vue'
-import { onBeforeUnmount, onMounted, ref } from '#imports'
-import { CMS_BLOCK_PICKER_MODAL_QUERY } from '../../../shared/block-picker'
+import { Popover as KPopover } from '@xleddyl/443-components-vue'
 import type { CmsBlockPreset } from '../../../shared/presets'
 
 withDefaults(
@@ -67,13 +44,6 @@ withDefaults(
 const emit = defineEmits<{ pick: [type: string]; paste: []; preset: [id: string] }>()
 
 const open = defineModel<boolean>('open', { default: false })
-const narrow = ref(false)
-let query: MediaQueryList | null = null
-
-function onQueryChange() {
-   narrow.value = !!query?.matches
-   open.value = false
-}
 
 function pick(type: string) {
    open.value = false
@@ -89,14 +59,4 @@ function preset(id: string) {
    open.value = false
    emit('preset', id)
 }
-
-onMounted(() => {
-   query = window.matchMedia(CMS_BLOCK_PICKER_MODAL_QUERY)
-   narrow.value = query.matches
-   query.addEventListener('change', onQueryChange)
-})
-
-onBeforeUnmount(() => {
-   query?.removeEventListener('change', onQueryChange)
-})
 </script>
