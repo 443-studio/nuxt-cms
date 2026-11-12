@@ -257,20 +257,10 @@ body:has(.cms-scope) {
 
 .cms-media-gallery {
    position: relative;
-   display: flex;
-   flex-direction: column;
-   gap: 1.25rem;
 }
 
-.cms-media-gallery.is-compact {
-   gap: 1rem;
-}
-
-.cms-media-toolbar {
-   display: flex;
-   flex-wrap: wrap;
-   align-items: center;
-   gap: 0.5rem;
+.cms-media-files-fill {
+   min-height: 20rem;
 }
 
 .cms-media-search {
@@ -315,11 +305,6 @@ body:has(.cms-scope) {
    font-size: 0.75rem;
    font-weight: 400;
    color: var(--k-text-dimmed);
-}
-
-.cms-media-pagination {
-   padding-top: 0.75rem;
-   border-top: 1px solid var(--k-line);
 }
 
 .cms-media-dropzone-hint {

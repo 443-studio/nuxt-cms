@@ -10,7 +10,7 @@
          </template>
       </KPageHeader>
 
-      <CmsMediaGallery v-model:folder="folder" />
+      <CmsMediaGallery v-model:folder="folder" fill />
    </div>
 </template>
 

@@ -6,8 +6,8 @@
       description="Set cms.media in nuxt.config to enable uploads."
    />
 
-   <div v-else ref="gallery" class="cms-media-gallery" :class="{ 'is-compact': selectable }">
-      <div class="cms-media-toolbar">
+   <KStack v-else ref="gallery" gap="md" :grow="fill" class="cms-media-gallery">
+      <KStack direction="row" align="center" gap="sm" wrap>
          <KInput
             v-model="search"
             :icon="cmsIcon('magnifying-glass')"
@@ -58,7 +58,7 @@
                />
             </template>
          </KStack>
-      </div>
+      </KStack>
 
       <KFieldMessage v-if="sourceHint" tone="neutral" :icon="false" :message="sourceHint" />
 
@@ -212,28 +212,33 @@
             </KGrid>
          </KStack>
 
-         <KStack v-if="visibleFiles.length" as="section" gap="sm">
-            <KSeparator
-               v-if="query || visibleFolders.length || recent.length"
-               variant="heading"
-               :label="
-                  query
-                     ? `${visibleFiles.length} file${visibleFiles.length > 1 ? 's' : ''}`
-                     : 'Files'
-               "
-               :level="3"
-               :lines="false"
-            />
+         <KSeparator
+            v-if="visibleFiles.length && (query || visibleFolders.length || recent.length)"
+            variant="heading"
+            :label="
+               query ? `${visibleFiles.length} file${visibleFiles.length > 1 ? 's' : ''}` : 'Files'
+            "
+            :level="3"
+            :lines="false"
+         />
 
+         <KCard
+            v-if="visibleFiles.length || !visibleFolders.length"
+            :fill="fill"
+            variant="outline"
+            :padding="view === 'list' ? 'none' : 'sm'"
+            :animated="false"
+            :class="{ 'cms-media-files-fill': fill }"
+         >
             <KTileGrid
-               v-if="view === 'grid'"
+               v-if="visibleFiles.length && view === 'grid'"
                :selected="selection"
                :items="paged"
                item-key="key"
                :item-label="(item: MediaItem) => mediaFilename(item.key)"
                label="Files"
                :columns="selectable ? 3 : 5"
-               min-item-width="10rem"
+               min-item-width="9rem"
                :selectable="canManage"
                :drag-data="canMove ? mediaDragData : undefined"
                @update:selected="setSelection"
@@ -270,7 +275,7 @@
             </KTileGrid>
 
             <KTable
-               v-else
+               v-else-if="visibleFiles.length"
                v-model:selected="selection"
                :rows="paged"
                :columns="listColumns"
@@ -279,6 +284,7 @@
                :selectable="canManage"
                :row-draggable="canMove"
                :drag-data="mediaDragData"
+               :fill="fill"
                label="Files"
                @row-drag-start="({ rows }) => startItemDrag(rows)"
                @row-drag-end="onDragEnd"
@@ -303,48 +309,50 @@
                   />
                </template>
             </KTable>
-         </KStack>
 
-         <KEmptyState
-            v-if="!visibleFiles.length && !visibleFolders.length"
-            :icon="cmsIcon(emptyState.icon)"
-            :title="emptyState.title"
-            :description="emptyState.description"
-         >
-            <template v-if="query || (canUpload && !hasTypedFiles)" #actions>
-               <KButton
-                  v-if="query"
-                  label="Clear search"
-                  :icon="cmsIcon('x-mark')"
-                  variant="soft"
-                  tone="neutral"
+            <KEmptyState
+               v-else
+               variant="plain"
+               fill
+               :icon="cmsIcon(emptyState.icon)"
+               :title="emptyState.title"
+               :description="emptyState.description"
+            >
+               <template v-if="query || (canUpload && !hasTypedFiles)" #actions>
+                  <KButton
+                     v-if="query"
+                     label="Clear search"
+                     :icon="cmsIcon('x-mark')"
+                     variant="soft"
+                     tone="neutral"
+                     size="sm"
+                     @click="search = ''"
+                  />
+                  <KButton
+                     v-else
+                     label="Upload"
+                     :icon="cmsIcon('cloud-arrow-up')"
+                     size="sm"
+                     @click="uploadOpen = true"
+                  />
+               </template>
+            </KEmptyState>
+
+            <template v-if="visibleFiles.length > PAGE_SIZE" #footer>
+               <KPagination
+                  v-model:page="page"
+                  :total="visibleFiles.length"
+                  :page-size="PAGE_SIZE"
                   size="sm"
-                  @click="search = ''"
-               />
-               <KButton
-                  v-else
-                  label="Upload"
-                  :icon="cmsIcon('cloud-arrow-up')"
-                  size="sm"
-                  @click="uploadOpen = true"
                />
             </template>
-         </KEmptyState>
-
-         <KPagination
-            v-if="visibleFiles.length > PAGE_SIZE"
-            v-model:page="page"
-            :total="visibleFiles.length"
-            :page-size="PAGE_SIZE"
-            size="sm"
-            class="cms-media-pagination"
-         />
+         </KCard>
       </template>
 
       <KFileDropOverlay :active="fileDragActive" :icon="cmsIcon('cloud-arrow-up')">
          Drop to upload to <strong>{{ dropTargetLabel }}</strong>
       </KFileDropOverlay>
-   </div>
+   </KStack>
 
    <template v-if="!notConfigured">
       <KModal
@@ -550,6 +558,7 @@ const scopeOptions: FilterPillOption<typeof SCOPE_EVERYWHERE>[] = [
 
 const props = defineProps<{
    selectable?: boolean
+   fill?: boolean
    mediaType?: MediaType | MediaType[]
    accept?: string[]
 }>()
@@ -1180,9 +1189,9 @@ async function uploadTree(pending: Promise<UploadTree>, target: string | null) {
 const draggingKeys = ref<string[]>([])
 const draggingFolder = ref<string | null>(null)
 const dropTarget = ref<string | null>(null)
-const galleryEl = useTemplateRef<HTMLElement>('gallery')
+const galleryRef = useTemplateRef<{ $el: HTMLElement }>('gallery')
 
-const { over: fileDragOver } = useFileDrop(galleryEl, {
+const { over: fileDragOver } = useFileDrop(() => galleryRef.value?.$el, {
    disabled: () => !canUpload.value,
    ignore: (event) => event.defaultPrevented,
    onDrop: (_files, event) => {
