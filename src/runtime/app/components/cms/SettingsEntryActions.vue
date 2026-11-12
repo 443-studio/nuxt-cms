@@ -3,9 +3,7 @@
       <KBadge
          :label="ENTRY_SETTINGS_STATUS_LABELS[status]"
          :tone="STATUS_TONES[status]"
-         :pulse="status === 'saving'"
          variant="outline"
-         dot
          aria-live="polite"
       />
       <KButton

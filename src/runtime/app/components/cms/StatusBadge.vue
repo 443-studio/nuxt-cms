@@ -4,7 +4,6 @@
          :label="scheduled ? 'Scheduled' : published ? 'Published' : 'Draft'"
          :tone="scheduled ? 'warning' : published ? 'success' : 'neutral'"
          :variant="scheduled || published ? 'soft' : 'outline'"
-         dot
       />
    </KTooltip>
 </template>
