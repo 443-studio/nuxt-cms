@@ -19,6 +19,22 @@ describe('validateConfig', () => {
       expect(errors.some((e) => e.includes('reserved name'))).toBe(true)
    })
 
+   it('reserves the name of the redirects table', () => {
+      const config = sampleConfig()
+      config.cms_redirects = config.categories!
+      expect(validateConfig(config, I18N)).toContain(
+         "cms.config entry 'cms_redirects': 'cms_redirects' is a reserved name"
+      )
+   })
+
+   it('reserves the name of the preview links table', () => {
+      const config = sampleConfig()
+      config.cms_preview_links = config.categories!
+      expect(validateConfig(config, I18N)).toContain(
+         "cms.config entry 'cms_preview_links': 'cms_preview_links' is a reserved name"
+      )
+   })
+
    it('rejects duplicate entry ids', () => {
       const config = sampleConfig()
       config.other = { ...config.categories!, fields: { ...config.categories!.fields } }
@@ -152,11 +168,15 @@ describe('validateConfig', () => {
       )
    })
 
-   it('rejects min and max on a field that is not blocks', () => {
+   it('rejects min and max on a field without bounds', () => {
       const config = sampleConfig()
-      config.events!.fields.seats!.max = 3
+      config.events!.fields.featured!.max = 3
       const errors = validateConfig(config, I18N)
-      expect(errors.some((e) => e.includes('min and max are only supported on blocks'))).toBe(true)
+      expect(
+         errors.some((e) =>
+            e.includes('min and max are only supported on number, text, blocks and tags fields')
+         )
+      ).toBe(true)
    })
 
    it('accepts validate functions on entries and blocks', () => {
@@ -210,7 +230,7 @@ describe('validateConfig', () => {
       const errors = validateConfig(config, I18N)
       expect(
          errors.some((e) =>
-            e.includes('translatable is only supported on text, richtext and media')
+            e.includes('translatable is only supported on text, richtext, media and link')
          )
       ).toBe(true)
    })
@@ -243,7 +263,7 @@ describe('validateConfig', () => {
          errors.some(
             (e) =>
                e.includes("field 'count'") &&
-               e.includes('translatable is only supported on text, richtext and media')
+               e.includes('translatable is only supported on text, richtext, media and link')
          )
       ).toBe(true)
    })
@@ -293,7 +313,7 @@ describe('validateConfig', () => {
       expect(errors.some((e) => e.includes("relation target 'nope'"))).toBe(true)
    })
 
-   it('rejects relation/blocks/slug fields inside blocks', () => {
+   it('rejects relation and slug fields inside blocks', () => {
       const config = sampleConfig()
       config.events!.fields.body!.blocks!.hero!.fields.rel = {
          label: 'Rel',

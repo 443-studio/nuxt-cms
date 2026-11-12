@@ -7,7 +7,10 @@ export default () => {
       const user = session.user
       if (!user?.id) return
       const row = await findUserById(user.id)
-      if (row && user.passwordStamp === passwordStamp(row.passwordHash)) return
+      if (row && user.passwordStamp === passwordStamp(row.passwordHash)) {
+         user.role = row.role
+         return
+      }
       await clearUserSession(event)
       throw createError({ statusCode: 401, statusMessage: 'Session expired' })
    })

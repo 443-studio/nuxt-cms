@@ -21,7 +21,7 @@
          }}
       </template>
       <template v-if="!uploading" #hint>
-         <span class="cms-media-dropzone-hint">
+         <span class="cms-icon-hint">
             <KIcon :name="cmsIcon(folder ? 'folder' : 'circle-stack')" />
             {{ folder ?? 'Library root' }}
          </span>

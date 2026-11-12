@@ -7,8 +7,10 @@ import {
    isMultiValueField,
    isPrivateField,
    isRequiredField,
+   isRoutedContent,
    isTranslatableField,
    pageAllFields,
+   relationTarget,
    typeName,
 } from './index'
 
@@ -38,6 +40,7 @@ function filterScalarFor(field: FieldConfig): string | null {
    if (isMultiValueField(field)) return LIST_FILTER
    switch (field.type) {
       case 'json':
+      case 'link':
          return null
       case 'blocks':
          return null
@@ -62,12 +65,13 @@ function filterableKeys(entry: CmsEntry): [string, string][] {
 
 function fieldSdl(config: CmsConfig, entryName: string, key: string, field: FieldConfig): string {
    if (field.type === 'relation') {
-      const target = typeName(field.to!)
+      const target = typeName(relationTarget(field))
       if (field.cardinality === 'many-to-many') return `  ${key}: [${target}!]!`
-      const nonNull = isRequiredField(field) && !config[field.to!]?.drafts
+      const nonNull = isRequiredField(field) && !config[relationTarget(field)]?.drafts
       return `  ${key}: ${target}${nonNull ? '!' : ''}`
    }
    if (field.type === 'media') return `  ${key}: CmsMedia`
+   if (field.type === 'link') return `  ${key}: CmsLink`
    if (field.type === 'tags' || (field.type === 'select' && field.multiple))
       return `  ${key}: [String!]!`
    if (field.type === 'blocks')
@@ -80,6 +84,7 @@ function fieldSdl(config: CmsConfig, entryName: string, key: string, field: Fiel
 function entrySdl(config: CmsConfig, name: string, entry: CmsEntry): string {
    const lines = ['  id: ID!']
    if (entry.kind === 'page') lines.push(`  ${PAGE_PATH_FIELD}: String!`)
+   if (isRoutedContent(entry)) lines.push('  path: String!', '  paths: [CmsLocalePath!]!')
    for (const [key, field] of Object.entries(entryFields(entry))) {
       if (isPrivateField(field)) continue
       lines.push(fieldSdl(config, name, key, field))
@@ -89,40 +94,66 @@ function entrySdl(config: CmsConfig, name: string, entry: CmsEntry): string {
    return `type ${typeName(name)} {\n${lines.join('\n')}\n}`
 }
 
-function blockFieldSdl(field: FieldConfig): string {
-   return field.type === 'media' ? 'CmsMedia' : scalarFor(field)
+function blockFieldSdl(
+   name: string,
+   schemaPath: readonly string[],
+   blockName: string,
+   key: string,
+   field: FieldConfig
+): string {
+   if (field.type === 'media') return 'CmsMedia'
+   if (field.type === 'link') return 'CmsLink'
+   if (field.type === 'blocks')
+      return `[${blocksFieldTypeName(name, [...schemaPath, blockName, key])}!]`
+   return scalarFor(field)
 }
 
-function sharedBlockFieldsSdl(field: FieldConfig): string[] {
-   const blocks = Object.values(field.blocks ?? {})
+function sharedBlockFieldsSdl(
+   name: string,
+   schemaPath: readonly string[],
+   field: FieldConfig
+): string[] {
+   const blocks = Object.entries(field.blocks ?? {})
    const first = blocks[0]
    if (!first) return []
    const lines: string[] = []
-   for (const key of Object.keys(first.fields)) {
-      const rendered = blocks.map((block) => block.fields[key])
-      if (rendered.some((blockField) => !blockField)) continue
-      const types = rendered.map((blockField) => blockFieldSdl(blockField!))
+   for (const key of Object.keys(first[1].fields)) {
+      if (blocks.some(([, block]) => !block.fields[key])) continue
+      const types = blocks.map(([blockName, block]) =>
+         blockFieldSdl(name, schemaPath, blockName, key, block.fields[key]!)
+      )
       if (types.some((type) => type !== types[0])) continue
       lines.push(`  ${key}: ${types[0]}`)
    }
    return lines
 }
 
-function blocksSdl(name: string, key: string, field: FieldConfig): string[] {
+function blocksSdl(name: string, schemaPath: readonly string[], field: FieldConfig): string[] {
    const blocks = Object.entries(field.blocks ?? {})
    if (!blocks.length) return []
-   const interfaceName = blocksFieldTypeName(name, key)
-   const shared = ['  type: String!', ...sharedBlockFieldsSdl(field)]
+   const interfaceName = blocksFieldTypeName(name, schemaPath)
+   const shared = ['  type: String!', ...sharedBlockFieldsSdl(name, schemaPath, field)]
    const defs = [`interface ${interfaceName} {\n${shared.join('\n')}\n}`]
+   const nested: string[] = []
    for (const [blockName, block] of blocks) {
       const lines = ['  type: String!']
       for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
-         lines.push(`  ${blockFieldKey}: ${blockFieldSdl(blockField)}`)
+         lines.push(
+            `  ${blockFieldKey}: ${blockFieldSdl(
+               name,
+               schemaPath,
+               blockName,
+               blockFieldKey,
+               blockField
+            )}`
+         )
+         if (blockField.type === 'blocks')
+            nested.push(...blocksSdl(name, [...schemaPath, blockName, blockFieldKey], blockField))
       }
-      const gqlType = blockTypeName(name, key, blockName)
+      const gqlType = blockTypeName(name, schemaPath, blockName)
       defs.push(`type ${gqlType} implements ${interfaceName} {\n${lines.join('\n')}\n}`)
    }
-   return defs
+   return [...defs, ...nested]
 }
 
 function filterSdl(name: string, entry: CmsEntry): string {
@@ -149,19 +180,25 @@ const COMMON_SDL = [
    'input BooleanFilter {\n  eq: Boolean\n  neq: Boolean\n  isNull: Boolean\n}',
    `input ${LIST_FILTER} {\n  hasAny: [String!]\n  hasAll: [String!]\n  isEmpty: Boolean\n}`,
    'enum CmsMediaType {\n  image\n  video\n  file\n}',
-   'type CmsMedia {\n  key: String!\n  url: String\n  type: CmsMediaType!\n  alt: String\n  folder: String\n  mime: String\n  size: Int\n  width: Int\n  height: Int\n}',
+   'type CmsMedia {\n  key: String!\n  url: String\n  type: CmsMediaType!\n  alt: String\n  folder: String\n  mime: String\n  size: Int\n  width: Int\n  height: Int\n  focalX: Float\n  focalY: Float\n}',
+   'type CmsLink {\n  href: String\n  label: String\n  newTab: Boolean!\n  external: Boolean!\n  entry: String\n  id: String\n}',
+   'type CmsSite {\n  name: String\n  titleTemplate: String\n  description: String\n  image: CmsMedia\n  hidden: Boolean!\n}',
 ]
 
+export const SITE_QUERY_FIELD = 'cmsSite'
+
 export function renderGraphqlSdl(config: CmsConfig): string {
-   const queryLines: string[] = []
+   const queryLines: string[] = [`  ${SITE_QUERY_FIELD}(locale: String): CmsSite!`]
    const types: string[] = []
+   if (Object.values(config).some(isRoutedContent))
+      types.push('type CmsLocalePath {\n  locale: String!\n  path: String!\n}')
 
    for (const [name, entry] of Object.entries(config)) {
       const gqlType = typeName(name)
       types.push(entrySdl(config, name, entry))
       for (const [key, field] of Object.entries(entryFields(entry))) {
          if (field.type === 'blocks' && !isPrivateField(field))
-            types.push(...blocksSdl(name, key, field))
+            types.push(...blocksSdl(name, [key], field))
       }
 
       if (entry.kind === 'single') {
@@ -183,11 +220,9 @@ export function renderGraphqlSdl(config: CmsConfig): string {
       queryLines.push(`  ${name}Count(filters: ${gqlType}Filters): Int!`)
       if (entry.kind === 'content')
          queryLines.push(`  ${name}BySlug(slug: String!, locale: String): ${gqlType}`)
+      if (isRoutedContent(entry))
+         queryLines.push(`  ${name}ByPath(path: String!, locale: String): ${gqlType}`)
    }
 
-   return [
-      ...COMMON_SDL,
-      ...types,
-      `type Query {\n${queryLines.length ? queryLines.join('\n') : '  _empty: Boolean'}\n}`,
-   ].join('\n\n')
+   return [...COMMON_SDL, ...types, `type Query {\n${queryLines.join('\n')}\n}`].join('\n\n')
 }

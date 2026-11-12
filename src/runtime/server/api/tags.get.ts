@@ -3,11 +3,12 @@ import { useDb } from '#cms-db'
 import { distinctTags, entryFieldsFor } from '../../shared/index'
 import { readPages } from '../utils/page-storage'
 import { getRegistryEntry, tableColumns } from '../utils/registry'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
 
 export default defineEventHandler(async (event): Promise<string[]> => {
-   await requireAdmin(event)
+   const { access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
+   assertCmsPermission(access, `${name}.read`)
    const key = getRouterParam(event, 'field') ?? ''
    const fields = entryFieldsFor(entry)
    const field = Object.hasOwn(fields, key) ? fields[key] : undefined

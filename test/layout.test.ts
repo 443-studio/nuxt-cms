@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { FieldConfig } from '../src/runtime/shared/index'
 import {
+   blockFormLayout,
    defaultListColumns,
    layoutFromConfig,
    resolveFormLayout,
    resolveListColumns,
 } from '../src/runtime/shared/index'
 import { validateConfig } from '../src/schema-codegen'
-import { I18N, sampleConfig } from './fixtures'
+import { I18N, contentConfig, sampleConfig } from './fixtures'
 
 const fields: Record<string, FieldConfig> = {
    title: { label: 'Title', type: 'text' },
@@ -159,5 +160,67 @@ describe('validateConfig with layout and list', () => {
       config.settings = config.categories!
       const errors = validateConfig(config, I18N)
       expect(errors.some((e) => e.includes("'settings' is a reserved name"))).toBe(true)
+   })
+})
+
+describe('block layout', () => {
+   it('arranges the block form and appends the unnamed fields', () => {
+      const layout = blockFormLayout({
+         fields,
+         layout: [['date', 'featured'], { title: 'Notes', collapsed: true, rows: ['notes'] }],
+      })
+      expect(layout.main).toEqual([
+         { rows: [['date', 'featured']] },
+         { title: 'Notes', collapsed: true, rows: [['notes']] },
+         { rows: [['title'], ['slug']] },
+      ])
+   })
+
+   it('puts every block field in its own row without a layout', () => {
+      expect(blockFormLayout({ fields }).main).toEqual([
+         { rows: [['title'], ['slug'], ['date'], ['featured'], ['notes']] },
+      ])
+   })
+
+   it('accepts a valid block layout', () => {
+      const config = sampleConfig()
+      config.events!.fields.body!.blocks!.quote!.layout = [
+         { title: 'Quote', description: 'The words', rows: [['text', 'author']] },
+      ]
+      expect(validateConfig(config, I18N)).toEqual([])
+   })
+
+   it('rejects unknown, repeated and crowded block layout keys', () => {
+      const config = sampleConfig()
+      const quote = config.events!.fields.body!.blocks!.quote!
+      quote.fields = {
+         ...quote.fields,
+         a: { label: 'A', type: 'text' },
+         b: { label: 'B', type: 'text' },
+         c: { label: 'C', type: 'text' },
+      }
+      quote.layout = [
+         ['text', 'nope'],
+         'text',
+         ['author', 'a', 'b', 'c', 'text'],
+         { title: '', rows: [] },
+      ]
+      const errors = validateConfig(config, I18N)
+      const at = "field 'body', block 'quote'"
+      expect(
+         errors.some((e) => e.includes(at) && e.includes("'nope', which is not a declared field"))
+      ).toBe(true)
+      expect(errors.some((e) => e.includes(at) && e.includes("'text' more than once"))).toBe(true)
+      expect(errors.some((e) => e.includes(at) && e.includes('more than 4 fields'))).toBe(true)
+      expect(errors.some((e) => e.includes(at) && e.includes('needs a title'))).toBe(true)
+   })
+
+   it('validates the block layouts of a content entry', () => {
+      const config = contentConfig()
+      config.news!.blocks!.text!.layout = [['heading', 'missing']]
+      const errors = validateConfig(config, I18N)
+      expect(
+         errors.some((e) => e.includes("block 'text'") && e.includes("'missing', which is not"))
+      ).toBe(true)
    })
 })

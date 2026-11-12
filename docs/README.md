@@ -14,12 +14,16 @@ deploy.
    types, relations, blocks, i18n, form layout.
 5. [Querying content](querying.md): GraphQL API, `useCms*` composables, `<CmsBlocks>`, filters,
    sorting, pagination.
-6. [Admin panel & security](admin.md): admin pages, search, visual editor, settings, admin
+6. [SEO](seo.md): site settings, `useCmsSeo`, redirects, `/sitemap.xml`, `/robots.txt`, per-item
+   noindex.
+7. [Admin panel & security](admin.md): admin pages, search, visual editor, settings, admin
    accounts, sessions.
-7. [Media](media.md): S3-compatible storage, filesystem storage or local mode, upload flow,
-   allowed file types.
-8. [Deployment](deployment.md): host and driver matrix, migrations on serverless, horizontal
-   scaling, Cloudflare Workers.
+8. [Media](media.md): S3-compatible storage, filesystem storage or local mode, upload flow,
+   allowed file types, focal point, `<CmsImage>`.
+9. [Hooks & webhooks](hooks.md): `cms:entry:change` / `cms:media:change` Nitro hooks, signed
+   webhooks, `verifyCmsWebhook`.
+10. [Deployment](deployment.md): host and driver matrix, migrations on serverless, horizontal
+    scaling, Cloudflare Workers.
 
 ## How it works in one paragraph
 

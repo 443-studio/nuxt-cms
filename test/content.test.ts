@@ -41,6 +41,7 @@ describe('content normalization', () => {
          'seoTitle',
          'seoDescription',
          'seoImage',
+         'seoNoindex',
       ])
       expect(news.titleField).toBe('title')
       expect(news.drafts).toBe(true)
@@ -158,6 +159,24 @@ describe('content validation', () => {
       expect(errors).toContain("block 'text': component must be a non-empty string")
       expect(errors).toContain("block 'image': icon must be a non-empty string")
       expect(errors).toContain("'class' cannot be a prop of the block component")
+   })
+
+   it('checks the block group and tags', () => {
+      const config = contentConfig()
+      const blocks = config.news!.blocks!
+      blocks.text!.group = ' '
+      blocks.image!.tags = ['photo', ''] as string[]
+      const errors = validateConfig(config, I18N).join('\n')
+      expect(errors).toContain("block 'text': group must be a non-empty string")
+      expect(errors).toContain("block 'image': tags must be an array of non-empty strings")
+      blocks.text!.group = 'Text'
+      blocks.image!.tags = 'photo' as unknown as string[]
+      expect(validateConfig(config, I18N).join('\n')).toContain(
+         "block 'image': tags must be an array of non-empty strings"
+      )
+      blocks.image!.tags = ['photo']
+      blocks.image!.group = 'Media'
+      expect(validateConfig(config, I18N)).toEqual([])
    })
 
    it('accepts a component on the blocks of a collection', () => {

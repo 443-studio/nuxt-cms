@@ -47,6 +47,10 @@
       "./generate": {
          "types": "./dist/runtime/generate.d.ts",
          "import": "./dist/runtime/generate.js"
+      },
+      "./webhooks": {
+         "types": "./dist/runtime/webhooks.d.ts",
+         "import": "./dist/runtime/webhooks.js"
       }
    },
    "main": "./dist/module.mjs",
@@ -82,7 +86,7 @@
       "@tiptap/pm": "^3.32.0",
       "@tiptap/starter-kit": "^3.32.0",
       "@tiptap/vue-3": "^3.32.0",
-      "@xleddyl/443-components-vue": "^0.16.88",
+      "@xleddyl/443-components-vue": "^0.16.101",
       "aws4fetch": "^1.0.20",
       "drizzle-kit": "^0.31.0",
       "drizzle-orm": "^0.44.0",

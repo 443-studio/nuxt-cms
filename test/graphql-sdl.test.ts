@@ -149,6 +149,13 @@ describe('renderGraphqlSdl', () => {
       expect(validate(schema, query)).toEqual([])
    })
 
+   it('exposes the media focal point as nullable floats', () => {
+      expect(sdl).toContain('  focalX: Float\n  focalY: Float\n}')
+      const schema = buildSchema(sdl)
+      const query = parse('{ events { poster { url width height focalX focalY } } }')
+      expect(validate(schema, query)).toEqual([])
+   })
+
    it('renders the media type as an enum', () => {
       expect(sdl).toContain('enum CmsMediaType {')
       expect(sdl).toContain('type: CmsMediaType!')

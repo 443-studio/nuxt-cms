@@ -1,8 +1,22 @@
 import { inArray } from 'drizzle-orm'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
-import type { CmsEntry, FieldConfig, MediaUsage } from '../../shared/index'
-import { PAGE_PATH_FIELD, pageFields, pageRouteOf, selectOptionLabel } from '../../shared/index'
+import type {
+   CmsEntry,
+   CmsSiteSettings,
+   FieldConfig,
+   MediaUsage,
+   MediaUsageReport,
+} from '../../shared/index'
+import {
+   CMS_SITE_SETTINGS_KEY,
+   PAGE_PATH_FIELD,
+   blockReferenceLabel,
+   pageFields,
+   pageRouteOf,
+   selectOptionLabel,
+   walkBlocks,
+} from '../../shared/index'
 
 export interface MediaReference {
    field: string
@@ -27,22 +41,18 @@ export function mediaReferences(
 ): MediaReference[] {
    const references: MediaReference[] = []
    for (const [key, field] of Object.entries(fields)) {
-      const value = values[key]
-      if (field.type === 'media') {
-         for (const mediaKey of mediaKeysOf(value)) references.push({ field: key, key: mediaKey })
-         continue
-      }
-      if (field.type !== 'blocks' || !Array.isArray(value)) continue
-      value.forEach((item: Record<string, unknown> | null, index) => {
-         const block = item ? field.blocks?.[String(item.type)] : undefined
-         for (const [blockFieldKey, blockField] of Object.entries(block?.fields ?? {})) {
-            if (blockField.type !== 'media') continue
-            for (const mediaKey of mediaKeysOf(item?.[blockFieldKey])) {
-               references.push({ field: `${key}[${index}].${blockFieldKey}`, key: mediaKey })
-            }
-         }
-      })
+      if (field.type !== 'media') continue
+      for (const mediaKey of mediaKeysOf(values[key]))
+         references.push({ field: key, key: mediaKey })
    }
+   walkBlocks(fields, values, ({ item, block, path }) => {
+      for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
+         if (blockField.type !== 'media') continue
+         for (const mediaKey of mediaKeysOf(item[blockFieldKey])) {
+            references.push({ field: blockReferenceLabel(path, blockFieldKey), key: mediaKey })
+         }
+      }
+   })
    return references
 }
 
@@ -52,7 +62,7 @@ export interface MediaUsageSource {
    rows: Record<string, unknown>[]
 }
 
-function titleOf(entry: CmsEntry, row: Record<string, unknown>): string | null {
+export function usageTitle(entry: CmsEntry, row: Record<string, unknown>): string | null {
    if (entry.kind === 'page') {
       const path = row[PAGE_PATH_FIELD]
       return pageRouteOf(entry, String(row.id))?.label ?? (typeof path === 'string' ? path : null)
@@ -71,7 +81,7 @@ function titleOf(entry: CmsEntry, row: Record<string, unknown>): string | null {
    return null
 }
 
-function fieldsOf(entry: CmsEntry, row: Record<string, unknown>) {
+export function usageFields(entry: CmsEntry, row: Record<string, unknown>) {
    const path = row[PAGE_PATH_FIELD]
    return entry.kind === 'page' && typeof path === 'string' ? pageFields(entry, path) : entry.fields
 }
@@ -83,7 +93,7 @@ export function collectMediaUsage(
    const usage: Record<string, MediaUsage[]> = Object.fromEntries(keys.map((key) => [key, []]))
    for (const { name, entry, rows } of sources) {
       for (const row of rows) {
-         for (const reference of mediaReferences(fieldsOf(entry, row), row)) {
+         for (const reference of mediaReferences(usageFields(entry, row), row)) {
             const list = usage[reference.key]
             if (!list) continue
             list.push({
@@ -91,13 +101,47 @@ export function collectMediaUsage(
                label: entry.label,
                kind: entry.kind,
                id: entry.kind === 'single' ? null : String(row.id),
-               title: titleOf(entry, row),
+               title: usageTitle(entry, row),
                field: reference.field,
             })
          }
       }
    }
    return usage
+}
+
+export const SITE_MEDIA_USAGE: Omit<MediaUsage, 'field'> = {
+   collection: CMS_SITE_SETTINGS_KEY,
+   label: 'Settings',
+   kind: 'site',
+   id: null,
+   title: 'Site settings',
+}
+
+export function addSiteMediaUsage(
+   usage: Record<string, MediaUsage[]>,
+   settings: Pick<CmsSiteSettings, 'image'>
+): Record<string, MediaUsage[]> {
+   const list = settings.image ? usage[settings.image] : undefined
+   if (list) list.push({ ...SITE_MEDIA_USAGE, field: 'Share image' })
+   return usage
+}
+
+export function redactMediaUsage(
+   usage: Record<string, MediaUsage[]>,
+   visible: (usage: MediaUsage) => boolean
+): MediaUsageReport {
+   const report: MediaUsageReport = { usage: {}, hidden: {} }
+   for (const [key, list] of Object.entries(usage)) {
+      const hidden = new Set<string>()
+      report.usage[key] = list.filter((item) => {
+         if (visible(item)) return true
+         hidden.add(`${item.collection}\u0000${item.id ?? ''}`)
+         return false
+      })
+      report.hidden[key] = hidden.size
+   }
+   return report
 }
 
 export async function assertKnownMedia(references: MediaReference[], lookup: MediaLookup) {

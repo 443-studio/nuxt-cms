@@ -1,13 +1,29 @@
 <template>
-   <div />
+   <div class="k-page">
+      <KEmptyState
+         :icon="cmsIcon(access?.known === false ? 'exclamation-triangle' : 'lock-closed')"
+         :title="access?.known === false ? 'Your role no longer exists' : 'Nothing to show yet'"
+         :description="
+            access?.known === false
+               ? `Your account has the role '${access.role}', which is not configured anymore, so it grants no access. Ask an administrator to assign you a new role.`
+               : 'Your role does not give access to any section. Ask an administrator for more permissions.'
+         "
+         fill
+      />
+   </div>
 </template>
 
 <script setup lang="ts">
-import { definePageMeta, navigateTo } from '#imports'
-import cmsConfig from '#cms-config'
+import { EmptyState as KEmptyState } from '@xleddyl/443-components-vue'
+import { definePageMeta, navigateTo, useRoute } from '#imports'
+import { useCmsPermissions } from '../composables/cms-permissions'
+import { cmsIcon } from '../utils/ui'
 
 definePageMeta({ layout: 'cms-admin', middleware: 'cms-auth' })
 
-const first = Object.keys(cmsConfig)[0]
-await navigateTo(first ? `/cms/${first}` : '/cms/media', { replace: true })
+const route = useRoute()
+const { access, firstPath } = useCmsPermissions()
+
+const first = firstPath()
+if (first) await navigateTo({ path: first, query: route.query }, { replace: true })
 </script>

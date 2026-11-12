@@ -10,13 +10,14 @@ import { renderSchemaFile } from '../src/schema-codegen'
 import type { CmsConfig, CmsI18n } from '../src/runtime/shared/index'
 import { normalizeCmsConfig } from '../src/runtime/shared/index'
 import type { CmsExportFile, CmsImportPreview } from '../src/runtime/shared/transfer'
+import { LIST_IDS_MAX } from '../src/runtime/shared/list-filters'
 import { IMPORT_MAX_BYTES, parseCsv } from '../src/runtime/shared/transfer'
 
 const state = vi.hoisted(() => ({
    db: null as unknown,
    schema: {} as Record<string, unknown>,
    config: {} as Record<string, unknown>,
-   user: null as { email: string } | null,
+   user: null as { email: string; id?: string; passwordStamp?: string } | null,
 }))
 
 vi.mock('#imports', () => ({
@@ -75,6 +76,16 @@ vi.mock('#cms-tables', () => ({
 vi.mock('#cms-config', () => ({
    get default() {
       return state.config
+   },
+}))
+
+vi.mock('#cms-roles', () => ({
+   default: {
+      writer: {
+         label: 'Writer',
+         description: null,
+         can: ['events.read', 'events.create', 'events.update', 'events.import'],
+      },
    },
 }))
 
@@ -309,6 +320,52 @@ describe('list filters endpoint', () => {
    })
 })
 
+describe('list ids endpoint', () => {
+   async function allIds(path: string) {
+      const response = await get(path)
+      expect(response.status).toBe(200)
+      return (await response.json()) as { ids: string[]; total: number }
+   }
+
+   it('returns every matching id for the search and filters, in list order', async () => {
+      expect(await allIds('/api/cms/admin/events?ids=true&sort=title&order=asc')).toEqual({
+         ids: ['ev_3', 'ev_2', 'ev_1'],
+         total: 3,
+      })
+      expect(
+         await allIds('/api/cms/admin/events?ids=true&filter.visibility=members&limit=1')
+      ).toEqual({ ids: ['ev_1', 'ev_3'], total: 2 })
+      expect(await allIds('/api/cms/admin/events?ids=true&search=night')).toEqual({
+         ids: ['ev_2'],
+         total: 1,
+      })
+   })
+
+   it('checks the session, the read permission and the filters like the list', async () => {
+      state.user = null
+      expect((await get('/api/cms/admin/events?ids=true')).status).toBe(401)
+      state.user = { email: 'someone@example.com' }
+      expect((await get('/api/cms/admin/events?ids=true')).status).toBe(403)
+      state.user = { email: 'admin@example.com' }
+      expect((await get('/api/cms/admin/events?ids=true&filter.seats=4')).status).toBe(400)
+   })
+
+   it(`caps the ids at ${LIST_IDS_MAX} and still reports the total`, async () => {
+      const extra = Array.from({ length: LIST_IDS_MAX + 5 }, (_, index) => ({
+         id: `bulk_${String(index).padStart(5, '0')}`,
+         name: `Bulk ${index}`,
+      }))
+      await db.insert(table('tags')).values(extra as never)
+      try {
+         const body = await allIds('/api/cms/admin/tags?ids=true')
+         expect(body.ids).toHaveLength(LIST_IDS_MAX)
+         expect(body.total).toBe(LIST_IDS_MAX + 6)
+      } finally {
+         await db.delete(table('tags')).where(sql`id like 'bulk_%'`)
+      }
+   })
+})
+
 describe('export endpoint', () => {
    it('requires an admin session', async () => {
       state.user = null
@@ -430,6 +487,37 @@ describe('import endpoint', () => {
          poster: 'library/autumn.webp',
          category: 'cat_lake',
       })
+   })
+
+   it('refuses published rows to a role without publish', async () => {
+      await insert('cms_users', {
+         id: 'usr_writer',
+         email: 'writer@example.com',
+         role: 'writer',
+         passwordHash: 'hash-0123456789abcdef',
+         mustChangePassword: false,
+      })
+      state.user = {
+         id: 'usr_writer',
+         email: 'writer@example.com',
+         passwordStamp: '0123456789abcdef',
+      }
+      const result = await preview(
+         '/api/cms/import/events?format=json&mode=upsert',
+         JSON.stringify([
+            { title: 'Draft row', slug: 'draft-row' },
+            { title: 'Live row', slug: 'live-row', status: 'published' },
+            { id: 'ev_1', title: 'Spring fair', slug: 'spring-fair' },
+            { id: 'ev_2', title: 'Night fishing', slug: 'night-fishing' },
+         ])
+      )
+      expect(result.rows.map((row) => row.errors.map((issue) => issue.message))).toEqual([
+         [],
+         ['Publishing needs the events.publish permission'],
+         ['Editing a published item needs the events.publish permission'],
+         [],
+      ])
+      expect((await post('/api/cms/import/tags?format=json', '[]')).status).toBe(403)
    })
 
    it('updates by id in upsert mode and keeps ids', async () => {

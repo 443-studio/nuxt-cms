@@ -44,6 +44,71 @@ export function cmsBlockProps(item: CmsBlockItem): Record<string, unknown> {
    )
 }
 
+export interface CmsBlockScope {
+   entry?: string
+   schemaPath: string | null
+   listPath: string
+}
+
+export interface CmsBlockParent {
+   entry?: string
+   schemaPath: string | null
+   itemPath: string
+   type: string
+   props: Record<string, unknown>
+}
+
+export function nestedBlocksField(
+   parent: Pick<CmsBlockParent, 'props'>,
+   blocks: unknown,
+   field?: string
+): string | undefined {
+   if (field) return field
+   if (!blocks) return undefined
+   return Object.entries(parent.props).find(([, value]) => value === blocks)?.[0]
+}
+
+export function cmsBlockScope(
+   options: { entry?: string; field?: string },
+   parent?: CmsBlockParent | null,
+   blocks?: unknown
+): CmsBlockScope {
+   if (!parent) {
+      const field = options.field ?? CONTENT_BODY_FIELD
+      return {
+         entry: options.entry,
+         schemaPath: options.entry ? field : null,
+         listPath: field,
+      }
+   }
+   const key = nestedBlocksField(parent, blocks, options.field) ?? '_'
+   const entry = options.entry ?? parent.entry
+   return {
+      entry,
+      schemaPath: entry && parent.schemaPath ? `${parent.schemaPath}.${parent.type}.${key}` : null,
+      listPath: `${parent.itemPath}.${key}`,
+   }
+}
+
+export function cmsBlockAnnotation(
+   block: Pick<ResolvedCmsBlock, 'index' | 'type'>,
+   scope: Pick<CmsBlockScope, 'listPath'>,
+   nested: boolean
+): Record<string, string | number> {
+   const path = `${scope.listPath}.${block.index}`
+   return nested
+      ? {
+           'data-cms-block-path': path,
+           'data-cms-block-parent': scope.listPath.slice(0, scope.listPath.lastIndexOf('.')),
+           'data-cms-block-type': block.type,
+        }
+      : {
+           'data-cms-block': block.index,
+           'data-cms-block-path': path,
+           'data-cms-block-type': block.type,
+        }
+}
+
 export function resolveCmsBlocks(
    blocks: readonly CmsBlockItem[] | null | undefined,
    options: { entry?: string; field?: string; onMissing?: (item: CmsBlockItem) => void } = {}

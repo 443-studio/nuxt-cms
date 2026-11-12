@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { $cmsQuery, cmsQueryKey, useCms } from '../src/runtime/app/composables/cms-query'
-import { CMS_GRAPHQL_BATCH_LIMIT } from '../src/runtime/shared/index'
+import { CMS_GRAPHQL_BATCH_LIMIT, PREVIEW_HEADER } from '../src/runtime/shared/index'
+import { nuxtAppStub } from './stubs/imports'
 
 interface Body {
    query: string
    variables?: Record<string, unknown>
 }
 
-type Fetch = (url: string, options: { method: string; body: Body | Body[] }) => Promise<unknown>
+type Fetch = (
+   url: string,
+   options: { method: string; body: Body | Body[]; headers?: Record<string, string> }
+) => Promise<unknown>
 
 const answer = (body: Body) => ({ data: { echo: body.query, variables: body.variables ?? null } })
 
@@ -22,7 +26,10 @@ beforeEach(() => {
 
 afterEach(() => {
    vi.unstubAllGlobals()
+   nuxtAppStub.current = null
 })
+
+const TOKEN = 'a'.repeat(43)
 
 describe('$cmsQuery coalescing', () => {
    it('sends the queries of one tick in one request and dedupes identical ones', async () => {
@@ -128,5 +135,38 @@ describe('useCms keys', () => {
       expect((second as unknown as { key: string }).key).toBe('cms-page:/:it')
       expect(fetchMock).toHaveBeenCalledTimes(1)
       expect(first.data.value).toEqual({ echo: 'query A { a }', variables: { locale: 'it' } })
+   })
+})
+
+describe('preview token forwarding', () => {
+   it('sends the token of the current route as a header in its own batch, never deduped', async () => {
+      const plain = $cmsQuery('query A { a }')
+      nuxtAppStub.current = { _route: { query: { 'cms-preview': TOKEN } } }
+      const previewed = [$cmsQuery('query A { a }'), $cmsQuery('query A { a }')]
+      nuxtAppStub.current = null
+      await Promise.all([plain, ...previewed])
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      const [publicCall, previewCall] = fetchMock.mock.calls.map((call) => call[1])
+      expect(publicCall!.headers).toBeUndefined()
+      expect(publicCall!.body).toEqual({ query: 'query A { a }' })
+      expect(previewCall!.headers).toEqual({ [PREVIEW_HEADER]: TOKEN })
+      expect(previewCall!.body).toEqual([{ query: 'query A { a }' }, { query: 'query A { a }' }])
+   })
+
+   it('ignores a malformed token', async () => {
+      nuxtAppStub.current = { _route: { query: { 'cms-preview': 'not-a-token' } } }
+      await $cmsQuery('query A { a }')
+      expect(fetchMock.mock.calls[0]![1].headers).toBeUndefined()
+   })
+
+   it('gives preview data its own async data key', async () => {
+      nuxtAppStub.current = { _route: { query: { 'cms-preview': [TOKEN] } } }
+      const result = useCms('query A { a }')
+      nuxtAppStub.current = null
+      await result
+      expect((result as unknown as { key: string }).key).toBe(
+         `${cmsQueryKey('query A { a }')}:cms-preview`
+      )
+      expect(fetchMock.mock.calls[0]![1].headers).toEqual({ [PREVIEW_HEADER]: TOKEN })
    })
 })

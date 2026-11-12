@@ -1,26 +1,38 @@
 import type { SQL } from 'drizzle-orm'
 import { desc, inArray, or, sql } from 'drizzle-orm'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import type { CmsConfig, CmsEntry, CmsI18n, FieldConfig } from '../../shared/index'
+import type { CmsBlockPath, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from '../../shared/index'
 import {
    decodeTranslatableValue,
+   formatBlockPath,
+   resolveBlockPath,
+   walkBlocks,
    isMultiSelect,
    isTranslatableField,
+   linkLabelTexts,
    mediaFilename,
    pageColumnFields,
    pageFields,
    pageFieldsTableName,
    pageMediaTableName,
    pageRouteOf,
+   readLinkValue,
    selectOptionLabel,
    selectValuesMatching,
 } from '../../shared/index'
-import type { CmsSearchHit, CmsSearchResponse, CmsSearchSnippet } from '../../shared/search'
+import type {
+   CmsSearchHit,
+   CmsSearchLinkFocus,
+   CmsSearchResponse,
+   CmsSearchSnippet,
+} from '../../shared/search'
 import {
    CMS_SEARCH_HITS_PER_ROW,
    CMS_SEARCH_MIN_LENGTH,
    CMS_SEARCH_ROWS_PER_ENTRY,
    CMS_SEARCH_VALUE_LIMIT,
+   cmsEntryLink,
+   cmsHashLink,
    cmsSearchLink,
    normalizeSearchQuery,
    searchCmsLabels,
@@ -46,6 +58,7 @@ export interface CmsSearchOptions {
    tables: Record<string, unknown>
    i18n: CmsI18n
    query: string
+   media?: boolean
 }
 
 type Row = Record<string, unknown>
@@ -57,7 +70,7 @@ interface FieldText {
 
 interface RowHit {
    field: string
-   block: number | null
+   block: string | null
    fieldLabel: string
    locale: string | null
    snippet: CmsSearchSnippet
@@ -76,6 +89,7 @@ const VALUE_TYPES = new Set([
    'select',
    'tags',
    'json',
+   'link',
    'blocks',
 ])
 
@@ -122,6 +136,13 @@ function fieldTexts(field: FieldConfig, value: unknown, defaultLocale: string): 
          .join(', ')
       return [{ locale: null, text }]
    }
+   if (field.type === 'link') {
+      const link = readLinkValue(value)
+      if (!link) return []
+      const texts: FieldText[] = linkLabelTexts(link.label)
+      if (link.url) texts.push({ locale: null, text: link.url })
+      return texts
+   }
    if (field.type === 'tags' && Array.isArray(value))
       return value.length ? [{ locale: null, text: value.map(String).join(', ') }] : []
    if (typeof value === 'string') return [{ locale: null, text: plainText(field, value) }]
@@ -154,21 +175,29 @@ function rowHits(
          collect(field, value, { field: key, block: null, fieldLabel: field.label })
          continue
       }
-      if (!Array.isArray(value)) continue
-      value.forEach((item: Row | null, index) => {
-         const block = item ? field.blocks?.[String(item.type)] : undefined
-         if (!item || !block) return
+      walkBlocks({ [key]: field }, row, ({ item, block, path }) => {
+         if (hits.length >= CMS_SEARCH_HITS_PER_ROW) return false
          for (const [blockKey, blockField] of Object.entries(block.fields)) {
-            if (!isSearchableField(blockField)) continue
+            if (!isSearchableField(blockField) || blockField.type === 'blocks') continue
             collect(blockField, item[blockKey], {
                field: key,
-               block: index,
-               fieldLabel: searchFieldPath(field.label, block.label, blockField.label),
+               block: formatBlockPath(path.slice(1)),
+               fieldLabel: searchFieldPath(...blockLabels(fields, row, path), blockField.label),
             })
          }
       })
    }
    return hits
+}
+
+function blockLabels(fields: Record<string, FieldConfig>, row: Row, path: CmsBlockPath): string[] {
+   const labels: string[] = []
+   for (let end = 2; end <= path.length; end += 2) {
+      const location = resolveBlockPath(fields, row, path.slice(0, end))
+      if (!location) break
+      labels.push(location.field.label, location.block?.label ?? String(location.item.type))
+   }
+   return labels
 }
 
 function titleOf(entry: CmsEntry, row: Row, defaultLocale: string): string | null {
@@ -250,13 +279,20 @@ async function pageRows(
    return decodePageRows(entry, rows)
 }
 
-function itemPath(name: string, entry: CmsEntry, row: Row): string | null {
-   if (entry.kind === 'single') return `/cms/${name}`
+function itemLink(
+   name: string,
+   entry: CmsEntry,
+   row: Row
+): ((focus: CmsSearchLinkFocus) => string) | null {
+   if (entry.kind === 'single') return (focus) => cmsSearchLink(`/cms/${name}`, focus)
    if (entry.kind === 'page') {
       const route = pageRouteOf(entry, String(row.id))
-      return route ? `/cms/${name}/${route.key}` : null
+      return route ? (focus) => cmsSearchLink(`/cms/${name}/${route.key}`, focus) : null
    }
-   return row.id == null ? null : `/cms/${name}/${String(row.id)}`
+   if (row.id == null) return null
+   const id = String(row.id)
+   if (entry.kind === 'collection') return (focus) => cmsEntryLink(name, id, focus)
+   return (focus) => cmsSearchLink(`/cms/${name}/${id}`, focus)
 }
 
 function entryHits(
@@ -268,8 +304,8 @@ function entryHits(
    const { defaultLocale } = context.i18n
    const hits: CmsSearchHit[] = []
    for (const row of rows) {
-      const path = itemPath(name, entry, row)
-      if (!path) continue
+      const link = itemLink(name, entry, row)
+      if (!link) continue
       const route = entry.kind === 'page' ? pageRouteOf(entry, String(row.id)) : undefined
       const fields = route ? pageFields(entry, route.path) : entry.fields
       const title = route ? route.label : titleOf(entry, row, defaultLocale)
@@ -285,11 +321,7 @@ function entryHits(
             fieldLabel: hit.fieldLabel,
             locale: hit.locale,
             snippet: hit.snippet,
-            to: cmsSearchLink(path, {
-               field: hit.field,
-               locale: hit.locale,
-               block: hit.block,
-            }),
+            to: link({ field: hit.field, locale: hit.locale, block: hit.block }),
          })
       }
    }
@@ -297,6 +329,7 @@ function entryHits(
 }
 
 async function mediaHits(context: SearchContext): Promise<CmsSearchHit[]> {
+   if (context.media === false) return []
    const table = context.tables.cms_media as SQLiteTable | undefined
    const columns = table ? columnsOf(table) : undefined
    if (!table || !columns?.alt || !columns.key || !columns.folder) return []
@@ -325,7 +358,10 @@ async function mediaHits(context: SearchContext): Promise<CmsSearchHit[]> {
             fieldLabel: 'Alt text',
             locale: null,
             snippet,
-            to: folder ? `/cms/media?${new URLSearchParams({ folder })}` : '/cms/media',
+            to: cmsHashLink(
+               folder ? `/cms/media?${new URLSearchParams({ folder })}` : '/cms/media',
+               { media: row.key }
+            ),
          } satisfies CmsSearchHit,
       ]
    })

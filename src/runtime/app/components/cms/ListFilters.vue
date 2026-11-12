@@ -7,24 +7,21 @@
       multiple
       clearable
       clear-label="Clear filters"
-      class="cms-list-filters"
       @update:model-value="onPillsUpdate"
    >
       <template v-for="key in relationKeys" #[`panel-${key}`]="{ close }" :key="key">
-         <div class="cms-list-filter-panel">
-            <CmsRelationField
-               :model-value="model[key] ?? null"
-               :to="config.fields[key]!.to!"
-               @update:model-value="(value) => pickRelation(key, value, close)"
-            />
-         </div>
+         <CmsRelationField
+            :model-value="model[key] ?? null"
+            :to="relationTarget(config.fields[key]!)"
+            @update:model-value="(value) => pickRelation(key, value, close)"
+         />
       </template>
    </KFilterPills>
 </template>
 
 <script setup lang="ts">
 import type { CmsConfig, CmsEntry } from '#nuxt-cms'
-import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
+import { isTranslatableField, relationTarget, selectDisplayValue } from '#nuxt-cms'
 import type { FilterPillOption, MenuEntry } from '@xleddyl/443-components-vue'
 import { FilterPills as KFilterPills } from '@xleddyl/443-components-vue'
 import { computed, reactive, watch } from '#imports'
@@ -64,6 +61,7 @@ const pills = computed<FilterPillOption<string>[]>(() =>
          active: isActive(key),
          menu,
          panel: !menu,
+         panelWidth: menu ? undefined : '18rem',
       }
    })
 )
@@ -123,7 +121,7 @@ function titleText(entry: CmsEntry | undefined, value: unknown): string {
 }
 
 function relationTitle(key: string, id: string): string {
-   const target = (cmsConfig as CmsConfig)[props.config.fields[key]?.to ?? '']
+   const target = (cmsConfig as CmsConfig)[relationTarget(props.config.fields[key] ?? {})]
    const known = props.relations?.[key]?.[id]
    const title = known !== undefined ? titleText(target, known) : fetchedTitles[`${key}:${id}`]
    return title || `#${id}`
@@ -133,7 +131,7 @@ async function resolveTitle(key: string, id: string) {
    if (import.meta.server) return
    const cacheKey = `${key}:${id}`
    if (props.relations?.[key]?.[id] !== undefined || fetchedTitles[cacheKey] !== undefined) return
-   const to = props.config.fields[key]?.to
+   const to = relationTarget(props.config.fields[key] ?? {})
    if (!to) return
    fetchedTitles[cacheKey] = ''
    try {

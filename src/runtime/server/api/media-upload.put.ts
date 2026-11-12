@@ -12,12 +12,12 @@ import { isMediaFolderMarker } from '../../shared/index'
 import { objectKeySchema } from '../../shared/validation'
 import { requireMediaFilePath, writeMediaFile } from '../utils/media-fs'
 import { assertUploadContentType, assertUploadSize, useMediaStorage } from '../utils/media'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const querySchema = z.object({ key: objectKeySchema })
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   await requireCmsPermission(event, 'media.write')
    const { media } = useMediaStorage(event)
    if (media.storage !== 'filesystem') {
       throw createError({

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -7,6 +7,7 @@ import {
    addComponent,
    addComponentsDir,
    addImports,
+   addPlugin,
    addRouteMiddleware,
    addServerHandler,
    addServerPlugin,
@@ -15,6 +16,7 @@ import {
    createResolver,
    defineNuxtModule,
    extendPages,
+   hasNuxtModule,
    resolvePath,
    tryResolveModule,
    useLogger,
@@ -24,8 +26,15 @@ import { buildSchema, introspectionFromSchema } from 'graphql'
 import { minifyIntrospection, outputIntrospectionFile } from 'gql.tada/internal'
 import { createJiti } from 'jiti'
 import { renderBrandFile, resolveBrand } from './brand-codegen'
+import { renderImageFile, resolveCmsImageSetup } from './image-codegen'
 import { renderGraphqlSdl } from './runtime/shared/graphql-sdl'
-import { migrationsDirFor } from './runtime/shared/migrations-dir'
+import type { CmsMigrationFixes } from './runtime/shared/migrations-dir'
+import {
+   MIGRATION_FIXES_FILE,
+   fixNewMigrations,
+   migrationSqlFiles,
+   migrationsDirFor,
+} from './runtime/shared/migrations-dir'
 import type { CmsConfig, CmsPageRoute, MediaStorageMode } from './runtime/shared/index'
 import { DEFAULT_MEDIA_MAX_FILE_SIZE, normalizeCmsConfig } from './runtime/shared/index'
 import {
@@ -36,6 +45,18 @@ import {
    renderBlocksFile,
 } from './blocks-codegen'
 import { DEFAULT_CMS_PREVIEW_PATH, previewPathErrors } from './runtime/shared/preview'
+import { previewBannerErrors } from './runtime/shared/preview-links'
+import type { CmsSeoModuleOptions, CmsSiteModuleOptions } from './runtime/shared/seo'
+import {
+   ROBOTS_CONFLICT_MODULES,
+   ROBOTS_PATH,
+   SITEMAP_CONFLICT_MODULES,
+   SITEMAP_PATH,
+   missingSiteUrlWarning,
+   normalizeSiteUrl,
+   resolveSeoSwitches,
+   seoOptionErrors,
+} from './runtime/shared/seo'
 import {
    collectMediaManifest,
    renderMediaManifestFile,
@@ -47,11 +68,27 @@ import {
    renderMigrationsTypes,
 } from './migrations-codegen'
 import type { Driver } from './schema-codegen'
-import { renderSchemaFile, validateConfig } from './schema-codegen'
+import { renderSchemaFile, uniqueTextColumns, validateConfig } from './schema-codegen'
 import { renderQueriesFile } from './queries-codegen'
 import { resolvePageRoutes, routePathsFromDir } from './runtime/shared/page-routes'
 import { renderTypesFile } from './types-codegen'
 import { CMS_ENABLED_ENV, resolveCmsEnabled } from './enabled'
+import type { ModuleOptionsWebhook } from './webhooks-config'
+import { resolveWebhooks } from './webhooks-config'
+import type { CmsRolesInput } from './runtime/shared/roles'
+import { validateRoles } from './runtime/shared/roles'
+
+export type { CmsWebhookEventFilter, ModuleOptionsWebhook } from './webhooks-config'
+export type {
+   CmsEntryAction,
+   CmsEntryChange,
+   CmsEntryStatus,
+   CmsHookContext,
+   CmsHookUser,
+   CmsMediaAction,
+   CmsMediaChange,
+} from './runtime/shared/hooks'
+export type { CmsRoleInput, CmsRolesInput } from './runtime/shared/roles'
 
 export type ModuleOptionsDatabase = { migrateOnBoot?: boolean } & (
    | { driver?: 'sqlite'; path?: string }
@@ -97,7 +134,12 @@ export interface ModuleOptions {
    preview?: {
       path?: string
       component?: string
+      banner?: boolean
    }
+   webhooks?: ModuleOptionsWebhook[]
+   roles?: CmsRolesInput
+   site?: CmsSiteModuleOptions
+   seo?: CmsSeoModuleOptions
 }
 
 interface ResolvedModuleOptions {
@@ -140,6 +182,7 @@ interface ResolvedModuleOptions {
    preview: {
       path: string
       component: string
+      banner: boolean
    }
 }
 
@@ -175,6 +218,10 @@ function resolveDatabaseOptions(
    }
    return { ...shared, driver: 'sqlite', path: database?.path ?? 'data/cms.db' }
 }
+
+const MODULE_VERSION: string = JSON.parse(
+   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+).version
 
 const DEFAULT_FILESYSTEM_MEDIA_DIR = 'data/media'
 const DEFAULT_FILESYSTEM_MEDIA_BASE_URL = '/media'
@@ -244,11 +291,87 @@ function resolveModuleOptions(options: ModuleOptions): ResolvedModuleOptions {
       preview: {
          path: options.preview?.path ?? DEFAULT_CMS_PREVIEW_PATH,
          component: options.preview?.component?.trim() ?? '',
+         banner: options.preview?.banner ?? true,
       },
    }
 }
 
 const moduleRequire = createRequire(import.meta.url)
+
+function resolveSiteUrlOption(nuxt: Nuxt, options: ModuleOptions): string {
+   const existing = nuxt.options.runtimeConfig.public.siteUrl
+   const nuxtSite = (nuxt.options as unknown as { site?: { url?: unknown } }).site?.url
+   const candidates = [
+      options.site?.url,
+      typeof existing === 'string' ? existing : undefined,
+      typeof nuxtSite === 'string' ? nuxtSite : undefined,
+      process.env.NUXT_PUBLIC_SITE_URL,
+   ]
+   return normalizeSiteUrl(candidates.find((candidate) => candidate?.trim()))
+}
+
+function setupSiteUrl(nuxt: Nuxt, options: ModuleOptions, logger: ReturnType<typeof useLogger>) {
+   const errors = seoOptionErrors(options.seo, options.site)
+   if (errors.length) throw new Error(`[nuxt-cms] ${errors.join('\n')}`)
+   const existing = nuxt.options.runtimeConfig.public.siteUrl
+   const siteUrl = resolveSiteUrlOption(nuxt, options)
+   if (
+      options.site?.url &&
+      typeof existing === 'string' &&
+      existing.trim() &&
+      normalizeSiteUrl(existing) !== siteUrl
+   ) {
+      logger.warn(
+         `[nuxt-cms] cms.site.url (${siteUrl}) replaces runtimeConfig.public.siteUrl (${existing}).`
+      )
+   }
+   nuxt.options.runtimeConfig.public.siteUrl = siteUrl
+   nuxt.options.runtimeConfig.public.cmsTrustForwardedHost =
+      options.site?.trustForwardedHost === true
+}
+
+function setupSeoRoutes(
+   nuxt: Nuxt,
+   resolver: ReturnType<typeof createResolver>,
+   seo: CmsSeoModuleOptions | undefined,
+   publicDir: string,
+   logger: ReturnType<typeof useLogger>
+) {
+   nuxt.hook('modules:done', () => {
+      const installed = (names: string[]) => names.filter((name) => hasNuxtModule(name, nuxt))
+      const publicFile = (file: string) =>
+         existsSync(join(publicDir, file)) ? [`public/${file}`] : []
+      const sitemapConflicts = [
+         ...installed(SITEMAP_CONFLICT_MODULES),
+         ...publicFile(SITEMAP_PATH.slice(1)),
+      ]
+      const switches = resolveSeoSwitches(seo, {
+         sitemap: sitemapConflicts,
+         robots: [...installed(ROBOTS_CONFLICT_MODULES), ...publicFile(ROBOTS_PATH.slice(1))],
+      })
+      for (const warning of switches.warnings) logger.warn(warning)
+      const siteUrlWarning = nuxt.options.runtimeConfig.public.siteUrl
+         ? null
+         : missingSiteUrlWarning(switches)
+      if (siteUrlWarning && !nuxt.options.dev) logger.warn(siteUrlWarning)
+      const runtime = nuxt.options.runtimeConfig.cms as Record<string, unknown>
+      runtime.seo = {
+         sitemap: switches.sitemap,
+         robots: switches.robots,
+         robotsSitemap: switches.sitemap || sitemapConflicts.length > 0,
+      }
+      if (switches.sitemap)
+         addServerHandler({
+            route: SITEMAP_PATH,
+            handler: resolver.resolve('./runtime/server/routes/sitemap'),
+         })
+      if (switches.robots)
+         addServerHandler({
+            route: ROBOTS_PATH,
+            handler: resolver.resolve('./runtime/server/routes/robots'),
+         })
+   })
+}
 
 function resolveImport(specifier: string) {
    try {
@@ -425,6 +548,31 @@ function addCmsBlocks(
       name: 'CmsBlocks',
       filePath: resolver.resolve('./runtime/app/blocks/CmsBlocks.vue'),
    })
+   addComponent({
+      name: 'CmsLink',
+      filePath: resolver.resolve('./runtime/app/links/CmsLink.vue'),
+   })
+   addComponent({
+      name: 'CmsField',
+      filePath: resolver.resolve('./runtime/app/blocks/CmsField'),
+   })
+   addPlugin(resolver.resolve('./runtime/app/plugins/cms-field'))
+   addTypeTemplate({
+      filename: 'types/nuxt-cms-field.d.ts',
+      getContents: () =>
+         [
+            "import type { Directive } from 'vue'",
+            '',
+            "declare module 'vue' {",
+            '  interface GlobalDirectives {',
+            '    vCmsField: Directive<HTMLElement, string>',
+            '  }',
+            '}',
+            '',
+            'export {}',
+            '',
+         ].join('\n'),
+   })
    if (!refs.length && !previews.length) return
    nuxt.hook('components:extend', (components) => {
       const names = components.map((component) => component.pascalName)
@@ -434,6 +582,25 @@ function addCmsBlocks(
       ]
       if (errors.length)
          throw new Error(`[nuxt-cms] Invalid block components:\n${errors.join('\n')}`)
+   })
+}
+
+function addCmsImage(nuxt: Nuxt, resolver: ReturnType<typeof createResolver>) {
+   const imageTemplate = addTemplate({
+      filename: 'cms/image.ts',
+      write: true,
+      getContents: () =>
+         renderImageFile(
+            resolveCmsImageSetup(
+               hasNuxtModule('@nuxt/image', nuxt),
+               nuxt.options as { image?: { provider?: unknown } }
+            )
+         ),
+   })
+   nuxt.options.alias['#cms-image'] = imageTemplate.dst
+   addComponent({
+      name: 'CmsImage',
+      filePath: resolver.resolve('./runtime/app/image/CmsImage.vue'),
    })
 }
 
@@ -502,6 +669,12 @@ export default defineNuxtModule<ModuleOptions>({
       const resolver = createResolver(import.meta.url)
       const logger = useLogger('nuxt-cms')
       const resolved = resolveModuleOptions(options)
+      const webhooks = resolveWebhooks(options.webhooks, process.env)
+      if (webhooks.errors.length) {
+         throw new Error(`[nuxt-cms] Invalid webhooks:\n${webhooks.errors.join('\n')}`)
+      }
+      for (const warning of webhooks.warnings) logger.warn(`[nuxt-cms] ${warning}`)
+      setupSiteUrl(nuxt, options, logger)
 
       if (!resolveCmsEnabled(options.enabled, process.env[CMS_ENABLED_ENV])) {
          const queryStub = resolver.resolve('./runtime/app/composables/cms-query-disabled')
@@ -514,6 +687,16 @@ export default defineNuxtModule<ModuleOptions>({
             { name: 'useCmsPage', from: entryStub },
             { name: 'useCmsContents', from: entryStub },
             { name: 'useCmsContent', from: entryStub },
+            { name: 'useCmsRoute', from: entryStub },
+            {
+               name: 'useCmsSite',
+               from: resolver.resolve('./runtime/app/composables/cms-site-disabled'),
+            },
+            { name: 'useCmsSeo', from: resolver.resolve('./runtime/app/composables/cms-seo') },
+            {
+               name: 'useCmsPreviewMode',
+               from: resolver.resolve('./runtime/app/composables/cms-preview-mode'),
+            },
          ])
          const disabledConfig = await loadCmsConfig(
             nuxt,
@@ -524,12 +707,14 @@ export default defineNuxtModule<ModuleOptions>({
          )
          addCmsTypeTemplates(nuxt, disabledConfig)
          addCmsBlocks(nuxt, resolver, disabledConfig, resolved.preview.component)
+         addCmsImage(nuxt, resolver)
          nuxt.options.runtimeConfig.public.cms = {
             mediaBaseUrl: resolved.media.publicBaseUrl,
             mediaStorage: resolved.media.storage,
             mediaMaxFileSize: resolved.media.maxFileSize,
             i18n: resolved.i18n,
             previewPath: resolved.preview.path,
+            version: MODULE_VERSION,
          }
          logger.info(
             '[nuxt-cms] disabled: registering no-op query composables and generated types, skipping admin, server and database setup'
@@ -592,9 +777,42 @@ export default defineNuxtModule<ModuleOptions>({
 
       addCmsTypeTemplates(nuxt, cmsConfig)
 
+      const roles = validateRoles(options.roles, cmsConfig)
+      if (roles.errors.length) {
+         for (const error of roles.errors) logger.error(error)
+         throw new Error(
+            `[nuxt-cms] Invalid cms.roles (${roles.errors.length} error${
+               roles.errors.length > 1 ? 's' : ''
+            })`
+         )
+      }
+      for (const warning of roles.warnings) logger.warn(`[nuxt-cms] ${warning}`)
+      const rolesTypes = resolver.resolve('./runtime/shared/roles').replace(/\\/g, '/')
+      addTemplate({
+         filename: 'cms/roles.d.ts',
+         write: true,
+         getContents: () =>
+            [
+               `import type { CmsRoles } from '${rolesTypes}'`,
+               ``,
+               `declare const roles: CmsRoles`,
+               ``,
+               `export default roles`,
+               ``,
+            ].join('\n'),
+      })
+      const rolesTemplate = addTemplate({
+         filename: 'cms/roles.js',
+         write: true,
+         getContents: () => `export default ${JSON.stringify(roles.roles, null, 3)}\n`,
+      })
+      nuxt.options.alias['#cms-roles'] = rolesTemplate.dst
+
       const queryComposables = resolver.resolve('./runtime/app/composables/cms-query')
       const entryComposables = resolver.resolve('./runtime/app/composables/cms-entry')
       addImports([
+         { name: 'useCmsSite', from: resolver.resolve('./runtime/app/composables/cms-site') },
+         { name: 'useCmsSeo', from: resolver.resolve('./runtime/app/composables/cms-seo') },
          { name: 'useCms', from: queryComposables },
          { name: '$cmsQuery', from: queryComposables },
          { name: 'useCmsSingle', from: entryComposables },
@@ -602,10 +820,22 @@ export default defineNuxtModule<ModuleOptions>({
          { name: 'useCmsPage', from: entryComposables },
          { name: 'useCmsContents', from: entryComposables },
          { name: 'useCmsContent', from: entryComposables },
+         { name: 'useCmsRoute', from: entryComposables },
+         {
+            name: 'useCmsPreviewMode',
+            from: resolver.resolve('./runtime/app/composables/cms-preview-mode'),
+         },
       ])
       addCmsBlocks(nuxt, resolver, cmsConfig, resolved.preview.component)
+      addCmsImage(nuxt, resolver)
+      addPlugin(resolver.resolve('./runtime/app/plugins/cms-preview'))
+      if (resolved.preview.banner)
+         addPlugin(resolver.resolve('./runtime/app/plugins/cms-preview-banner.client'))
 
-      const previewErrors = previewPathErrors(resolved.preview.path, Object.keys(cmsConfig))
+      const previewErrors = [
+         ...previewPathErrors(resolved.preview.path, Object.keys(cmsConfig)),
+         ...previewBannerErrors(options.preview?.banner),
+      ]
       if (previewErrors.length) throw new Error(`[nuxt-cms] ${previewErrors.join('\n')}`)
       const previewPath = resolved.preview.path
       const previewRule = nuxt.options.routeRules?.[previewPath] ?? {}
@@ -660,6 +890,16 @@ export default defineNuxtModule<ModuleOptions>({
       const relativeMigrationsDir = relative(nuxt.options.rootDir, migrationsDir)
 
       const toPosix = (path: string) => path.replace(/\\/g, '/')
+      const migrationFixes: CmsMigrationFixes = {
+         dialect,
+         out: toPosix(migrationsDir),
+         uniqueTextColumns: uniqueTextColumns(cmsConfig),
+      }
+      addTemplate({
+         filename: `cms/${MIGRATION_FIXES_FILE}`,
+         write: true,
+         getContents: () => JSON.stringify(migrationFixes, null, 2),
+      })
       addTemplate({
          filename: 'cms/drizzle.config.ts',
          write: true,
@@ -765,6 +1005,10 @@ export default defineNuxtModule<ModuleOptions>({
 
       addServerPlugin(resolver.resolve('./runtime/server/plugins/session-validate'))
 
+      if (Object.keys(webhooks.webhooks).length) {
+         addServerPlugin(resolver.resolve('./runtime/server/plugins/webhooks'))
+      }
+
       if (!nuxt.options.dev) {
          addServerPlugin(resolver.resolve('./runtime/server/plugins/session-check'))
       }
@@ -782,13 +1026,24 @@ export default defineNuxtModule<ModuleOptions>({
                `--schema=${relativeSchemaPath}`,
                `--out=${relativeMigrationsDir}`,
             ]
+            const before = migrationSqlFiles(migrationsDir)
             const code = await new Promise<number>((done) => {
                spawn(process.execPath, args, { cwd: nuxt.options.rootDir, stdio: 'inherit' })
                   .on('close', (exitCode) => done(exitCode ?? 1))
                   .on('error', () => done(1))
             })
-            if (code !== 0)
+            if (code !== 0) {
                logger.error(`[nuxt-cms] drizzle-kit generate failed (exit code ${code})`)
+               return
+            }
+            const fixed = fixNewMigrations(
+               migrationsDir,
+               before,
+               migrationFixes.uniqueTextColumns,
+               dialect
+            )
+            for (const file of fixed)
+               logger.info(`[nuxt-cms] ${file}: blank values of new unique fields become NULL`)
          })
       }
 
@@ -848,6 +1103,11 @@ export default defineNuxtModule<ModuleOptions>({
             dir: mediaDir,
             ...((existingConfig.media as Record<string, unknown>) ?? {}),
          },
+         webhooks: {
+            ...webhooks.webhooks,
+            ...((existingConfig.webhooks as Record<string, unknown>) ?? {}),
+         } as never,
+         seo: { sitemap: false, robots: false, robotsSitemap: false },
       }
       nuxt.options.runtimeConfig.public.cms = {
          mediaBaseUrl: resolved.media.publicBaseUrl,
@@ -855,6 +1115,7 @@ export default defineNuxtModule<ModuleOptions>({
          mediaMaxFileSize: resolved.media.maxFileSize,
          i18n: resolved.i18n,
          previewPath,
+         version: MODULE_VERSION,
       }
 
       addTypeTemplate(
@@ -869,7 +1130,7 @@ export default defineNuxtModule<ModuleOptions>({
                   '    id?: string',
                   '    email: string',
                   '    name?: string | null',
-                  "    role?: 'superadmin' | 'admin'",
+                  '    role?: string',
                   '    firstLogin?: boolean',
                   '    passwordStamp?: string',
                   '  }',
@@ -889,6 +1150,27 @@ export default defineNuxtModule<ModuleOptions>({
                   '  }',
                   '}',
                   '',
+                  'export {}',
+                  '',
+               ].join('\n'),
+         },
+         { nuxt: true, nitro: true }
+      )
+
+      const hooksTypes = toPosix(resolver.resolve('./runtime/shared/hooks'))
+      addTypeTemplate(
+         {
+            filename: 'types/nuxt-cms-hooks.d.ts',
+            getContents: () =>
+               [
+                  `import type { CmsRuntimeHooks } from '${hooksTypes}'`,
+                  '',
+                  ...['nitropack', 'nitropack/types'].flatMap((name) => [
+                     `declare module '${name}' {`,
+                     '  interface NitroRuntimeHooks extends CmsRuntimeHooks {}',
+                     '}',
+                     '',
+                  ]),
                   'export {}',
                   '',
                ].join('\n'),
@@ -929,12 +1211,13 @@ export default defineNuxtModule<ModuleOptions>({
          )
       })
       nuxt.hook('modules:done', async () => {
-         const include = nuxt.options.vite.optimizeDeps?.include
-         if (!include) return
+         const optimizeDeps = (nuxt.options.vite.optimizeDeps ??= {})
+         const include = [...new Set([...(optimizeDeps.include ?? []), 'zod'])]
          const rootUrl = pathToFileURL(`${nuxt.options.rootDir}/`).href
-         nuxt.options.vite.optimizeDeps!.include = await Promise.all(
+         optimizeDeps.include = await Promise.all(
             include.map(async (entry) =>
-               entry.startsWith('@tiptap/') && !(await tryResolveModule(entry, rootUrl))
+               (entry.startsWith('@tiptap/') || entry === 'zod') &&
+               !(await tryResolveModule(entry, rootUrl))
                   ? `@xleddyl/nuxt-cms > ${entry}`
                   : entry
             )
@@ -1088,6 +1371,11 @@ export default defineNuxtModule<ModuleOptions>({
       }
 
       addServerHandler({
+         route: '/api/cms/link-usage',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/link-usage.post'),
+      })
+      addServerHandler({
          route: '/api/cms/search',
          method: 'get',
          handler: resolver.resolve('./runtime/server/api/search.get'),
@@ -1128,6 +1416,74 @@ export default defineNuxtModule<ModuleOptions>({
          handler: resolver.resolve('./runtime/server/api/account-welcome.post'),
       })
       addServerHandler({
+         route: '/api/cms/site',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/site.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/site',
+         method: 'put',
+         handler: resolver.resolve('./runtime/server/api/site.put'),
+      })
+      addServerHandler({
+         middleware: true,
+         handler: resolver.resolve('./runtime/server/middleware/hidden-site'),
+      })
+      addServerHandler({
+         middleware: true,
+         handler: resolver.resolve('./runtime/server/middleware/redirects'),
+      })
+      addServerHandler({
+         middleware: true,
+         handler: resolver.resolve('./runtime/server/middleware/preview-links'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/preview.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview-links/:collection/:id',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/preview-links.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview-links/:collection/:id',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/preview-links.post'),
+      })
+      addServerHandler({
+         route: '/api/cms/preview-links/:collection/:id/:linkId',
+         method: 'delete',
+         handler: resolver.resolve('./runtime/server/api/preview-link.delete'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/redirects.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/redirects.post'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects/import',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/redirects-import.post'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects/:id',
+         method: 'put',
+         handler: resolver.resolve('./runtime/server/api/redirect.put'),
+      })
+      addServerHandler({
+         route: '/api/cms/redirects/:id',
+         method: 'delete',
+         handler: resolver.resolve('./runtime/server/api/redirect.delete'),
+      })
+      setupSeoRoutes(nuxt, resolver, options.seo, publicDir, logger)
+      addServerHandler({
          route: '/api/cms/admin/settings',
          method: 'get',
          handler: resolver.resolve('./runtime/server/api/settings.get'),
@@ -1141,6 +1497,31 @@ export default defineNuxtModule<ModuleOptions>({
          route: '/api/cms/admin/settings/:key',
          method: 'delete',
          handler: resolver.resolve('./runtime/server/api/settings.delete'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/presets.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:id',
+         method: 'put',
+         handler: resolver.resolve('./runtime/server/api/preset.put'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:id',
+         method: 'delete',
+         handler: resolver.resolve('./runtime/server/api/preset.delete'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:collection/:field',
+         method: 'get',
+         handler: resolver.resolve('./runtime/server/api/presets-field.get'),
+      })
+      addServerHandler({
+         route: '/api/cms/presets/:collection/:field',
+         method: 'post',
+         handler: resolver.resolve('./runtime/server/api/presets-field.post'),
       })
 
       addServerHandler({

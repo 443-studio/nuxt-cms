@@ -3,6 +3,7 @@ import type {
    CmsCollectionName,
    CmsCollectionTypes,
    CmsContentName,
+   CmsContentRouteMatch,
    CmsContentTypes,
    CmsPagePath,
    CmsPageTypes,
@@ -14,11 +15,13 @@ import {
    cmsContentItemQueries,
    cmsContentQueries,
    cmsPageQueries,
+   cmsRouteEntries,
+   cmsRouteQuery,
    cmsSingleQueries,
 } from '#cms-queries'
 import { useAsyncData } from '#imports'
 import type { CmsAsyncDataOptions } from './cms-query'
-import { $cmsQuery } from './cms-query'
+import { cmsPreviewKey, cmsPreviewToken, cmsQueryWithPreview } from './cms-query'
 
 export interface CmsSortInput<Entry> {
    field: Extract<keyof Entry, string>
@@ -48,6 +51,10 @@ export interface CmsContentOptions<ResT, DefaultT> extends CmsAsyncDataOptions<R
 
 export type CmsContentsOptions<ResT, DefaultT, Entry> = CmsCollectionOptions<ResT, DefaultT, Entry>
 
+export interface CmsRouteOptions<ResT, DefaultT> extends CmsAsyncDataOptions<ResT, DefaultT> {
+   locale?: string
+}
+
 function unknownEntry(name: string): never {
    throw new Error(`[nuxt-cms] no generated query for "${name}"; check cms.config.ts`)
 }
@@ -60,11 +67,12 @@ export function useCmsSingle<K extends CmsSingleName, DefaultT = null>(
    const entryName = String(name)
    const query = cmsSingleQueries[entryName]
 
+   const preview = cmsPreviewToken()
    return useAsyncData(
-      key ?? `cms-single:${entryName}:${locale ?? ''}`,
+      key ?? cmsPreviewKey(`cms-single:${entryName}:${locale ?? ''}`, preview),
       async () => {
          if (!query) unknownEntry(entryName)
-         const result = await $cmsQuery(query, { locale })
+         const result = await cmsQueryWithPreview(query, { locale }, preview)
          return (result?.[entryName] ?? null) as CmsSingleTypes[K] | null
       },
       {
@@ -92,11 +100,12 @@ export function useCmsCollection<K extends CmsCollectionName, DefaultT = CmsColl
    const query = cmsCollectionQueries[entryName]
    const variables = { locale, filters, sort, limit, offset }
 
+   const preview = cmsPreviewToken()
    return useAsyncData(
-      key ?? `cms-collection:${entryName}:${JSON.stringify(variables)}`,
+      key ?? cmsPreviewKey(`cms-collection:${entryName}:${JSON.stringify(variables)}`, preview),
       async () => {
          if (!query) unknownEntry(entryName)
-         const result = await $cmsQuery(query, variables)
+         const result = await cmsQueryWithPreview(query, variables, preview)
          return (result?.[entryName] ?? []) as CmsCollectionTypes[K][]
       },
       {
@@ -124,11 +133,12 @@ export function useCmsContents<K extends CmsContentName, DefaultT = CmsContentTy
    const query = cmsContentQueries[entryName]
    const variables = { locale, filters, sort, limit, offset }
 
+   const preview = cmsPreviewToken()
    return useAsyncData(
-      key ?? `cms-contents:${entryName}:${JSON.stringify(variables)}`,
+      key ?? cmsPreviewKey(`cms-contents:${entryName}:${JSON.stringify(variables)}`, preview),
       async () => {
          if (!query) unknownEntry(entryName)
-         const result = await $cmsQuery(query, variables)
+         const result = await cmsQueryWithPreview(query, variables, preview)
          return (result?.[entryName] ?? []) as CmsContentTypes[K][]
       },
       {
@@ -147,11 +157,12 @@ export function useCmsContent<K extends CmsContentName, DefaultT = null>(
    const entryName = String(name)
    const query = cmsContentItemQueries[entryName]
 
+   const preview = cmsPreviewToken()
    return useAsyncData(
-      key ?? `cms-content:${entryName}:${slug}:${locale ?? ''}`,
+      key ?? cmsPreviewKey(`cms-content:${entryName}:${slug}:${locale ?? ''}`, preview),
       async () => {
          if (!query) unknownEntry(entryName)
-         const result = await $cmsQuery(query, { slug, locale })
+         const result = await cmsQueryWithPreview(query, { slug, locale }, preview)
          return (result?.item ?? null) as CmsContentTypes[K] | null
       },
       {
@@ -169,11 +180,12 @@ export function useCmsPage<P extends CmsPagePath, DefaultT = null>(
    const pagePath = String(path)
    const query = cmsPageQueries[pagePath]
 
+   const preview = cmsPreviewToken()
    return useAsyncData(
-      key ?? `cms-page:${pagePath}:${locale ?? ''}`,
+      key ?? cmsPreviewKey(`cms-page:${pagePath}:${locale ?? ''}`, preview),
       async () => {
          if (!query) unknownEntry(pagePath)
-         const result = await $cmsQuery(query, { path: pagePath, locale })
+         const result = await cmsQueryWithPreview(query, { path: pagePath, locale }, preview)
          return (result?.page ?? null) as CmsPageTypes[P] | null
       },
       {
@@ -181,4 +193,27 @@ export function useCmsPage<P extends CmsPagePath, DefaultT = null>(
          ...asyncDataOptions,
       }
    ) as AsyncData<CmsPageTypes[P] | DefaultT | null, Error | undefined>
+}
+
+export function useCmsRoute<DefaultT = null>(
+   path: string,
+   options: CmsRouteOptions<CmsContentRouteMatch | null, DefaultT> = {}
+): AsyncData<CmsContentRouteMatch | DefaultT | null, Error | undefined> {
+   const { locale, key, default: fallback, ...asyncDataOptions } = options
+
+   const preview = cmsPreviewToken()
+   return useAsyncData(
+      key ?? cmsPreviewKey(`cms-route:${path}:${locale ?? ''}`, preview),
+      async () => {
+         if (!cmsRouteQuery) return null
+         const result = await cmsQueryWithPreview(cmsRouteQuery, { path, locale }, preview)
+         const entry = cmsRouteEntries.find((name) => result?.[name])
+         if (!entry) return null
+         return { entry, item: result[entry] } as CmsContentRouteMatch
+      },
+      {
+         default: (fallback ?? (() => null)) as () => CmsContentRouteMatch | null,
+         ...asyncDataOptions,
+      }
+   ) as AsyncData<CmsContentRouteMatch | DefaultT | null, Error | undefined>
 }

@@ -113,7 +113,7 @@ pages: {
    id: 'pages',
    label: 'Pages',
    kind: 'page',
-   columns: ['metaTitle', 'metaDescription', 'ogImage'],
+   columns: ['seoTitle', 'seoDescription', 'seoImage'],
    fields: { ... },
    overrides: { ... },
 }
@@ -140,7 +140,14 @@ pages_media   (page_id -> pages.id on delete cascade, key, position default 0, m
   column would (the key, or the JSON of a translatable media).
 - A `blocks` field stores each block at its own `position`: the block type is a row with
   `key = <field>._type`, each subfield is a row with `key = <field>.<subfield>` (media subfields
-  in `<entry>_media`, the others in `<entry>_fields`).
+  in `<entry>_media`, the others in `<entry>_fields`), and the Hide/Show flag of a block that does
+  not declare its own `hidden` field is a row `<field>.hidden` (`true` or `false`). Saving a blocks
+  field replaces every `<field>.*` row of the page, so rows of removed block fields go away too.
+- A [nested `blocks` subfield](#nested-blocks) is one `<entry>_fields` row
+  `<field>.<subfield>` at the position of its parent block, holding the JSON of the whole nested
+  list (the same shape a collection column holds). Media keys inside it stay in that JSON, not in
+  `<entry>_media`: media usage, the save check of media keys and link references read the decoded
+  value, so they see them. Pages saved before a block had a nested field read it as `null`.
 - An empty value (`null`) has no row. An empty list of blocks reads back as `null`.
 - `relation` and `slug` fields must be listed in `columns` (they need their foreign key and their
   unique index), and many-to-many relations are not supported on pages.
@@ -153,7 +160,7 @@ D1, `json_agg` on Postgres). Saving a page is one transaction on SQLite and Post
 
 **No foreign key to `cms_media`.** `media_key` is not a foreign key to `cms_media.key`. With
 `storage: 'local'` the files come from the folder (or the build manifest) and `cms_media` only holds
-the alt texts, so it can be empty while pages use many media; with `'s3'` deleting a file from the
+the alt texts and focal points, so it can be empty while pages use many media; with `'s3'` deleting a file from the
 library removes its `cms_media` row, and a foreign key would either block that or wipe content. The
 module checks media keys when a page is saved instead: the admin API rejects (400) a media key, in
 a media field or in a block, that is not in the media library (the folder or manifest in local
@@ -234,9 +241,10 @@ export default defineCmsConfig({
 - `fields` (optional) adds extra fields to every item, with the same options as a collection.
 - `labels` (optional) renames system fields in the admin, keyed by system field name.
 - `tabs`, `layout` and `list` work as on a collection. The default list columns are title, status
-  and publish date. In the visual editor, `layout` orders the fields of the Content tab.
+  and publish date. In the visual editor, `layout` arranges the Content tab.
 - `preview` (optional) sets the component that wraps the body in the visual editor, see
   [Preview component](#preview-component).
+- `route` (optional) is the public address of the items on the site, see [Routes](#routes).
 - `titleField`, `drafts`, `columns`, `routes`, `include`, `exclude`, `overrides` and a custom
   `table` are config errors on a content entry.
 
@@ -253,8 +261,10 @@ System fields, injected for you (declaring one of them in `fields` is a config e
 | `seoTitle`       | `text`, translatable                 |                                                    |
 | `seoDescription` | `text` textarea, translatable        |                                                    |
 | `seoImage`       | `media` image                        |                                                    |
+| `seoNoindex`     | `boolean`                            | hides the item from search engines and the sitemap |
 
-The text system fields are translatable when `cms.i18n.locales` is set, plain text otherwise.
+The text system fields are translatable when `cms.i18n.locales` is set, plain text otherwise. The
+SEO fields feed [`useCmsSeo`](seo.md#usecmsseo) and the [sitemap](seo.md#sitemapxml).
 
 Every item has a draft or published `status` and `createdAt`/`updatedAt`. **The public API returns
 an item only when it is published and its `publishedAt` is not in the future**: a published item
@@ -267,6 +277,47 @@ migrations as collections.
 
 Items are edited in the [visual editor](admin.md#visual-editor): the body is drawn by the block
 components of the site, with live updates, drag and drop and a palette of the blocks.
+
+### Routes
+
+`route` tells the CMS where the site shows the items of a content entry, so it can give each item
+its public path. It is a path pattern, the full path the site serves:
+
+```ts
+news: { id: 'news', kind: 'content', blocks: sections, route: '/news/[slug]' }
+```
+
+Placeholders fill a whole segment: `[slug]`, `[id]`, and `[year]`, `[month]`, `[day]` (from
+`publishedAt`, in UTC, `2026`, `04`, `01`). A pattern needs `[slug]` or `[id]`. With
+`cms.i18n.locales`, a single pattern is the path in every locale; a map gives each locale its own
+full path, prefix included, and must name every locale:
+
+```ts
+blog: {
+   id: 'blog',
+   kind: 'content',
+   blocks: sections,
+   route: { en: '/blog/[slug]', it: '/it/blog/[slug]' },
+}
+```
+
+The CMS does not add a locale prefix by itself: write the paths your router serves (with
+`@nuxtjs/i18n` and the `prefix_except_default` strategy, the map above). The slug is shared by
+every locale.
+
+With a route, the items get `path` (in the requested locale) and `paths` (one `{ locale, path }`
+per locale) in GraphQL and in `#cms-types`, the entry gets a `<entry>ByPath(path, locale)` query,
+and `useCmsRoute(path)` finds the item a site path shows, see
+[Routes in querying](querying.md#content-routes). The visual editor shows the address of the item
+in its Content tab, with an Open link once the item is live. `path` and `paths` are reserved field
+names on a routed entry.
+
+The build fails when a pattern does not start with `/`, has an empty segment or a trailing slash,
+holds `?`, `#`, spaces or an unknown placeholder, puts a placeholder inside a segment
+(`[slug].html`), repeats a placeholder, has neither `[slug]` nor `[id]`, or lives under `/cms`; when
+a map is used without `cms.i18n.locales`, names an unknown locale or misses one; when `route` is set
+on an entry that is not `kind: 'content'`; and when two entries have patterns that match the same
+paths (`/news/[slug]` and `/news/[id]`).
 
 ### Preview component
 
@@ -300,21 +351,25 @@ defineProps<{ item: Pick<News, 'title' | 'excerpt' | 'cover'>; locale?: string }
 ```
 
 The component receives `item` (every public field of the item in the active language, media as
-`CmsMedia` objects, relations as ids, values not saved yet included) and `locale`. Use the same
+`CmsMedia` objects, relations as ids, values not saved yet included, and `path` when the entry has
+a [route](#routes)) and `locale`. Use the same
 component on the site page, with `<CmsBlocks>` in the slot, and the preview matches the page.
+Mark the item fields it shows (`<CmsField name="title" as="h1">`, see
+[Marking fields](querying.md#marking-fields)) to open them from the canvas.
 `cms.preview.component` in `nuxt.config` sets a default for every content entry. A `preview` option
 on an entry that is not `kind: 'content'` is a config error.
 
 ## Field types
 
 Every field has `label: string` and optional `required?: boolean` and `private?: boolean` (see
-[Private fields](#private-fields)). Type-specific options:
+[Private fields](#private-fields)), plus the [field options](#field-options) `default`, `unique`,
+`immutable`, `min` and `max` where they apply. Type-specific options:
 
 | type       | extra options                                                                      | stored / queried as |
 | ---------- | ---------------------------------------------------------------------------------- | ------------------- |
-| `text`     | `textarea?: boolean`, `translatable?: boolean`                                      | String              |
+| `text`     | `textarea?: boolean`, `translatable?: boolean`, `min?` / `max?` (characters)        | String              |
 | `richtext` | `translatable?: boolean`                                                            | String (HTML)       |
-| `number`   | `integer?: boolean`                                                                 | Float / Int         |
+| `number`   | `integer?: boolean`, `min?` / `max?` (value)                                        | Float / Int         |
 | `boolean`  | none                                                                               | Boolean             |
 | `date`     | none                                                                               | String `yyyy-mm-dd` |
 | `datetime` | none                                                                                | String, ISO 8601 UTC |
@@ -325,6 +380,7 @@ Every field has `label: string` and optional `required?: boolean` and `private?:
 | `json`     | none                                                                               | JSON                |
 | `media`    | `mediaType?: T \| T[]` where `T` is `'image' \| 'video' \| 'file'`, `accept?: string[]`, `translatable?: boolean`, `mobile?: boolean` | CmsMedia object     |
 | `relation` | see [Relations](#relations)                                                         | related entry / list |
+| `link`     | `to?: string[]`, `external?: boolean` (default `true`), `withLabel?: boolean`, `translatable?: boolean`; see [Links](#links) | CmsLink object      |
 | `blocks`   | `blocks: Record<name, { label, fields, validate? }>` (required), `min?: number`, `max?: number` | array of typed blocks |
 
 A `datetime` field stores an instant as an ISO 8601 string in UTC (`2026-05-01T08:30:00.000Z`). The
@@ -332,6 +388,63 @@ API accepts any ISO 8601 date and time with a time zone (`Z` or `+02:00`) and st
 value without a time zone is rejected. The admin shows a date and time picker in the browser's time
 zone. It filters and sorts as a `StringFilter`, and the fixed format keeps the string order equal to
 the time order.
+
+## Field options
+
+```ts
+code:  { label: 'Code', type: 'text', unique: true, immutable: true, min: 3, max: 12 },
+seats: { label: 'Seats', type: 'number', integer: true, min: 1, max: 500, default: 24 },
+date:  { label: 'Date', type: 'date', default: 'today' },
+level: { label: 'Level', type: 'select', options: ['basic', 'pro'], default: 'basic' },
+```
+
+**`default`** is the initial value of a new item: the create form, the first save of a single, an
+API create that leaves the key out, and an import row that creates an entry without that column
+(an explicit `null` stays `null`). Duplicate keeps the copied value instead.
+
+| type | `default` |
+| ---- | --------- |
+| `text`, `richtext` | a string; on a translatable field it fills the default locale only |
+| `number` | a number (an integer with `integer`, inside `min` / `max`) |
+| `boolean` | `true` or `false` |
+| `date` | `yyyy-mm-dd`, or `'today'` (the browser's date in the admin, the UTC date on the server) |
+| `datetime` | an ISO 8601 date and time with a time zone, or `'now'` |
+| `email` | a valid email |
+| `select` | one of the option values; a list of option values with `multiple` |
+| `tags` | a list of non-empty strings, at most `max` after deduplication |
+
+**`unique: true`** on `text`, `email` and `number` adds a unique index to the column (the
+generated migration holds it: an existing duplicate makes the migration fail, so clean the data
+first). Before the index, the migration sets blank values of an optional unique `text` or `email`
+field to `null`, since older saves stored them as `''`. Values match exactly, case included,
+except `email`: the admin API and the import compare emails without case (`Ann@x.com` and
+`ann@x.com` clash there), while the database index stays case-sensitive and emails keep the case
+they were typed with. A blank value is stored as `null`, and any number of items may be empty. A
+unique field takes no `default` (every new item would get the same value). The admin API checks the value before it writes and answers `409` with the
+issue on the field (`ValidationMessages.unique`, "This value is already used by another entry"),
+which the admin form shows under the field. Duplicate clears a unique field and the import reports a
+value already taken by another row or entry. Not supported on translatable fields (no per-locale
+uniqueness), inside `blocks`, on pages (their values are rows) and on singles. A `slug` is always
+unique and does not take the option.
+
+**`immutable: true`** makes a value fixed once it is saved: the admin shows the field disabled when
+it edits an item that holds a value, and the admin API refuses a different value with `400`
+(`ValidationMessages.immutable`, "This value cannot be changed once saved"), the import too. An item
+saved with the field empty can fill it once, so a field added to existing items, or left blank on
+create, is not stuck empty. Supported on `text`, `number`, `boolean`, `date`, `datetime`, `email`,
+`slug`, `select` and `relation` (not many-to-many), not on translatable fields, inside `blocks` or on
+pages. Like every admin rule, it does not protect the database from direct writes.
+
+**`min` / `max`** use one vocabulary for every type and measure what the field holds: the value of
+a `number`, the length in characters of a `text` (every locale of a translatable text), the number
+of blocks of a [`blocks`](#number-of-blocks) field and the number of tags of a
+[`tags`](#tags-fields) field (`max` only). An empty value skips them (add `required`). They are
+checked by the admin form and the admin API (`ValidationMessages.minValue` / `maxValue`, "Must be at
+least 1", and `minLength` / `maxLength`, "Use at most 12 characters"); the number input also stops
+at the bounds. With [`showIf`](#conditional-fields) they apply only while the field is visible.
+`minLength` and `maxLength` are not options: the build tells you to use `min` and `max`. Number
+bounds are any numbers with `min <= max`; text bounds are integers (`min >= 0`, `max >= 1`).
+They work on block fields too and never change the column.
 
 ## Select option labels
 
@@ -408,7 +521,7 @@ languages: { label: 'Languages', type: 'tags', required: true, max: 5, suggestio
 - Filters with a [`StringListFilter`](querying.md#list-filters) (`hasAny`, `hasAll`, `isEmpty`;
   exact, case-sensitive match), never sorts.
 - Not allowed inside `blocks` (like multi-select), not translatable, and it cannot be a
-  `titleField` or the target of a `showIf`.
+  `titleField`. A `showIf` can test it with `empty` or `has` only.
 
 ## Relations
 
@@ -427,6 +540,45 @@ category: {
   join table (`<entry>_<field>`).
 - A `required` relation cannot use `onDelete: 'set null'`.
 - Custom-table entries cannot be the source of `many-to-many` relations.
+
+## Links
+
+A `link` field points either at an address or at a page or content item of the site. Menus and
+calls to action are the main use, so it is allowed inside `blocks` too.
+
+```ts
+cta: { label: 'Button', type: 'link', withLabel: true, translatable: true },
+privacy: { label: 'Privacy page', type: 'link', to: ['pages'], external: false },
+```
+
+- **Value**, stored as JSON: `{ url }` for an address, or `{ entry, id }` for an internal target,
+  plus an optional `label` and `newTab: true`. Internal targets are the rows of the page entry (`id`
+  is the page key, `about` for `/about`) and the items of [content entries with a
+  `route`](#routes). Links store ids, so a slug change or a moved item never breaks them.
+- **Options**: `to` lists the entries an internal link may target (default: the page entry and
+  every routed content entry; each must be one of those); `external: false` refuses addresses;
+  `withLabel: true` asks for a link text; `translatable: true` (needs `withLabel` and
+  `cms.i18n.locales`) keeps the link text per locale while the target stays the same.
+- **Addresses** must be `http(s)://` URLs, `mailto:`, `tel:`, a root-relative path (`/contact`) or
+  an anchor (`#team`). `javascript:`, `data:`, other schemes, protocol-relative `//host` URLs,
+  spaces and control characters are refused by the admin form and the admin API.
+- **Queried** as [`CmsLink`](querying.md#links), whose `href` is resolved for the requested locale
+  and is `null` when the target is missing, a draft or scheduled.
+- **Admin**: an Internal / External switch, a search across the allowed entries (title and path,
+  drafts and scheduled items marked), the URL input, the link text and an "Open in a new tab"
+  switch. A warning shows when the target is a draft, scheduled or deleted. The search only covers
+  the entries the role can read. Deleting a content item that is linked somewhere lists those
+  entries first (`POST /api/cms/link-usage`, admin session, only the entries the role can read);
+  after the delete the links stay stored and their `href` is `null`.
+- With `translatable`, the link text counts in the [translation progress](admin.md#translations)
+  like a translatable text, and the copy and clear actions of the form include it.
+- The admin search finds link texts (in every locale) and addresses. CSV import and export use JSON
+  text; a plain address in a CSV cell is read as `{ url }`. Duplicate copies the value.
+- `required` asks for a target (a link text alone is not enough) and `showIf` works on the link
+  itself. Other fields can test a link with [`empty`](#conditional-fields) only: a link is empty
+  without an address or a target, whatever its text. `default`, `unique`, `immutable`, `min` and
+  `max` are refused on links at build time.
+- Not a `titleField`, not filterable or sortable.
 
 ## Blocks
 
@@ -464,10 +616,13 @@ gallery: { label: 'Gallery', type: 'blocks', min: 2, max: 8, blocks: { ... } }
   `maxBlocks` messages of `ValidationMessages` ("Add at least 2 blocks", "Add at most 8 blocks").
   On a field with `showIf` they apply only while the field is visible.
 - `min` is an integer of 0 or more, `max` an integer of 1 or more, and `min` cannot exceed `max`.
-  They are only valid on `blocks` fields. The schema, the column and the query shape do not change.
+  The schema, the column and the query shape do not change. On `number` and `text` fields the same
+  options bound the value and the length (see [Field options](#field-options)).
 
-Block fields accept every field type **except** `slug`, `relation`, `blocks`, `tags` and
-multi-select (`select` with `multiple: true`). They can be `translatable` (see below) but not `private`: mark the
+Block fields accept every field type **except** `slug`, `relation`, `tags` and
+multi-select (`select` with `multiple: true`); a `blocks` field inside a block nests blocks (see
+[Nested blocks](#nested-blocks)). A block field can take a `showIf` that tests the other fields of
+the same block item (see [Conditional fields](#conditional-fields)). They can be `translatable` (see below) but not `private`: mark the
 whole `blocks` field private instead.
 `required` inside a block is an admin and save-time rule: the API and the generated types always
 return block fields as nullable, since stored items can predate a field or its `required` flag.
@@ -479,7 +634,8 @@ declares its own `hidden` field keeps the old behavior: the value is returned an
 
 ### Block components
 
-A block can name the site component that renders it, plus an icon and a help text for the admin:
+A block can name the site component that renders it, plus an icon, a help text, a group and search
+tags for the admin:
 
 ```ts
 blocks: {
@@ -488,6 +644,8 @@ blocks: {
       component: 'SectionHero',
       icon: 'photo',
       description: 'Full-width image with a heading.',
+      group: 'Headers',
+      tags: ['banner', 'cover'],
       fields: { ... },
    },
 }
@@ -496,14 +654,20 @@ blocks: {
 - `component` is the name of a component of the site as Nuxt auto-imports it (`SectionHero`, or
   `section-hero`). The build fails when no such component is registered.
 - `icon` is a Heroicons outline name; `description` is a short help text.
+- `group` puts the block under a heading in the [block picker](admin.md#block-picker). Groups follow
+  the order of their first block in the config; blocks without a group come last, under **Other**.
+- `tags` are extra words the search of the picker matches, next to the label, the description and
+  the group.
 - These keys work in every `blocks` field: collections, singles, pages and content.
 - A block with a `component` cannot have fields named `key`, `ref`, `class` or `style`.
 - When every block of a field has a `component`, the admin edits that field in the
   [visual editor](admin.md#visual-editor) as well; other `blocks` fields keep the tile grid.
 
 Render a blocks value with [`<CmsBlocks>`](querying.md#rendering-blocks). Each component receives
-the fields of its block as props. Type them with the generated interface
-`<Entry><Field><Block>Props` from `#cms-types`:
+the fields of its block as props; mark the element of each field with `<CmsField>` or
+`v-cms-field` ([Marking fields](querying.md#marking-fields)) so the visual editor can open it from
+the canvas. Type the props with the generated interface `<Entry><Field><Block>Props` from
+`#cms-types`:
 
 ```vue
 <script setup lang="ts">
@@ -516,6 +680,63 @@ defineProps<NewsBodyHeroProps>()
 The same type is reachable as `CmsBlockProps<'news', 'body', 'hero'>`, for use outside
 `defineProps` (Vue cannot resolve a generic indexed type in `defineProps`, so use the named
 interface there).
+
+### Nested blocks
+
+A block can hold its own `blocks` field, for layouts such as columns, tabs, accordions or a grid of
+cards. The nested field takes `label`, `blocks`, `min`, `max`, `required`, `description` and
+`showIf` like any block field (not `translatable`, `private` or `default`), and its blocks take
+every block option (`component`, `icon`, `group`, `layout`, `validate`, ...):
+
+```ts
+const content = defineCmsBlocks({ text: { ... }, image: { ... } })
+
+const sections = defineCmsBlocks({
+   ...content,
+   columns: {
+      label: 'Columns',
+      component: 'SectionColumns',
+      fields: {
+         columns: {
+            label: 'Columns',
+            type: 'blocks',
+            min: 2,
+            max: 3,
+            blocks: {
+               column: {
+                  label: 'Column',
+                  component: 'SectionColumn',
+                  fields: { content: { label: 'Content', type: 'blocks', blocks: content } },
+               },
+            },
+         },
+      },
+   },
+})
+```
+
+- Blocks nest at most **3 levels** (`MAX_BLOCKS_DEPTH`): the top `blocks` field is level 1, a
+  `blocks` field in one of its blocks level 2, one more level 3. A deeper field fails the build.
+- A block set may contain itself: declare the nested field with `blocks: {}` and assign it after,
+  `sections.columns.fields.items.blocks = sections`. Nesting stops at the limit: at level 3 the
+  blocks whose nested field would point back into the set are left out of the set, so the picker
+  never offers a container that could not hold anything.
+- Everything that works on blocks works at every level: validation (`min`, `max`, `required`
+  while visible, block `validate` with the item, its `index` in its list and its `blockPath` such
+  as `body.2.columns.0`), errors on the exact field (`body.2.columns.0.heading`), hidden items,
+  translatable fields, media, links, search, media and link usage, translation progress and
+  actions, Duplicate, JSON import and export, copy and paste, presets.
+- No migration: nested items live in the JSON of the parent item (and in one row on pages).
+- GraphQL and `#cms-types` name nested types after their path: the field interface
+  `<Entry><Field><Block><SubField>Block`, the block types `<Entry><Field><Block><SubField><Block>`
+  and `...Props` (for example `NewsBodyColumnsColumnsColumnProps`), and
+  `CmsBlockProps<'news', 'body.columns.columns', 'column'>`. The build fails when two generated
+  type names clash.
+- A nested block item is addressed by its path from the entry values: `body.2.columns.0` is item 0
+  of the `columns` field of item 2 of `body`. Pure helpers in `#nuxt-cms` read and change values by
+  path: `parseBlockPath`, `formatBlockPath`, `blockAt`, `blockListAt`, `resolveBlockPath`,
+  `blocksFieldAt`, `blockSchemaPath`, `blocksFieldAtSchemaPath`, `updateBlockAt`, `insertBlocks`,
+  `removeBlock`, `moveBlock`, `walkBlocks`, `mapBlocks`, `blocksFieldPaths`.
 
 ### Translatable block fields
 
@@ -560,7 +781,7 @@ pages: {
    fields: {
       title: { label: 'Title', type: 'text' },
       hero: { label: 'Hero', type: 'media', tab: 'images' },
-      metaTitle: { label: 'Meta title', type: 'text', tab: 'seo' },
+      seoTitle: { label: 'SEO title', type: 'text', tab: 'seo' },
    },
 }
 ```
@@ -634,33 +855,92 @@ Admins can change the table columns and the form layout in **Settings** (see
 [Admin panel](admin.md#settings)). The config is the default, and **Reset to default** goes back
 to it.
 
+### Block layout
+
+A block takes `layout` too, in the same format, to arrange its form in the tile grid modal and in
+the inspector of the visual editor:
+
+```ts
+blocks: {
+   session: {
+      label: 'Session',
+      fields: { title, day, startsAt, minutes, fee, indoor, level, host, notes, handout, extra },
+      layout: [
+         'title',
+         ['day', 'startsAt', 'minutes'],
+         ['fee', 'level', 'indoor'],
+         'notes',
+         { title: 'Extras', collapsed: true, rows: [['host', 'handout'], 'extra'] },
+      ],
+   },
+}
+```
+
+The rules are the ones above, checked against the fields of the block: unknown or repeated keys,
+rows over 4 fields and untitled sections fail the build, and unnamed fields go at the end. The
+fields of a row stay side by side only where the form is wide enough (32rem), so in a narrow
+inspector they stack. Block layouts come from the config only: Settings does not override them.
+
 ## Conditional fields
 
-`showIf` hides a field in the admin editor until another field of the same entry has a given value. This is
-useful when one `select` decides which of the remaining fields are meaningful.
+`showIf` hides a field in the admin editor until a condition on the other fields of the same entry
+holds. This is useful when one `select` decides which of the remaining fields are meaningful.
 
 ```ts
 type: { label: 'Type', type: 'select', options: ['text', 'image'], required: true },
 body:  { label: 'Body',  type: 'richtext', showIf: { field: 'type', eq: 'text' } },
 photo: { label: 'Photo', type: 'media', showIf: { field: 'type', eq: 'image' } },
+alt:   { label: 'Alt text', type: 'text', showIf: { field: 'photo', empty: false } },
 ```
 
-- Use `eq` for a single value or `in` for a list; pass an **array of conditions** to require all of
-  them (AND).
+A condition is `{ field, <operator>: value }`. Several operators in one condition must all hold
+(`{ field: 'seats', gte: 10, lt: 100 }`).
+
+| operator | holds when the value of `field` | target field types |
+| -------- | ------------------------------- | ------------------ |
+| `eq` / `neq` | equals / differs from the value | `select`, `boolean`, `text`, `number`, `date`, `datetime`, `email`, `slug` |
+| `in` / `notIn` | is / is not one of a non-empty list | same as `eq` |
+| `gt` / `gte` / `lt` / `lte` | is greater / greater or equal / lower / lower or equal | `number` (a number), `date` (`yyyy-mm-dd`), `datetime` (ISO 8601 with a time zone, compared as instants) |
+| `empty: true \| false` | is / is not empty | every type except `boolean` |
+| `has` | is a list that contains the value | `tags` (case-insensitive), multi-select, many-to-many `relation` (a related id) |
+
+Combine conditions with `{ all: [...] }`, `{ any: [...] }` and `{ not: condition }`, nested as
+deep as you need. An array at the top is the same as `all`:
+
+```ts
+sponsor: {
+   label: 'Sponsor',
+   type: 'text',
+   showIf: [
+      { field: 'featured', eq: true },
+      { any: [{ field: 'visibility', neq: 'hidden' }, { not: { field: 'keywords', empty: true } }] },
+   ],
+},
+```
+
 - **Only the admin editor is affected.** The GraphQL schema, the database column and the query shape
   are unchanged: a condition cannot make a column conditional.
 - A hidden field **keeps the value it already has**; it is not cleared on save, so toggling the
   controlling field back and forth does not lose work.
-- On a conditional field, `required` means **"required while visible"**: it is enforced by the admin
-  form only. The column stays nullable and the GraphQL field stays optional, because two fields
-  belonging to opposite branches can never both be filled, and a `NOT NULL` on either would make every
-  entry unsavable. Treat a conditional field as optional when you read it.
-- The condition may point at a `select`, `boolean`, `text`, `number`, `date`, `email` or `slug`
-  field. It cannot point at `blocks`, `relation`, `media`, `json`, multi-select, `tags` or translatable fields, whose
-  values have no single comparable form.
-- When the target is a `select`, the referenced values are checked against its `options` at build
-  time, so a typo fails the build instead of silently hiding the field forever.
-- The `titleField` cannot be conditional, and `showIf` is not supported inside `blocks`.
+- On a conditional field, `required` means **"required while visible"**, and `min` / `max` also
+  apply only while the field is visible. The same rule runs in the admin form and in the
+  validation of the admin API and of the import (one shared evaluator), never in the database: the
+  column stays nullable and the GraphQL field stays optional, because two fields belonging to
+  opposite branches can never both be filled, and a `NOT NULL` on either would make every entry
+  unsavable. Treat a conditional field as optional when you read it.
+- A missing value never matches `eq`, `in`, `has` or the comparisons, and always matches `neq` and
+  `notIn`. Empty means `null`, a blank string, an empty list, a translatable value with no locale
+  filled, a `json` value of `{}` or `[]`, or a `link` with no address and no target; `0` and
+  `false` are not empty.
+- A translatable field can only be tested with `empty`. Every other operator is checked against the
+  target type at build time: the value type (a boolean for a `boolean` field, a number for a
+  `number` field, a valid date for `date` and `datetime`), select values against the `options` (so a
+  typo fails the build instead of silently hiding the field forever), non-empty lists, unknown keys
+  and groups with anything next to `all` / `any` / `not`.
+- Inside `blocks`, `showIf` on a block field tests the **sibling fields of the same block item**:
+  `{ field: 'layout', eq: 'image' }` reads the `layout` of that block. It cannot reach the fields of
+  the entry. The block editor, the visual editor and the block validation follow it.
+- The `titleField` cannot be conditional.
 
 ## Validation hooks
 
@@ -702,7 +982,8 @@ saved on a `page` entry. A translatable value is a `{ locale: text }` map, and
 `defaultLocaleValue(value, defaultLocale)` from `#nuxt-cms` reads its text in the default locale (a
 plain string, from a field that is not translatable, is returned as it is).
 
-A block can have its own `validate`, with the values of one block item and `{ ..., index }`. Its
+A block can have its own `validate`, with the values of one block item and `{ ..., index, blockPath }`
+(`index` in its own list, `blockPath` like `body.2` or `body.2.columns.0` for a nested block). Its
 `field` names a field of the block, and the message shows on the `blocks` field (in the visual
 editor, on the field of the selected block):
 
@@ -874,24 +1155,35 @@ export default defineCmsConfig({
   option.
 - A content entry needs a non-empty `blocks` map and cannot declare a system field, `titleField`,
   `columns`, `routes`, `overrides` or a custom table; `labels` may only name system fields.
-- A block `component` must be a non-empty string naming a registered Nuxt component; `icon` must be
-  a non-empty string.
+- A block `component` must be a non-empty string naming a registered Nuxt component; `icon` and
+  `group` must be non-empty strings; `tags` must be an array of non-empty strings; `layout`
+  follows the [form layout](#form-layout) rules against the fields of the block.
 - `titleField` is required on collections, must reference a declared field, and that field must be a
   `text`, `slug`, `email`, `number`, `date`, `datetime` or single `select`.
 - `select` needs a non-empty array of `options`: non-empty strings or `{ value, label }` objects
   with a non-empty `value` and `label`, and no value repeated.
-- `min` and `max` are only valid on `blocks` fields: `min` an integer of 0 or more, `max` an
-  integer of 1 or more, `min` not greater than `max`. A `tags` field takes `max` only (an integer of
-  1 or more), and `suggestions` (a boolean) is only valid on `tags` fields.
+- `min` and `max` are valid on `blocks` fields (`min` an integer of 0 or more, `max` an integer of
+  1 or more, `min` not greater than `max`), `number` fields (numbers, `min <= max`) and `text`
+  fields (characters, same integer rules as blocks). A `tags` field takes `max` only (an integer of
+  1 or more), and `suggestions` (a boolean) is only valid on `tags` fields. `minLength` and
+  `maxLength` are refused.
+- `default` must fit the field (see [Field options](#field-options)) and is not allowed on `slug`,
+  `json`, `media`, `relation` and `blocks` fields, inside `blocks` or on pages. `unique` is only
+  valid on `text`, `email` and `number` fields of collections and content entries, not translatable
+  and not inside `blocks`. `immutable` is not allowed on `richtext`, `json`, `media`, `tags`,
+  `blocks`, many-to-many and translatable fields, inside `blocks` or on pages.
 - `validate` on an entry or a block must be a function.
 - Multi-select (`select` with `multiple: true`) and `tags` are not allowed inside `blocks` and are excluded from sorting.
-- `translatable` is only valid on `text`, `richtext` and `media`, at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
-- `showIf` must reference another declared field of a comparable type, cannot be used on the `titleField` or inside `blocks`, and needs exactly one of `eq` / `in`.
+- `translatable` is only valid on `text`, `richtext`, `media` and `link` (with `withLabel`), at the top level or inside a block, and requires `cms.i18n.locales`. The `blocks` field itself cannot be translatable.
+- `showIf` must reference another declared field (a sibling field inside `blocks`) with an operator that fits its type and a value of the right type (see [Conditional fields](#conditional-fields)); groups take only `all`, `any` or `not`; the `titleField` cannot be conditional.
 - `tab` must name a tab declared by the same entry; tab ids must be unique and every tab needs a label.
 - `slug.from` must point to a `text` field. When that field is translatable, the slug is generated
   from its value in the default locale (as the `slug` of a content entry is from the title).
 - `private` is not allowed inside `blocks`.
 - A relation `to` must reference an existing collection or content entry.
+- A link `to` must be a list of distinct entries, each the page entry or a content entry with a
+  `route`; `external` and `withLabel` are booleans valid only on links; a link with no allowed
+  target (`external: false` and no internal entry) is refused.
 - `list.filters` may only name single `select`, `boolean` and single `relation` fields, plus
   `status` on an entry with drafts.
 - `columns` is only valid on the page entry and may only list fields that every page has;

@@ -3,12 +3,13 @@ import { z } from 'zod'
 import { normalizeMediaFolder } from '../../shared/index'
 import { useMediaStorage } from '../utils/media'
 import { writeMediaFolderMarker } from '../utils/media-folders'
-import { requireAdmin } from '../utils/require-admin'
+import { emitMediaChange } from '../utils/hooks'
+import { requireCmsPermission } from '../utils/permissions'
 
 const bodySchema = z.object({ name: z.string().min(1).max(255) })
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.write')
    const { store } = useMediaStorage(event)
    const { name } = await readValidatedBody(event, bodySchema.parse)
 
@@ -19,5 +20,6 @@ export default defineEventHandler(async (event) => {
 
    await writeMediaFolderMarker(store, folder)
 
+   emitMediaChange(event, user, { action: 'folder-create', keys: [], folder })
    return { folder }
 })

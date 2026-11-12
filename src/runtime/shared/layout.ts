@@ -1,4 +1,4 @@
-import type { FieldConfig } from './index'
+import type { BlockConfig, FieldConfig } from './index'
 
 export const MAX_LAYOUT_ROW_FIELDS = 4
 
@@ -132,6 +132,10 @@ export function resolveFormLayout(
    }
 
    return { main }
+}
+
+export function blockFormLayout(block: Pick<BlockConfig, 'fields' | 'layout'>): CmsFormLayout {
+   return resolveFormLayout(block.fields, layoutFromConfig(block.layout))
 }
 
 export function defaultListColumns(

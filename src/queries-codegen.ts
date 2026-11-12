@@ -4,20 +4,43 @@ import {
    entryFieldsFor,
    isCollectionKind,
    isPrivateField,
+   isRoutedContent,
    pageFields,
    pageRoutes,
+   relationTarget,
+   routedContentNames,
 } from './runtime/shared/index'
 
-const MEDIA_SELECTION = 'key url type alt folder mime size width height'
+const MEDIA_SELECTION = 'key url type alt folder mime size width height focalX focalY'
 
-function blocksSelection(entryName: string, key: string, field: FieldConfig): string {
+const LINK_SELECTION = 'href label newTab external entry id'
+
+function fieldSelection(key: string, field: FieldConfig): string {
+   if (field.type === 'media') return `${key} { ${MEDIA_SELECTION} }`
+   if (field.type === 'link') return `${key} { ${LINK_SELECTION} }`
+   return key
+}
+
+function blocksSelection(
+   entryName: string,
+   schemaPath: readonly string[],
+   field: FieldConfig
+): string {
    const parts = ['__typename type']
    for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
       const fields = Object.entries(block.fields).map(([blockFieldKey, blockField]) =>
-         blockField.type === 'media' ? `${blockFieldKey} { ${MEDIA_SELECTION} }` : blockFieldKey
+         blockField.type === 'blocks'
+            ? `${blockFieldKey} { ${blocksSelection(
+                 entryName,
+                 [...schemaPath, blockName, blockFieldKey],
+                 blockField
+              )} }`
+            : fieldSelection(blockFieldKey, blockField)
       )
       if (!fields.length) continue
-      parts.push(`... on ${blockTypeName(entryName, key, blockName)} { ${fields.join(' ')} }`)
+      parts.push(
+         `... on ${blockTypeName(entryName, schemaPath, blockName)} { ${fields.join(' ')} }`
+      )
    }
    return parts.join(' ')
 }
@@ -31,23 +54,20 @@ function entrySelection(
 ): string {
    const parts = ['id']
    if (entry.kind === 'page') parts.push('path')
+   if (isRoutedContent(entry)) parts.push('path', 'paths { locale path }')
    for (const [key, field] of Object.entries(fields)) {
       if (isPrivateField(field)) continue
       if (field.type === 'relation') {
-         const target = config[field.to!]
+         const target = config[relationTarget(field)]
          if (!withRelations || !target) continue
-         parts.push(`${key} { ${entrySelection(config, field.to!, target, false)} }`)
-         continue
-      }
-      if (field.type === 'media') {
-         parts.push(`${key} { ${MEDIA_SELECTION} }`)
+         parts.push(`${key} { ${entrySelection(config, relationTarget(field), target, false)} }`)
          continue
       }
       if (field.type === 'blocks') {
-         parts.push(`${key} { ${blocksSelection(name, key, field)} }`)
+         parts.push(`${key} { ${blocksSelection(name, [key], field)} }`)
          continue
       }
-      parts.push(key)
+      parts.push(fieldSelection(key, field))
    }
    if (isCollectionKind(entry)) parts.push('createdAt')
    parts.push('updatedAt')
@@ -84,6 +104,21 @@ export function contentListQuery(config: CmsConfig, name: string, entry: CmsEntr
 export function contentItemQuery(config: CmsConfig, name: string, entry: CmsEntry): string {
    const selection = entrySelection(config, name, entry, true)
    return `query CmsContent($slug: String!, $locale: String) { item: ${name}BySlug(slug: $slug, locale: $locale) { ${selection} } }`
+}
+
+export function contentRouteQuery(config: CmsConfig): string | null {
+   const names = routedContentNames(config)
+   if (!names.length) return null
+   const fields = names.map(
+      (name) =>
+         `${name}: ${name}ByPath(path: $path, locale: $locale) { ${entrySelection(
+            config,
+            name,
+            config[name]!,
+            true
+         )} }`
+   )
+   return `query CmsRoute($path: String!, $locale: String) { ${fields.join(' ')} }`
 }
 
 export function pageQuery(config: CmsConfig, name: string, entry: CmsEntry, path: string): string {
@@ -145,6 +180,10 @@ export function renderQueriesFile(config: CmsConfig): string {
       `export const cmsContentItemQueries: Record<string, string> = {`,
       ...contentItems,
       `}`,
+      ``,
+      `export const cmsRouteEntries: string[] = ${JSON.stringify(routedContentNames(config))}`,
+      ``,
+      `export const cmsRouteQuery: string | null = ${JSON.stringify(contentRouteQuery(config))}`,
       ``,
    ].join('\n')
 }

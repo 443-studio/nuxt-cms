@@ -33,5 +33,23 @@ export default defineNuxtConfig({
          path: '/cms/preview',
          component: 'NewsArticle',
       },
+      roles: {
+         editor: {
+            label: 'Editor',
+            description: 'Writes and publishes news, drafts events, uploads media.',
+            can: [
+               'news.*',
+               'events.read',
+               'events.create',
+               'events.update',
+               '*.read',
+               'media.write',
+            ],
+         },
+      },
+      seo: {
+         sitemap: true,
+         robots: true,
+      },
    },
 })

@@ -6,7 +6,7 @@ import type { MediaItem, MediaSourceInfo } from '../../shared/index'
 import { isMediaFolderMarker } from '../../shared/index'
 import { useMediaIndex } from '../utils/media-index'
 import { toMediaItem, useMediaConfig } from '../utils/media'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 function foldersOf(items: MediaItem[]) {
    const folders = new Set<string>()
@@ -17,17 +17,34 @@ function foldersOf(items: MediaItem[]) {
 }
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   await requireCmsPermission(event, 'media.read')
    const { media, publicUrl } = useMediaConfig(event)
 
    if (media.storage === 'local') {
       const index = await useMediaIndex()
-      const rows = await useDb().select({ key: cms_media.key, alt: cms_media.alt }).from(cms_media)
-      const altByKey = new Map(rows.map((row) => [row.key, row.alt]))
+      const rows = await useDb()
+         .select({
+            key: cms_media.key,
+            alt: cms_media.alt,
+            focalX: cms_media.focalX,
+            focalY: cms_media.focalY,
+         })
+         .from(cms_media)
+      const metaByKey = new Map(rows.map((row) => [row.key, row]))
 
-      const items: MediaItem[] = index.files.map((file) =>
-         toMediaItem({ ...file, alt: altByKey.get(file.key) ?? null, createdAt: null }, publicUrl)
-      )
+      const items: MediaItem[] = index.files.map((file) => {
+         const meta = metaByKey.get(file.key)
+         return toMediaItem(
+            {
+               ...file,
+               alt: meta?.alt ?? null,
+               focalX: meta?.focalX ?? null,
+               focalY: meta?.focalY ?? null,
+               createdAt: null,
+            },
+            publicUrl
+         )
+      })
 
       return { items, folders: foldersOf(items), source: index.source }
    }

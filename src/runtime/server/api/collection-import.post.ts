@@ -6,7 +6,9 @@ import {
    readRawBody,
 } from 'h3'
 import { z } from 'zod'
+import cmsConfig from '#cms-config'
 import { runBatch, useDb } from '#cms-db'
+import type { CmsConfig } from '../../shared/index'
 import { isCollectionKind } from '../../shared/index'
 import {
    canTransferCsv,
@@ -16,15 +18,21 @@ import {
    TRANSFER_FORMATS,
 } from '../../shared/transfer'
 import { mapConstraintErrors } from '../utils/db-errors'
+import { emitEntryChange } from '../utils/hooks'
 import {
+   assignImportIds,
    checkImportRows,
+   existingImportIds,
    importPreview,
    importWriteStatements,
+   planImportRedirects,
    validateImportRows,
 } from '../utils/import'
+import { invalidateRedirects, redirectPlanStatements } from '../utils/redirects'
 import { mediaLookup } from '../utils/media-check'
 import { getContentI18n, getRegistryEntry } from '../utils/registry'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
+import { can } from '../../shared/roles'
 
 const querySchema = z.object({
    format: z.enum(TRANSFER_FORMATS),
@@ -40,12 +48,15 @@ function tooLarge(): never {
 }
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (!isCollectionKind(entry)) {
       throw createError({ statusCode: 405, statusMessage: 'Only collections can be imported' })
    }
+   assertCmsPermission(access, `${name}.import`)
    const { format, mode, dryRun } = await getValidatedQuery(event, querySchema.parse)
+   assertCmsPermission(access, `${name}.create`)
+   if (mode === 'upsert') assertCmsPermission(access, `${name}.update`)
    if (format === 'csv' && !canTransferCsv(entry)) {
       throw createError({
          statusCode: 400,
@@ -60,14 +71,20 @@ export default defineEventHandler(async (event) => {
    const i18n = getContentI18n()
    const source = importSource(entry, format, text, i18n)
    const db = useDb()
-   const rows = await checkImportRows(validateImportRows(entry, source.rows, i18n), {
-      db,
-      name,
-      entry,
-      table,
-      mode,
-      media: source.errors.length ? null : await mediaLookup(),
-   })
+   const existing = mode === 'upsert' ? await existingImportIds(db, table, source.rows) : null
+   const isCreate = (id: string | null) => !existing || !id || !existing.has(id)
+   const rows = await checkImportRows(
+      validateImportRows(entry, source.rows, i18n, isCreate, cmsConfig as CmsConfig),
+      {
+         db,
+         name,
+         entry,
+         table,
+         mode,
+         media: source.errors.length ? null : await mediaLookup(),
+         canPublish: can(access, `${name}.publish`),
+      }
+   )
    const preview = importPreview(entry, rows, {
       format,
       mode,
@@ -83,8 +100,20 @@ export default defineEventHandler(async (event) => {
       })
    }
 
+   const written = assignImportIds(entry, rows)
+   const redirects = await planImportRedirects(db, entry, table, written)
    await mapConstraintErrors(() =>
-      runBatch((tx) => importWriteStatements(tx, name, entry, table, rows))
+      runBatch((tx) => [
+         ...importWriteStatements(tx, name, entry, table, written),
+         ...(redirects ? redirectPlanStatements(tx, redirects) : []),
+      ])
    )
+   if (redirects) invalidateRedirects()
+   emitEntryChange(event, user, {
+      entry: name,
+      kind: entry.kind,
+      action: 'import',
+      ids: written.flatMap((row) => (row.values && row.id ? [row.id] : [])),
+   })
    return { ...preview, imported: true }
 })

@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import type {
+   BlockConfig,
+   CmsConfig,
    CmsEntry,
    CmsI18n,
    CmsValidateContext,
@@ -10,17 +12,41 @@ import type {
 import {
    BLOCK_HIDDEN_KEY,
    declaresHiddenField,
+   focalPointIssue,
+   allowsExternalLinks,
+   declaredLinkTargets,
    isFieldVisible,
    isTranslatableField,
+   linkTargetNames,
+   linkUrlError,
    normalizeTags,
+   pageLinkPath,
+   formatBlockPath,
    selectOptionValues,
+   walkBlocks,
 } from './index'
+import type { CmsLinkValue } from './links'
 
 export const objectKeySchema = z
    .string()
    .min(1)
    .max(1024)
    .refine((k) => !k.includes('..') && !k.startsWith('/'), 'Invalid object key')
+
+const focalCoordinateSchema = z.number().min(0).max(1).nullish()
+
+export const mediaUpdateSchema = z
+   .object({
+      key: objectKeySchema,
+      alt: z.string().max(1024).nullish(),
+      folder: z.string().max(255).nullish(),
+      focalX: focalCoordinateSchema,
+      focalY: focalCoordinateSchema,
+   })
+   .superRefine((body, ctx) => {
+      const message = focalPointIssue(body.focalX, body.focalY)
+      if (message) ctx.addIssue({ code: 'custom', message, path: ['focalX'] })
+   })
 
 export interface ValidationMessages {
    required: string
@@ -33,6 +59,18 @@ export interface ValidationMessages {
    minBlocks: (min: number) => string
    maxBlocks: (max: number) => string
    maxTags: (max: number) => string
+   minValue: (min: number) => string
+   maxValue: (max: number) => string
+   minLength: (min: number) => string
+   maxLength: (max: number) => string
+   unique: string
+   immutable: string
+   linkTarget: string
+   linkUrlAndTarget: string
+   linkExternal: string
+   linkEntry: (entry: string) => string
+   linkUnknownPage: string
+   invalidLinkLabel: string
 }
 
 const DEFAULT_MESSAGES: ValidationMessages = {
@@ -46,6 +84,22 @@ const DEFAULT_MESSAGES: ValidationMessages = {
    minBlocks: (min) => `Add at least ${min} ${min === 1 ? 'block' : 'blocks'}`,
    maxBlocks: (max) => `Add at most ${max} ${max === 1 ? 'block' : 'blocks'}`,
    maxTags: (max) => `Add at most ${max} ${max === 1 ? 'tag' : 'tags'}`,
+   minValue: (min) => `Must be at least ${min}`,
+   maxValue: (max) => `Must be at most ${max}`,
+   minLength: (min) => `Use at least ${min} ${min === 1 ? 'character' : 'characters'}`,
+   maxLength: (max) => `Use at most ${max} ${max === 1 ? 'character' : 'characters'}`,
+   unique: 'This value is already used by another entry',
+   immutable: 'This value cannot be changed once saved',
+   linkTarget: 'Choose a page or enter a URL',
+   linkUrlAndTarget: 'A link has either a URL or a target, not both',
+   linkExternal: 'This link cannot point to an external URL',
+   linkEntry: (entry) => `This link cannot point to '${entry}'`,
+   linkUnknownPage: 'Unknown page',
+   invalidLinkLabel: 'Invalid link text',
+}
+
+export function validationMessages(messages?: Partial<ValidationMessages>): ValidationMessages {
+   return { ...DEFAULT_MESSAGES, ...messages }
 }
 
 const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -84,7 +138,10 @@ function scalarSchema(field: FieldConfig, m: ValidationMessages): z.ZodType {
       case 'json':
          return z.unknown()
       default:
-         return field.required ? z.string().trim().min(1, m.required) : z.string()
+         if (field.required) return z.string().trim().min(1, m.required)
+         return field.unique
+            ? z.string().transform((value) => (value.trim() ? value : null))
+            : z.string()
    }
 }
 
@@ -108,30 +165,147 @@ function translatableSchema(field: FieldConfig, i18n: CmsI18n, m: ValidationMess
       : record.nullish().transform((v) => v ?? null)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function trimmed(value: unknown): string {
+   return typeof value === 'string' ? value.trim() : ''
+}
+
+function linkLabelValue(
+   field: FieldConfig,
+   raw: unknown,
+   i18n: CmsI18n,
+   m: ValidationMessages
+): { label?: string | Record<string, string>; error?: string } {
+   if (!field.withLabel || raw == null) return {}
+   if (field.translatable && i18n.locales.length) {
+      const entries = isRecord(raw)
+         ? Object.entries(raw)
+         : typeof raw === 'string'
+           ? [[i18n.defaultLocale, raw] as const]
+           : null
+      if (!entries) return { error: m.invalidLinkLabel }
+      if (entries.some(([locale]) => !i18n.locales.includes(locale)))
+         return { error: m.unknownLocale }
+      const label = Object.fromEntries(
+         entries
+            .map(([locale, text]) => [locale, trimmed(text)] as const)
+            .filter(([, text]) => !!text)
+      )
+      return Object.keys(label).length ? { label } : {}
+   }
+   if (typeof raw !== 'string') return { error: m.invalidLinkLabel }
+   const label = raw.trim()
+   return label ? { label } : {}
+}
+
+function linkSchema(
+   field: FieldConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages,
+   config?: CmsConfig
+): z.ZodType {
+   const targets = config ? linkTargetNames(config, field) : declaredLinkTargets(field)
+   const parse = z
+      .unknown()
+      .nullish()
+      .transform((input, ctx): CmsLinkValue | null => {
+         const fail = (message: string) => {
+            ctx.addIssue({ code: 'custom', message })
+            return z.NEVER
+         }
+         if (input == null) return null
+         if (!isRecord(input)) return fail(m.linkTarget)
+         const url = trimmed(input.url)
+         const entry = trimmed(input.entry)
+         const id = trimmed(input.id)
+         const { label, error } = linkLabelValue(field, input.label, i18n, m)
+         if (error) return fail(error)
+         if (url && (entry || id)) return fail(m.linkUrlAndTarget)
+         const extra: CmsLinkValue = {
+            ...(label !== undefined ? { label } : {}),
+            ...(input.newTab === true ? { newTab: true } : {}),
+         }
+         if (url) {
+            if (!allowsExternalLinks(field)) return fail(m.linkExternal)
+            const urlError = linkUrlError(url)
+            if (urlError) return fail(urlError)
+            return { url, ...extra }
+         }
+         if (!entry && !id) return label !== undefined ? fail(m.linkTarget) : null
+         if (!entry || !id) return fail(m.linkTarget)
+         if (targets && !targets.includes(entry)) return fail(m.linkEntry(entry))
+         const target = config?.[entry]
+         if (target?.kind === 'page' && !pageLinkPath(target, id)) return fail(m.linkUnknownPage)
+         return { entry, id, ...extra }
+      })
+   if (!field.required) return parse
+   return parse.refine((value) => value !== null, m.required)
+}
+
 function blockFieldSchema(
    blockField: FieldConfig,
    i18n: CmsI18n,
-   m: ValidationMessages
+   m: ValidationMessages,
+   config?: CmsConfig
 ): z.ZodType {
+   if (blockField.type === 'link') return linkSchema(blockField, i18n, m, config)
+   if (blockField.type === 'blocks') return blocksFieldSchema(blockField, i18n, m, config)
    if (isTranslatableField(blockField) && i18n.locales.length)
-      return translatableSchema(blockField, i18n, m)
-   return optionalize(blockField, scalarSchema(blockField, m), m)
+      return withValueBounds(blockField, translatableSchema(blockField, i18n, m), m)
+   return withValueBounds(blockField, optionalize(blockField, scalarSchema(blockField, m), m), m)
 }
 
-function blocksSchema(field: FieldConfig, i18n: CmsI18n, m: ValidationMessages) {
+function blockVariantSchema(
+   type: string,
+   block: BlockConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages,
+   config?: CmsConfig
+) {
+   const variant = z.object({
+      type: z.literal(type),
+      ...(declaresHiddenField(block) ? {} : { [BLOCK_HIDDEN_KEY]: z.boolean().optional() }),
+      ...Object.fromEntries(
+         Object.entries(block.fields).map(([key, blockField]) => [
+            key,
+            blockFieldSchema(unconditional(blockField), i18n, m, config),
+         ])
+      ),
+   })
+   const conditional = conditionalFields(block.fields)
+   if (!conditional.length) return variant
+   return variant.superRefine((item, ctx) => {
+      for (const issue of conditionalIssues(conditional, item, block.fields, i18n, m))
+         ctx.addIssue({ code: 'custom', ...issue })
+   })
+}
+
+function blocksSchema(
+   field: FieldConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages,
+   config?: CmsConfig
+) {
    const variants = Object.entries(field.blocks ?? {}).map(([type, block]) =>
-      z.object({
-         type: z.literal(type),
-         ...(declaresHiddenField(block) ? {} : { [BLOCK_HIDDEN_KEY]: z.boolean().optional() }),
-         ...Object.fromEntries(
-            Object.entries(block.fields).map(([key, blockField]) => [
-               key,
-               blockFieldSchema(blockField, i18n, m),
-            ])
-         ),
-      })
+      blockVariantSchema(type, block, i18n, m, config)
    )
    return z.array(z.discriminatedUnion('type', variants as never))
+}
+
+function blocksFieldSchema(
+   declared: FieldConfig,
+   i18n: CmsI18n,
+   m: ValidationMessages,
+   config?: CmsConfig
+): z.ZodType {
+   const field = unconditional(declared)
+   const list = blocksSchema(field, i18n, m, config)
+   const base = field.required ? list.min(1, m.required) : list
+   const bounded = declared.showIf ? base : boundedBlocks(base, field, m)
+   return field.required ? bounded : bounded.nullish().transform((v) => v ?? null)
 }
 
 export function blocksCountMessage(
@@ -155,10 +329,86 @@ export function tagsCountMessage(
    return null
 }
 
-function countMessage(field: FieldConfig, count: number, m: ValidationMessages): string | null {
-   return field.type === 'tags'
-      ? tagsCountMessage(field, count, m)
-      : blocksCountMessage(field, count, m)
+export function valueBoundsMessage(
+   field: Pick<FieldConfig, 'type' | 'min' | 'max'>,
+   value: unknown,
+   messages?: Partial<ValidationMessages>
+): string | null {
+   const m: ValidationMessages = { ...DEFAULT_MESSAGES, ...messages }
+   if (field.type === 'number' && typeof value === 'number') {
+      if (field.min !== undefined && value < field.min) return m.minValue(field.min)
+      if (field.max !== undefined && value > field.max) return m.maxValue(field.max)
+      return null
+   }
+   if (field.type !== 'text') return null
+   const texts =
+      typeof value === 'string'
+         ? [value]
+         : value && typeof value === 'object'
+           ? Object.values(value).filter((text): text is string => typeof text === 'string')
+           : []
+   for (const text of texts) {
+      const length = text.trim() ? text.length : 0
+      if (!length) continue
+      if (field.min !== undefined && length < field.min) return m.minLength(field.min)
+      if (field.max !== undefined && length > field.max) return m.maxLength(field.max)
+   }
+   return null
+}
+
+function boundsMessage(field: FieldConfig, value: unknown, m: ValidationMessages): string | null {
+   if (field.type === 'tags')
+      return Array.isArray(value) ? tagsCountMessage(field, value.length, m) : null
+   if (field.type === 'blocks')
+      return Array.isArray(value) ? blocksCountMessage(field, value.length, m) : null
+   return valueBoundsMessage(field, value, m)
+}
+
+function hasValueBounds(field: FieldConfig): boolean {
+   return (
+      (field.type === 'number' || field.type === 'text') &&
+      (field.min !== undefined || field.max !== undefined)
+   )
+}
+
+function withValueBounds(field: FieldConfig, schema: z.ZodType, m: ValidationMessages): z.ZodType {
+   if (field.showIf || !hasValueBounds(field)) return schema
+   return schema.superRefine((value, ctx) => {
+      const message = valueBoundsMessage(field, value, m)
+      if (message) ctx.addIssue({ code: 'custom', message })
+   })
+}
+
+function unconditional(field: FieldConfig): FieldConfig {
+   return field.showIf ? { ...field, required: false } : field
+}
+
+function conditionalFields(fields: Record<string, FieldConfig>): [string, FieldConfig][] {
+   return Object.entries(fields).filter(
+      ([, field]) =>
+         !!field.showIf && (!!field.required || field.min !== undefined || field.max !== undefined)
+   )
+}
+
+function conditionalIssues(
+   conditional: [string, FieldConfig][],
+   values: Record<string, unknown>,
+   scope: Record<string, FieldConfig>,
+   i18n: CmsI18n,
+   m: ValidationMessages
+): { path: string[]; message: string }[] {
+   const issues: { path: string[]; message: string }[] = []
+   for (const [key, field] of conditional) {
+      if (!isFieldVisible(field, values, scope)) continue
+      const value = values[key]
+      if (field.required && isEmptyValue(field, value, i18n.defaultLocale)) {
+         issues.push({ path: [key], message: m.required })
+         continue
+      }
+      const message = boundsMessage(field, value, m)
+      if (message) issues.push({ path: [key], message })
+   }
+   return issues
 }
 
 function tagsSchema(field: FieldConfig, bounded: boolean, m: ValidationMessages): z.ZodType {
@@ -201,13 +451,18 @@ function hookIssues(result: CmsValidateResult) {
    )
 }
 
-function hasValidateHooks(entry: ValidatedEntry): boolean {
-   if (entry.validate) return true
-   return Object.values(entry.fields).some(
+function hasBlockValidateHooks(fields: Record<string, FieldConfig>): boolean {
+   return Object.values(fields).some(
       (field) =>
          field.type === 'blocks' &&
-         Object.values(field.blocks ?? {}).some((block) => block.validate)
+         Object.values(field.blocks ?? {}).some(
+            (block) => !!block.validate || hasBlockValidateHooks(block.fields)
+         )
    )
+}
+
+function hasValidateHooks(entry: ValidatedEntry): boolean {
+   return !!entry.validate || hasBlockValidateHooks(entry.fields)
 }
 
 export function entryValidationIssues(
@@ -231,23 +486,18 @@ export function entryValidationIssues(
          })
       }
    }
-   for (const [key, field] of Object.entries(entry.fields)) {
-      const list = values[key]
-      if (field.type !== 'blocks' || !Array.isArray(list)) continue
-      list.forEach((item: unknown, index) => {
-         if (!item || typeof item !== 'object') return
-         const block = field.blocks?.[String((item as Record<string, unknown>).type)]
-         if (!block?.validate) return
-         const result = block.validate(item as Record<string, unknown>, { ...context, index })
-         for (const issue of hookIssues(result)) {
-            issues.push({
-               path: issue.field ? [key, index, issue.field] : [key, index],
-               message: issue.message,
-               level: issue.level === 'warning' ? 'warning' : 'error',
-            })
-         }
-      })
-   }
+   walkBlocks(entry.fields, values, ({ item, block, path, index }) => {
+      if (!block.validate) return
+      for (const issue of hookIssues(
+         block.validate(item, { ...context, index, blockPath: formatBlockPath(path) })
+      )) {
+         issues.push({
+            path: issue.field ? [...path, issue.field] : [...path],
+            message: issue.message,
+            level: issue.level === 'warning' ? 'warning' : 'error',
+         })
+      }
+   })
    return issues
 }
 
@@ -275,23 +525,15 @@ function isEmptyValue(field: FieldConfig, value: unknown, defaultLocale: string)
 }
 
 export function buildEntrySchema(
-   entry: ValidatedEntry & { drafts?: boolean; path?: string },
+   entry: ValidatedEntry & { drafts?: boolean; path?: string; config?: CmsConfig },
    i18n: CmsI18n,
    messages?: Partial<ValidationMessages>
 ) {
    const m: ValidationMessages = { ...DEFAULT_MESSAGES, ...messages }
    const shape: Record<string, z.ZodType> = {}
-   const conditional: [string, FieldConfig][] = []
-   const conditionalBounds: [string, FieldConfig][] = []
+   const conditional = conditionalFields(entry.fields)
    for (const [key, declared] of Object.entries(entry.fields)) {
-      const field = declared.showIf ? { ...declared, required: false } : declared
-      if (declared.showIf && declared.required) conditional.push([key, declared])
-      if (
-         declared.showIf &&
-         (declared.type === 'blocks' || declared.type === 'tags') &&
-         (declared.min !== undefined || declared.max !== undefined)
-      )
-         conditionalBounds.push([key, declared])
+      const field = unconditional(declared)
       if (field.type === 'relation' && field.cardinality === 'many-to-many') {
          const list = z.array(z.string().min(1))
          shape[key] = field.required
@@ -310,15 +552,16 @@ export function buildEntrySchema(
          shape[key] = tagsSchema(field, !declared.showIf, m)
          continue
       }
+      if (field.type === 'link') {
+         shape[key] = linkSchema(field, i18n, m, entry.config)
+         continue
+      }
       if (field.type === 'blocks') {
-         const list = blocksSchema(field, i18n, m)
-         const base = field.required ? list.min(1, m.required) : list
-         const bounded = declared.showIf ? base : boundedBlocks(base, field, m)
-         shape[key] = field.required ? bounded : bounded.nullish().transform((v) => v ?? null)
+         shape[key] = blocksFieldSchema(declared, i18n, m, entry.config)
          continue
       }
       if (isTranslatableField(field) && i18n.locales.length) {
-         shape[key] = translatableSchema(field, i18n, m)
+         shape[key] = withValueBounds(declared, translatableSchema(field, i18n, m), m)
          continue
       }
       if (field.type === 'json') {
@@ -328,7 +571,7 @@ export function buildEntrySchema(
             : json.nullish().transform((v) => v ?? null)
          continue
       }
-      shape[key] = optionalize(field, scalarSchema(field, m), m)
+      shape[key] = withValueBounds(declared, optionalize(field, scalarSchema(field, m), m), m)
    }
    if (entry.drafts) {
       shape.status = z
@@ -339,21 +582,12 @@ export function buildEntrySchema(
 
    const schema = z.object(shape)
    const hooks = hasValidateHooks(entry)
-   if (!conditional.length && !conditionalBounds.length && !hooks) return schema
+   if (!conditional.length && !hooks) return schema
 
    return schema.superRefine((parsed, ctx) => {
       const values = parsed as Record<string, unknown>
-      for (const [key, field] of conditional) {
-         if (!isFieldVisible(field, values)) continue
-         if (!isEmptyValue(field, values[key], i18n.defaultLocale)) continue
-         ctx.addIssue({ code: 'custom', path: [key], message: m.required })
-      }
-      for (const [key, field] of conditionalBounds) {
-         const list = values[key]
-         if (!isFieldVisible(field, values) || !Array.isArray(list)) continue
-         const message = countMessage(field, list.length, m)
-         if (message) ctx.addIssue({ code: 'custom', path: [key], message })
-      }
+      for (const issue of conditionalIssues(conditional, values, entry.fields, i18n, m))
+         ctx.addIssue({ code: 'custom', ...issue })
       if (!hooks) return
       for (const issue of entryValidationIssues(entry, values, i18n, entry.path)) {
          if (issue.level === 'error')

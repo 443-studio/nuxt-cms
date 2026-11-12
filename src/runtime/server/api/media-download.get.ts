@@ -22,7 +22,7 @@ import { attachmentDisposition } from '../utils/media-download'
 import { mediaFilePath } from '../utils/media-fs'
 import { useMediaIndex } from '../utils/media-index'
 import { mediaMimeForKey } from '../utils/media-sync'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const querySchema = z.object({ key: objectKeySchema })
 
@@ -84,7 +84,7 @@ async function sendRemoteFile(event: H3Event, baseUrl: string, key: string, disp
 }
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   await requireCmsPermission(event, 'media.read')
    const { media } = useMediaConfig(event)
    const { key } = await getValidatedQuery(event, querySchema.parse)
    if (isMediaFolderMarker(key)) notFound()

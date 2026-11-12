@@ -1,8 +1,21 @@
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { CmsDb } from '#cms-db'
-import type { CmsEntry, CmsI18n } from '../../shared/index'
+import type { CmsConfig, CmsContentMoves, CmsEntry, CmsI18n } from '../../shared/index'
+import {
+   isRoutedContent,
+   mergeContentMoves,
+   relationTarget,
+   rowAfterUpdate,
+} from '../../shared/index'
 import { uniqueFieldKeys } from '../../shared/duplicate'
+import {
+   changedImmutableKeys,
+   immutableFieldKeys,
+   isCaseInsensitiveUnique,
+   uniqueCompareValue,
+   withEntryDefaults,
+} from '../../shared/field-options'
 import type {
    CmsImportAction,
    CmsImportIssue,
@@ -12,7 +25,7 @@ import type {
    CmsTransferFormat,
 } from '../../shared/transfer'
 import { IMPORT_ID_PATTERN, importIssuePath, importRowTitle } from '../../shared/transfer'
-import { buildEntrySchema } from '../../shared/validation'
+import { buildEntrySchema, validationMessages } from '../../shared/validation'
 import { customId } from './custom-id'
 import type { MediaLookup } from './media-references'
 import { mediaReferences } from './media-references'
@@ -23,6 +36,8 @@ import {
    withTimestamps,
    withUpdatedAt,
 } from './registry'
+import type { CmsRedirectPlan } from '../../shared/index'
+import { contentMovesOf, planContentRedirects } from './redirects'
 import { manyToManyStatements, splitRelationValues } from './relations'
 import { chunks, KEY_CHUNK } from './write-statements'
 
@@ -45,16 +60,32 @@ export interface ImportContext {
    table: SQLiteTable
    mode: CmsImportMode
    media: MediaLookup | null
+   canPublish?: boolean
 }
 
 const META_KEYS = new Set(['id', 'createdAt', 'updatedAt'])
 
+export async function existingImportIds(
+   db: CmsDb,
+   table: SQLiteTable,
+   rows: CmsImportSourceRow[]
+): Promise<Set<string>> {
+   const ids = rows.flatMap((row) =>
+      typeof row.values.id === 'string' && IMPORT_ID_PATTERN.test(row.values.id)
+         ? [row.values.id]
+         : []
+   )
+   return ids.length ? existingIds(db, table, ids) : new Set()
+}
+
 export function validateImportRows(
    entry: CmsEntry,
    rows: CmsImportSourceRow[],
-   i18n: CmsI18n
+   i18n: CmsI18n,
+   isCreate: (id: string | null) => boolean = () => true,
+   config?: CmsConfig
 ): PreparedImportRow[] {
-   const schema = buildEntrySchema(entry, i18n)
+   const schema = buildEntrySchema({ ...entry, config }, i18n)
    return rows.map((row) => {
       const errors = [...row.errors]
       const rawId = row.values.id
@@ -67,9 +98,10 @@ export function validateImportRows(
                message: 'Invalid id: use letters, numbers, _ and -, up to 128 characters',
             })
       }
-      const input = Object.fromEntries(
+      const given = Object.fromEntries(
          Object.entries(row.values).filter(([key]) => !META_KEYS.has(key))
       )
+      const input = isCreate(id) ? withEntryDefaults(entry.fields, given, i18n) : given
       const result = schema.safeParse(input)
       if (!result.success) {
          const reported = new Set(errors.map((issue) => issue.path))
@@ -128,16 +160,17 @@ async function checkIds(rows: PreparedImportRow[], context: ImportContext) {
 async function checkRelations(rows: PreparedImportRow[], context: ImportContext) {
    const fileIds = new Set(rows.flatMap((row) => (row.id ? [row.id] : [])))
    for (const [key, field] of Object.entries(context.entry.fields)) {
-      if (field.type !== 'relation' || !field.to) continue
-      const target = resolveTable(field.to)
+      const to = relationTarget(field)
+      if (field.type !== 'relation' || !to) continue
+      const target = resolveTable(to)
       if (!target) continue
       const wanted = rows.flatMap((row) => relationIds(row.values?.[key]))
       if (!wanted.length) continue
       const found = await existingIds(context.db, target, wanted)
-      if (field.to === context.name) for (const id of fileIds) found.add(id)
+      if (to === context.name) for (const id of fileIds) found.add(id)
       for (const row of rows) {
          const missing = relationIds(row.values?.[key]).filter((id) => !found.has(id))
-         if (missing.length) addError(row, key, `Unknown ${field.to} id: ${missing.join(', ')}`)
+         if (missing.length) addError(row, key, `Unknown ${to} id: ${missing.join(', ')}`)
       }
    }
 }
@@ -146,26 +179,53 @@ async function checkUnique(rows: PreparedImportRow[], context: ImportContext) {
    const columns = context.table as unknown as Columns
    for (const key of uniqueFieldKeys(context.entry)) {
       const column = columns[key]
+      const field = context.entry.fields[key]!
       if (!column) continue
-      const owners = new Map<string, PreparedImportRow>()
+      const owners = new Map<string | number, PreparedImportRow>()
       for (const row of rows) {
          const value = row.values?.[key]
-         if (typeof value !== 'string' || !value) continue
-         const owner = owners.get(value)
+         if (!((typeof value === 'string' && value) || typeof value === 'number')) continue
+         const compared = uniqueCompareValue(field, value)
+         const owner = owners.get(compared)
          if (owner) addError(row, key, `Same value as row ${owner.index}`)
-         else owners.set(value, row)
+         else owners.set(compared, row)
       }
+      const lower = isCaseInsensitiveUnique(field)
       for (const chunk of chunks([...owners.keys()], KEY_CHUNK)) {
          const found = (await context.db
             .select({ id: columns.id!, value: column })
             .from(context.table)
-            .where(inArray(column, chunk))) as { id: string; value: string }[]
+            .where(lower ? inArray(sql`lower(${column})`, chunk) : inArray(column, chunk))) as {
+            id: string
+            value: string | number
+         }[]
          for (const match of found) {
-            const row = owners.get(String(match.value))
+            const row = owners.get(uniqueCompareValue(field, match.value))
             if (row && row.id !== String(match.id))
                addError(row, key, 'This value is already used by another entry')
          }
       }
+   }
+}
+
+async function checkImmutable(rows: PreparedImportRow[], context: ImportContext) {
+   const columns = context.table as unknown as Columns
+   const keys = immutableFieldKeys(context.entry.fields).filter((key) => columns[key])
+   const updated = rows.filter((row) => row.action === 'update' && row.id && row.values)
+   if (!keys.length || !updated.length) return
+   const saved = new Map<string, Row>()
+   const selection = Object.fromEntries(keys.map((key) => [key, columns[key]!]))
+   for (const chunk of chunks([...new Set(updated.map((row) => row.id!))], KEY_CHUNK)) {
+      const found = (await context.db
+         .select({ ...selection, id: columns.id! })
+         .from(context.table)
+         .where(inArray(columns.id!, chunk))) as Row[]
+      for (const match of found) saved.set(String(match.id), match)
+   }
+   const message = validationMessages().immutable
+   for (const row of updated) {
+      for (const key of changedImmutableKeys(context.entry.fields, saved.get(row.id!), row.values!))
+         addError(row, key, message)
    }
 }
 
@@ -185,6 +245,35 @@ async function checkMedia(rows: PreparedImportRow[], context: ImportContext) {
    }
 }
 
+async function publishedIds(db: CmsDb, table: SQLiteTable, ids: string[]): Promise<Set<string>> {
+   const columns = table as unknown as Columns
+   const found = new Set<string>()
+   for (const chunk of chunks([...new Set(ids)], KEY_CHUNK)) {
+      const rows = (await db
+         .select({ id: columns.id!, status: columns.status! })
+         .from(table)
+         .where(inArray(columns.id!, chunk))) as { id: string; status: unknown }[]
+      for (const row of rows) if (row.status === 'published') found.add(String(row.id))
+   }
+   return found
+}
+
+async function checkPublish(rows: PreparedImportRow[], context: ImportContext) {
+   if (context.canPublish !== false || !context.entry.drafts) return
+   const permission = `${context.name}.publish`
+   for (const row of rows) {
+      if (row.values?.status === 'published')
+         addError(row, 'status', `Publishing needs the ${permission} permission`)
+   }
+   const updated = rows.flatMap((row) => (row.action === 'update' && row.id ? [row.id] : []))
+   if (!updated.length) return
+   const published = await publishedIds(context.db, context.table, updated)
+   for (const row of rows) {
+      if (row.action === 'update' && row.id && published.has(row.id))
+         addError(row, 'id', `Editing a published item needs the ${permission} permission`)
+   }
+}
+
 export async function checkImportRows(
    rows: PreparedImportRow[],
    context: ImportContext
@@ -192,7 +281,9 @@ export async function checkImportRows(
    await checkIds(rows, context)
    await checkRelations(rows, context)
    await checkUnique(rows, context)
+   await checkImmutable(rows, context)
    await checkMedia(rows, context)
+   await checkPublish(rows, context)
    return rows
 }
 
@@ -238,6 +329,10 @@ function deferredSelfRelations(entry: CmsEntry, name: string): string[] {
       .map(([key]) => key)
 }
 
+export function assignImportIds(entry: CmsEntry, rows: PreparedImportRow[]): PreparedImportRow[] {
+   return rows.map((row) => (row.values && !row.id ? { ...row, id: customId(entry.id) } : row))
+}
+
 export function importWriteStatements(
    db: CmsDb,
    name: string,
@@ -281,4 +376,33 @@ export function importWriteStatements(
       later.push(...manyToManyStatements(db, name, id, lists))
    }
    return [...main, ...later]
+}
+
+export async function planImportRedirects(
+   db: CmsDb,
+   entry: CmsEntry,
+   table: SQLiteTable,
+   rows: PreparedImportRow[]
+): Promise<CmsRedirectPlan | null> {
+   if (!isRoutedContent(entry)) return null
+   const updates = rows.filter((row) => row.action === 'update' && row.values && row.id)
+   if (!updates.length) return null
+   const idCol = (table as unknown as Columns).id!
+   const before = new Map<string, Row>()
+   for (const ids of chunks(
+      updates.map((row) => row.id!),
+      KEY_CHUNK
+   )) {
+      const found = (await db.select().from(table).where(inArray(idCol, ids))) as Row[]
+      for (const row of found) before.set(String(row.id), row)
+   }
+   const moves: CmsContentMoves[] = []
+   for (const row of updates) {
+      const existing = before.get(row.id!)
+      if (!existing) continue
+      const { values } = splitRelationValues(entry, encodeColumnValues(entry, row.values!))
+      const after = rowAfterUpdate(existing, withContentDefaults(entry, values))
+      moves.push(contentMovesOf(entry, existing, after))
+   }
+   return planContentRedirects(mergeContentMoves(moves))
 }

@@ -1,19 +1,36 @@
 <template>
-   <KDrawer
+   <KFormDrawer
       :open="!!item"
       :title="shown ? mediaFilename(shown.key) : ''"
       size="lg"
-      @update:open="(value) => !value && emit('close')"
+      :form="form"
+      :readonly="!canEdit"
+      :deletable="!readOnly && canDelete"
+      @update:open="(value: boolean) => !value && emit('close')"
+      @delete="item && emit('delete', item)"
    >
-      <div v-if="shown" class="cms-media-detail">
-         <div class="cms-media-detail-preview">
-            <img
-               v-if="shown.type === 'image' && shown.url"
+      <KStack v-if="shown" gap="lg">
+         <KFormField
+            v-if="shown.type === 'image' && shown.url"
+            label="Focal point"
+            :description="
+               focalEditable
+                  ? 'Click or drag on the image to mark the part that must stay visible when it is cropped.'
+                  : undefined
+            "
+         >
+            <KFocalPointInput
+               v-model="focal"
                :src="shown.url"
                :alt="shown.alt ?? ''"
+               :readonly="!focalEditable"
+               empty-text="Center (default)"
+               clearable
             />
+         </KFormField>
+         <div v-else class="cms-media-detail-preview">
             <video
-               v-else-if="shown.type === 'video' && shown.url"
+               v-if="shown.type === 'video' && shown.url"
                :src="shown.url"
                controls
                preload="metadata"
@@ -54,72 +71,53 @@
             />
          </KStack>
 
-         <div class="cms-media-detail-facts">
-            <KDescriptionList :items="facts">
-               <template #value="{ item: fact }">
-                  <span
-                     class="cms-media-detail-fact"
-                     :class="{ 'k-mono': fact.key === 'key' }"
-                     :title="fact.value == null ? undefined : String(fact.value)"
-                     >{{ fact.value }}</span
-                  >
+         <KCard variant="subtle" padding="sm">
+            <KDescriptionList :items="facts" layout="inline">
+               <template #value-key="{ item: fact }">
+                  <span class="k-mono">{{ fact.value }}</span>
                </template>
             </KDescriptionList>
-         </div>
+         </KCard>
 
          <KStack gap="md">
-            <KFormField label="Alt text">
+            <KFormField label="Alt text" name="alt">
                <KInput
-                  v-model="alt"
+                  v-model="draft.alt"
                   placeholder="Describe the image for screen readers"
-                  @keydown.enter.prevent="save"
+                  :maxlength="ALT_MAX"
                />
             </KFormField>
-            <KFormField v-if="!readOnly" label="Folder">
-               <CmsMediaFolderPicker v-model="folder" :folders="folders" />
+            <KFormField v-if="!readOnly && canEdit" label="Folder" name="folder">
+               <CmsMediaFolderPicker v-model="draft.folder" :folders="folders" />
             </KFormField>
          </KStack>
 
-         <section class="cms-media-detail-usage">
-            <h3 class="cms-media-section-title">Used in</h3>
-            <div v-if="usageLoading" class="cms-media-loading">
-               <KSpinner size="sm" />
-            </div>
-            <p v-else-if="usageList === null" class="cms-media-hint">
-               Could not check where this file is used.
-            </p>
-            <p v-else-if="!usageList.length" class="cms-media-hint">Not used in any entry.</p>
-            <ul v-else class="cms-media-usage-list">
-               <li v-for="(entry, index) in usageList" :key="index">
-                  <NuxtLink
-                     :to="usageLink(entry)"
-                     class="cms-media-usage-link"
-                     @click="emit('close')"
-                  >
-                     <span class="cms-media-usage-title">{{ entry.title ?? entry.label }}</span>
-                     <span class="cms-media-usage-meta">{{ entry.label }} · {{ entry.field }}</span>
-                  </NuxtLink>
-               </li>
-            </ul>
-         </section>
-      </div>
-
-      <template #footer>
-         <KButton
-            v-if="!readOnly"
-            label="Delete"
-            :icon="cmsIcon('trash')"
-            variant="ghost"
-            tone="danger"
-            @click="item && emit('delete', item)"
-         />
-         <span v-else />
-         <KStack direction="row" gap="sm" align="center">
-            <KButton label="Close" variant="ghost" tone="neutral" @click="emit('close')" />
-            <KButton label="Save" :loading="saving" :disabled="!dirty" @click="save" />
+         <KStack as="section" gap="sm">
+            <KSeparator variant="heading" label="Used in" :level="3" />
+            <KFieldMessage
+               v-if="!usageLoading && usageList === null"
+               tone="neutral"
+               :icon="false"
+               message="Could not check where this file is used."
+            />
+            <KRecordList
+               v-else-if="usageLoading || usageItems.length || !hiddenUsage"
+               :items="usageItems"
+               :loading="usageLoading"
+               :skeleton-rows="2"
+               label="Used in"
+               empty-text="Not used in any entry."
+               empty-variant="hint"
+            />
+            <KFieldMessage
+               v-if="!usageLoading && hiddenUsage"
+               tone="neutral"
+               :icon="false"
+               :message="otherEntriesLabel(hiddenUsage)"
+            />
          </KStack>
-      </template>
-   </KDrawer>
+      </KStack>
+   </KFormDrawer>
 </template>
 
 <script setup lang="ts">
@@ -127,35 +125,63 @@ import type { MediaItem, MediaUsage } from '#nuxt-cms'
 import { computed, ref, useRequestURL, watch } from '#imports'
 import {
    Button as KButton,
+   Card as KCard,
    CopyButton as KCopyButton,
    DescriptionList as KDescriptionList,
-   Drawer as KDrawer,
+   FieldMessage as KFieldMessage,
+   FocalPointInput as KFocalPointInput,
+   FormDrawer as KFormDrawer,
    FormField as KFormField,
    Icon as KIcon,
    Input as KInput,
-   Spinner as KSpinner,
+   RecordList as KRecordList,
+   Separator as KSeparator,
    Stack as KStack,
+   toast,
+   useForm,
 } from '@xleddyl/443-components-vue'
-import { formatFileSize, mediaFilename, mediaIconFor } from '#nuxt-cms'
+import type { CmsFocalPoint } from '#nuxt-cms'
+import {
+   focalPointOf,
+   formatFileSize,
+   groupMediaUsage,
+   mediaFilename,
+   mediaIconFor,
+   otherEntriesLabel,
+} from '#nuxt-cms'
 import type { CmsMediaLibrary } from '../../composables/cms-media-library'
-import { usageLink } from '../../composables/cms-media-library'
+import { usageItem } from '../../composables/cms-media-library'
 import { cmsIcon } from '../../utils/ui'
 
-const props = defineProps<{
-   item: MediaItem | null
-   library: CmsMediaLibrary
-   readOnly: boolean
-}>()
+const props = withDefaults(
+   defineProps<{
+      item: MediaItem | null
+      library: CmsMediaLibrary
+      readOnly: boolean
+      canEdit?: boolean
+      canDelete?: boolean
+   }>(),
+   { canEdit: true, canDelete: true }
+)
 
 const emit = defineEmits<{ close: []; delete: [item: MediaItem] }>()
 
 const folders = computed(() => props.library.folders.value)
 
-const alt = ref('')
-const folder = ref<string | null>(null)
-const saving = ref(false)
+const ALT_MAX = 1024
+
+const draft = ref<{
+   alt: string
+   folder: string | null
+   focalX: number | null
+   focalY: number | null
+}>({ alt: '', folder: null, focalX: null, focalY: null })
+
+const form = useForm({ values: draft, onSubmit: save })
 const usageList = ref<MediaUsage[] | null>([])
+const hiddenUsage = ref(0)
 const usageLoading = ref(false)
+const usageItems = computed(() => groupMediaUsage(usageList.value ?? []).map(usageItem))
 const requestUrl = useRequestURL()
 const lastItem = ref<MediaItem | null>(props.item)
 
@@ -172,23 +198,40 @@ watch(
    () => props.item?.key,
    async (key) => {
       if (!props.item || !key) return
-      alt.value = props.item.alt ?? ''
-      folder.value = props.item.folder ?? null
+      const point = focalPointOf(props.item)
+      form.reset({
+         alt: props.item.alt ?? '',
+         folder: props.item.folder ?? null,
+         focalX: point?.x ?? null,
+         focalY: point?.y ?? null,
+      })
       usageLoading.value = true
       const usage = await props.library.usage([key])
       if (props.item?.key !== key) return
-      usageList.value = usage ? usage[key] ?? [] : null
+      usageList.value = usage ? usage.usage[key] ?? [] : null
+      hiddenUsage.value = usage?.hidden[key] ?? 0
       usageLoading.value = false
    },
    { immediate: true }
 )
 
-const dirty = computed(() => {
-   if (!props.item) return false
-   return (
-      (alt.value.trim() || null) !== (props.item.alt ?? null) ||
-      (!props.readOnly && folder.value !== (props.item.folder ?? null))
-   )
+const focal = computed<CmsFocalPoint | null>({
+   get: () =>
+      draft.value.focalX == null || draft.value.focalY == null
+         ? null
+         : { x: draft.value.focalX, y: draft.value.focalY },
+   set: (point) => {
+      draft.value.focalX = point?.x ?? null
+      draft.value.focalY = point?.y ?? null
+   },
+})
+const focalEditable = computed(() => props.canEdit && !!props.item)
+
+const focalChanged = computed(() => {
+   const saved = focalPointOf(props.item)
+   const current = focal.value
+   if (!saved || !current) return saved !== current
+   return saved.x !== current.x || saved.y !== current.y
 })
 
 const downloadHref = computed(() =>
@@ -223,14 +266,14 @@ const facts = computed(() => {
    return list
 })
 
-async function save() {
-   if (!props.item || !dirty.value || saving.value) return
-   saving.value = true
-   const ok = await props.library.updateItem(props.item.key, {
-      alt: alt.value.trim() || null,
-      ...(props.readOnly ? {} : { folder: folder.value }),
+async function save(values: typeof draft.value) {
+   if (!props.item) return
+   await props.library.updateItem(props.item.key, {
+      alt: values.alt.trim() || null,
+      ...(props.readOnly ? {} : { folder: values.folder }),
+      ...(focalChanged.value ? { focalX: values.focalX, focalY: values.focalY } : {}),
    })
-   saving.value = false
-   if (ok) emit('close')
+   toast.success('Saved')
+   emit('close')
 }
 </script>

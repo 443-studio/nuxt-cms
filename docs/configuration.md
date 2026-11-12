@@ -33,6 +33,16 @@ cms: {
    preview: {
       path: '/cms/preview',         // the site page shown inside the visual editor
       component: '',                // default wrapper component for content previews
+      banner: true,                 // "Preview" banner on pages opened with a preview link
+   },
+   webhooks: [],                    // [{ name, url?, secret?, events?, timeout? }], see Hooks & webhooks
+   roles: {},                       // { editor: { label?, description?, can: [...] } }, see Roles
+   site: {
+      url: '',                      // absolute site URL; or NUXT_PUBLIC_SITE_URL
+   },
+   seo: {
+      sitemap: true,                // serve /sitemap.xml (off when another provider is found)
+      robots: true,                 // serve /robots.txt (off when another provider is found)
    },
 }
 ```
@@ -206,6 +216,71 @@ The [visual editor](admin.md#visual-editor) shows a page of the site in an ifram
   item in the preview, for example the header of your article page. A content entry can override it
   with its own [`preview.component`](schema.md#preview-component). The build fails when the
   component is not registered.
+- `banner` (default `true`) shows a small "Preview" banner, with the expiry, on site pages opened
+  with a [preview link](querying.md#preview-links). Set it to `false` to draw your own with
+  `useCmsPreviewMode()`. Anything but a boolean fails the build.
+
+### `webhooks`
+
+URLs called with a signed JSON `POST` after each admin write: `name` (camelCase, unique), `url`,
+`secret` (16+ characters), `events` (`'entry'`, `'media'` or exact events like `'entry:publish'`)
+and `timeout` (ms, default 5000). The URL and the secret can be set at runtime with
+`NUXT_CMS_WEBHOOKS_<NAME>_URL` / `NUXT_CMS_WEBHOOKS_<NAME>_SECRET`. The build validates every
+webhook. See [Hooks & webhooks](hooks.md).
+
+### `roles`
+
+Roles for the admin accounts, declared in code. Each key is a role (a lowercase letter first, then
+letters, digits, `-` or `_`) with an optional `label` (defaults to the key in sentence case), an
+optional `description` (shown in the role picker) and `can`, the list of permissions:
+
+```ts
+cms: {
+   roles: {
+      editor: {
+         label: 'Editor',
+         description: 'Writes the news, drafts events.',
+         can: ['news.*', 'events.read', 'events.create', 'events.update', '*.read', 'media.write'],
+      },
+   },
+}
+```
+
+A permission is `<scope>.<action>`:
+
+| Scope | Actions |
+| --- | --- |
+| an entry key (collection, content) | `read`, `create`, `update`, `delete`, `publish` (only with drafts), `import`, `export` |
+| an entry key (single, page) | `read`, `update` |
+| `media` | `read`, `write` (upload, alt text, folders, move), `delete` |
+| `users` | `manage` (Settings → Users) |
+| `settings` | `manage` (Settings → Site, column and layout overrides in Settings) |
+| `redirects` | `manage` (Settings → Redirects) |
+
+`*` replaces a whole segment: `news.*` is every action on `news`, `*.read` reads everything, and
+`*` alone is every permission. Every action implies `read` on the same scope (`news.update` lets
+the role open `news`, `media.write` lets it browse the library). Roles live in the code, the
+database only stores the role key of each account in `cms_users.role`.
+
+Two roles are built in and cannot be redefined: `admin` (every permission except `users.manage`,
+the role of the accounts created before roles existed and the default of a new account) and
+`superadmin` (the env account, every permission). An account whose role is removed from the config
+keeps its row but gets no access, and the panel says so. The build fails on an unknown entry,
+scope or action (`categories.publish` on an entry without drafts, `home.delete` on a single), on a
+reserved or malformed role key and on unknown keys. It warns when a role edits an entry with media
+fields without `media.read`, or with a relation without `read` on the target, because the pickers
+of the form need them. See [Roles and permissions](admin.md#roles-and-permissions).
+
+### `site` and `seo`
+
+`site.url` is the absolute URL of the site, used for canonical links, share images, the sitemap
+and `robots.txt`. It becomes `runtimeConfig.public.siteUrl` (so `NUXT_PUBLIC_SITE_URL` overrides it
+at runtime); without it, the module falls back to an existing `runtimeConfig.public.siteUrl`, to
+`site.url` of `nuxt-site-config`, then to the request origin (the `Host` header; forwarded
+headers only with `site.trustForwardedHost: true`, for a proxy that overwrites them). `seo.sitemap` and `seo.robots` turn
+the `/sitemap.xml` and `/robots.txt` routes on or off. Left unset, each is on unless the build finds
+`@nuxtjs/sitemap` / `@nuxtjs/robots` or a `public/sitemap.xml` / `public/robots.txt`. A bad URL,
+an unknown key or a non-boolean switch fails the build. See [SEO](seo.md).
 
 ## Environment variables
 
@@ -233,6 +308,9 @@ Secrets should be provided as env vars rather than committed to `nuxt.config.ts`
 | `NUXT_PUBLIC_CMS_MEDIA_MAX_FILE_SIZE` | no | same limit, checked by the admin client; set it to the same value as `NUXT_CMS_MEDIA_MAX_FILE_SIZE` |
 | `NUXT_CMS_MEDIA_DIR` | for filesystem media | directory for uploaded files (default `data/media`) |
 | `NUXT_PUBLIC_CMS_MEDIA_BASE_URL` | for media | public base URL for uploaded files |
+| `NUXT_CMS_WEBHOOKS_<NAME>_URL` | no | URL of the webhook named `<name>` (upper snake case) |
+| `NUXT_CMS_WEBHOOKS_<NAME>_SECRET` | no | signing secret of that webhook |
+| `NUXT_PUBLIC_SITE_URL` | recommended | absolute site URL for canonical links, the sitemap and `robots.txt` |
 
 Env vars follow Nuxt's runtime-config convention: `cms.admin.email` ← `NUXT_CMS_ADMIN_EMAIL`,
 `cms.database.url` ← `NUXT_CMS_DATABASE_URL`, and so on. Values set via env override the ones in

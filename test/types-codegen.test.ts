@@ -10,6 +10,10 @@ describe('renderTypesFile', () => {
       expect(out).toContain('export interface CmsMedia<T extends CmsMediaType = CmsMediaType>')
    })
 
+   it('types the media focal point as nullable numbers', () => {
+      expect(out).toContain('  focalX: number | null\n  focalY: number | null\n}')
+   })
+
    it('narrows a media field to the declared media type', () => {
       expect(out).toContain("poster: CmsMedia<'image'> | null")
    })

@@ -6,7 +6,7 @@ import type { CmsDb } from '#cms-db'
 import { useDb } from '#cms-db'
 import * as cmsTables from '#cms-tables'
 import type { CmsEntry } from '../../shared/index'
-import { entryFieldsFor } from '../../shared/index'
+import { entryFieldsFor, relationTarget } from '../../shared/index'
 import { resolveTable, tableColumns } from './registry'
 import type { JoinTable, WriteDb } from './write-statements'
 import { joinWriteStatements } from './write-statements'
@@ -53,7 +53,7 @@ export async function assertRelationTargets(entry: CmsEntry, lists: Record<strin
    for (const [key, ids] of Object.entries(lists)) {
       if (!ids.length) continue
       const field = entryFieldsFor(entry)[key]!
-      const target = resolveTable(field.to!)
+      const target = resolveTable(relationTarget(field))
       if (!target) continue
       const idCol = tableColumns(target).id!
       const rows = (await db.select({ id: idCol }).from(target).where(inArray(idCol, ids))) as {
@@ -64,7 +64,9 @@ export async function assertRelationTargets(entry: CmsEntry, lists: Record<strin
          const missing = ids.filter((id) => !found.has(id))
          throw createError({
             statusCode: 422,
-            statusMessage: `Unknown ${field.to} id(s) for '${key}': ${missing.join(', ')}`,
+            statusMessage: `Unknown ${relationTarget(field)} id(s) for '${key}': ${missing.join(
+               ', '
+            )}`,
          })
       }
    }
@@ -90,9 +92,10 @@ export async function relationTitles(
    const titles: Record<string, Record<string, unknown>> = {}
 
    for (const [key, field] of Object.entries(entryFieldsFor(entry))) {
-      if (field.type !== 'relation' || !field.to) continue
-      const targetEntry = config[field.to]
-      const target = resolveTable(field.to)
+      const to = relationTarget(field)
+      if (field.type !== 'relation' || !to) continue
+      const targetEntry = config[to]
+      const target = resolveTable(to)
       if (!targetEntry?.titleField || !target) continue
 
       const ids = new Set<string>()
@@ -149,4 +152,32 @@ export async function attachManyToMany<T extends Row>(
       }
    }
    return rows
+}
+
+export interface SavedReadBack<T> {
+   row: T
+   error: unknown
+}
+
+export async function readBackSaved<T extends Row>(
+   name: string,
+   entry: CmsEntry,
+   row: T
+): Promise<SavedReadBack<T>> {
+   try {
+      const [attached] = await attachManyToMany(useDb(), name, entry, [row])
+      return { row: attached ?? row, error: null }
+   } catch (error) {
+      return { row, error }
+   }
+}
+
+export function savedReadBackError(error: unknown) {
+   return createError({
+      statusCode: 500,
+      statusMessage:
+         'The changes were saved, but the saved item could not be read back. Reload it.',
+      data: { saved: true },
+      cause: error,
+   })
 }

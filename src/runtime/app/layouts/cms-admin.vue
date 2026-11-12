@@ -1,9 +1,20 @@
 <template>
-   <KRoot class="cms-scope cms-canvas" :theme="theme" preset="default">
+   <KRoot class="is-canvas" document :theme="theme" preset="default">
       <KDashboardLayout
          v-model:open="navOpen"
          class="cms-admin"
+         :content="content"
+         :loading="navigationPending"
          :navigation="navigation"
+         :account="account"
+         :settings-sections="settingsSections.navigation.value"
+         :settings-presets="false"
+         settings-title="Settings"
+         :settings-route="true"
+         settings-route-location="hash"
+         settings-account-section="account"
+         settings-hide-session
+         :settings-resolve-page="settingsSections.resolvePage"
          :theme-switch="false"
          :collapsible="false"
          :storage-key="false"
@@ -12,6 +23,7 @@
          :search-navigation="false"
          :search-props="searchProps"
          search-label="Search"
+         @sign-out="logout"
       >
          <template #brand>
             <CmsBrandMark :subtitle="cmsBrand.subtitle || undefined" />
@@ -21,55 +33,34 @@
             <CmsBrandMark size="sm" />
          </template>
 
-         <template #search-item="{ item: { data: hit } }">
-            <template v-if="hit">
-               <KIcon :name="cmsIcon(iconOf(hit))" class="cms-search-option-icon" />
-               <span class="cms-search-option-text">
-                  <template v-if="isValueHit(hit)">
-                     <span class="cms-search-option-head">
-                        <span class="cms-search-option-title">{{
-                           hit.title ?? hit.entryLabel
-                        }}</span>
-                        <span v-if="hit.fieldLabel" class="cms-search-option-meta">
-                           {{ hit.fieldLabel }}
-                        </span>
-                        <KBadge v-if="hit.locale" size="sm" class="cms-code-badge">
-                           {{ hit.locale }}
-                        </KBadge>
-                     </span>
-                     <span class="cms-search-snippet">
-                        {{ hit.snippet.before
-                        }}<mark class="cms-search-mark">{{ hit.snippet.match }}</mark
-                        >{{ hit.snippet.after }}
-                     </span>
-                  </template>
-                  <template v-else>
-                     <span class="cms-search-option-title">
-                        {{ hit.snippet.before
-                        }}<mark class="cms-search-mark">{{ hit.snippet.match }}</mark
-                        >{{ hit.snippet.after }}
-                     </span>
-                     <span class="cms-search-option-meta">{{ labelMeta(hit) }}</span>
-                  </template>
-               </span>
-            </template>
-         </template>
-
-         <template #account>
-            <KAccountMenu
-               :name="displayName"
-               :email="email"
-               :active="settingsOpen"
-               aria-haspopup="dialog"
-               aria-label="Open settings"
-               @click="openSettings"
-            />
-         </template>
-
          <slot />
+
+         <template #settings-nav-footer>
+            <CmsPoweredBy />
+         </template>
+         <template #settings-account-fields>
+            <CmsSettingsAccount />
+         </template>
+         <template
+            v-for="section in settingsSections.views.value"
+            #[`settings-section-${section.id}`]="slot"
+         >
+            <component :is="section.component" v-bind="section.bind?.(slot)" />
+         </template>
+         <template
+            v-for="section in settingsSections.actionViews.value"
+            #[`settings-actions-${section.id}`]="slot"
+         >
+            <component :is="section.actions" v-bind="section.bindActions?.(slot)" />
+         </template>
+         <template
+            v-for="section in settingsSections.tabViews.value"
+            #[`settings-tabs-${section.id}`]="slot"
+         >
+            <component :is="section.tabs" :page="slot.page" />
+         </template>
       </KDashboardLayout>
 
-      <CmsSettingsModal v-model:open="settingsOpen" @logout="logout" />
       <CmsWelcomeModal />
       <KOverlayHost />
    </KRoot>
@@ -77,16 +68,22 @@
 
 <script setup lang="ts">
 import type { CmsConfig, CmsEntryKind } from '#nuxt-cms'
-import type { CommandGroup, DashboardSearchProps, NavSection } from '@xleddyl/443-components-vue'
+import type {
+   CommandGroup,
+   CommandItem,
+   DashboardSearchProps,
+   NavSection,
+   ShellContent,
+   TextRange,
+} from '@xleddyl/443-components-vue'
 import {
-   AccountMenu as KAccountMenu,
-   Badge as KBadge,
    DashboardLayout as KDashboardLayout,
-   Icon as KIcon,
    OverlayHost as KOverlayHost,
    Root as KRoot,
+   provideFormConfig,
    provideTheme,
 } from '@xleddyl/443-components-vue'
+import { useNavigationPending } from '@xleddyl/443-components-vue/nuxt/composables'
 import { computed, navigateTo, ref, useRoute, watch } from '#imports'
 import cmsConfig from '#cms-config'
 import { cmsBrand } from '#cms-brand'
@@ -94,15 +91,30 @@ import type { CmsSearchHit, CmsSearchKind, CmsSearchResponse } from '../../share
 import { CMS_SEARCH_MIN_LENGTH, normalizeSearchQuery } from '../../shared/search'
 import { useCmsTheme } from '../composables/cms-theme'
 import { useCmsAccount } from '../composables/cms-account'
+import { useCmsPermissions } from '../composables/cms-permissions'
+import { provideCmsRouteLocation } from '../composables/cms-route'
 import { loadCmsSettings } from '../composables/cms-settings'
-import { cmsIcon } from '../utils/ui'
+import { useCmsSettingsSections } from '../composables/cms-settings-sections'
+import { cmsIcon, cmsSubmitError } from '../utils/ui'
 
 const route = useRoute()
 const { email, displayName } = useCmsAccount()
+const { can, role, roleLabel } = useCmsPermissions()
 const theme = useCmsTheme()
 provideTheme(theme)
+provideCmsRouteLocation()
+provideFormConfig({ submitError: cmsSubmitError })
 const navOpen = ref(false)
-const settingsOpen = ref(false)
+const navigationPending = useNavigationPending()
+const settingsSections = useCmsSettingsSections()
+
+const content = computed(() => (route.meta.content as ShellContent | undefined) ?? 'fill')
+
+const account = computed(() => ({
+   name: displayName.value,
+   email: email.value,
+   role: roleLabel(role.value),
+}))
 
 await loadCmsSettings()
 
@@ -115,22 +127,26 @@ const GROUPS: { kind: CmsEntryKind; title: string; icon: string }[] = [
 
 const entries = Object.entries(cmsConfig as CmsConfig)
 
-const navigation: NavSection[] = [
-   ...GROUPS.map((group) => ({
-      label: group.title,
-      items: entries
-         .filter(([, entry]) => entry.kind === group.kind)
-         .map(([name, entry]) => ({
-            label: entry.label,
-            to: `/cms/${name}`,
-            icon: cmsIcon(entry.icon ?? group.icon),
-         })),
-   })),
-   {
-      label: 'Library',
-      items: [{ label: 'Media', to: '/cms/media', icon: cmsIcon('photo') }],
-   },
-].filter((section) => section.items.length)
+const navigation = computed<NavSection[]>(() =>
+   [
+      ...GROUPS.map((group) => ({
+         label: group.title,
+         items: entries
+            .filter(([name, entry]) => entry.kind === group.kind && can(`${name}.read`))
+            .map(([name, entry]) => ({
+               label: entry.label,
+               to: `/cms/${name}`,
+               icon: cmsIcon(entry.icon ?? group.icon),
+            })),
+      })),
+      {
+         label: 'Library',
+         items: can('media.read')
+            ? [{ label: 'Media', to: '/cms/media', icon: cmsIcon('photo') }]
+            : [],
+      },
+   ].filter((section) => section.items.length)
+)
 
 const SEARCH_DEBOUNCE_MS = 180
 
@@ -193,6 +209,35 @@ function isValueHit(hit: CmsSearchHit) {
    return hit.type === 'value' || hit.type === 'media'
 }
 
+function snippetText(hit: CmsSearchHit) {
+   const { before, match, after } = hit.snippet
+   return {
+      text: `${before}${match}${after}`,
+      ranges: [[before.length, before.length + match.length]] satisfies TextRange[],
+   }
+}
+
+function hitItem(hit: CmsSearchHit, index: number): CommandItem<CmsSearchHit> {
+   const snippet = snippetText(hit)
+   const base = { id: `hit-${index}`, icon: cmsIcon(iconOf(hit)), to: hit.to, data: hit }
+   if (!isValueHit(hit)) {
+      return {
+         ...base,
+         label: snippet.text,
+         description: labelMeta(hit),
+         highlight: { label: snippet.ranges },
+      }
+   }
+   return {
+      ...base,
+      label: hit.title ?? hit.entryLabel,
+      meta: hit.fieldLabel ?? undefined,
+      description: snippet.text,
+      badge: hit.locale ? hit.locale.toUpperCase() : undefined,
+      highlight: { description: snippet.ranges },
+   }
+}
+
 function iconOf(hit: CmsSearchHit) {
    return hit.type === 'entry' ? KIND_ICONS[hit.kind] : TYPE_ICONS[hit.type] ?? 'tag'
 }
@@ -218,12 +263,7 @@ async function search(term: string, signal: AbortSignal): Promise<CommandGroup<C
          group = { id: key, label: hit.entryLabel, description: KIND_LABELS[hit.kind], items: [] }
          groups.set(key, group)
       }
-      group.items.push({
-         id: `hit-${index}`,
-         label: hit.title ?? hit.entryLabel,
-         to: hit.to,
-         data: hit,
-      })
+      group.items.push(hitItem(hit, index))
    })
    truncated.value = response.truncated
    return [...groups.values()]
@@ -236,13 +276,7 @@ watch(
    }
 )
 
-function openSettings() {
-   navOpen.value = false
-   settingsOpen.value = true
-}
-
 async function logout() {
-   settingsOpen.value = false
    await navigateTo('/cms/logout')
 }
 </script>

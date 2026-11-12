@@ -4,34 +4,19 @@
       <span class="k-visually-hidden">No media</span>
    </span>
 
-   <img
-      v-else-if="kind === 'image' && url"
-      :src="url"
-      :alt="filename"
-      :title="filename"
-      loading="lazy"
-      class="cms-media-thumb"
-   />
-
-   <video
-      v-else-if="kind === 'video' && url"
-      :src="url"
-      :title="filename"
-      muted
-      playsinline
-      preload="metadata"
-      class="cms-media-thumb"
-   />
-
-   <span v-else :title="filename" class="cms-media-thumb is-fallback">
-      <KIcon :name="cmsIcon(icon)" />
-   </span>
+   <KTooltip v-else :text="filename">
+      <KThumbnail :src="url ?? undefined" :kind="kind" :alt="filename" size="sm" />
+   </KTooltip>
 </template>
 
 <script setup lang="ts">
 import { computed } from '#imports'
-import { Icon as KIcon } from '@xleddyl/443-components-vue'
-import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
+import {
+   Icon as KIcon,
+   Thumbnail as KThumbnail,
+   Tooltip as KTooltip,
+} from '@xleddyl/443-components-vue'
+import { mediaFilename, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { cmsIcon } from '../../utils/ui'
 
@@ -42,5 +27,4 @@ const { mediaBaseUrl } = useCmsRuntime()
 const kind = computed(() => (props.value ? mediaTypeForKey(props.value) : 'file'))
 const url = computed(() => (props.value ? mediaPublicUrl(mediaBaseUrl, props.value) : null))
 const filename = computed(() => (props.value ? mediaFilename(props.value) : ''))
-const icon = computed(() => mediaIconFor(kind.value))
 </script>

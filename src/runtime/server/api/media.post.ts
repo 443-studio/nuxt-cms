@@ -15,7 +15,8 @@ import {
    toMediaItem,
    useMediaConfig,
 } from '../utils/media'
-import { requireAdmin } from '../utils/require-admin'
+import { emitMediaChange } from '../utils/hooks'
+import { requireCmsPermission } from '../utils/permissions'
 
 const bodySchema = z.object({
    key: objectKeySchema,
@@ -28,7 +29,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event): Promise<MediaItem> => {
-   await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.write')
    const { media, publicUrl } = useMediaConfig(event)
    assertMediaWritable(media)
    const body = await readValidatedBody(event, bodySchema.parse)
@@ -53,5 +54,6 @@ export default defineEventHandler(async (event): Promise<MediaItem> => {
       .onConflictDoUpdate({ target: cms_media.key, set: values })
       .returning()
 
+   emitMediaChange(event, user, { action: 'upload', keys: [body.key], folder: values.folder })
    return toMediaItem(row!, publicUrl)
 })

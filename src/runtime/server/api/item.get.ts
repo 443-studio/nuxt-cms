@@ -10,14 +10,15 @@ import {
 } from '../utils/registry'
 import { readPages } from '../utils/page-storage'
 import { attachManyToMany } from '../utils/relations'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, requireCmsAccess } from '../utils/permissions'
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const { access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (entry.kind === 'single') {
       throw createError({ statusCode: 404, statusMessage: 'Single objects have no items' })
    }
+   assertCmsPermission(access, `${name}.read`)
 
    const id = parseId(event)
 

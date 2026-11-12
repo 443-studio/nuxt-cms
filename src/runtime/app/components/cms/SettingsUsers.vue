@@ -1,284 +1,131 @@
 <template>
-   <KAlert
-      v-if="created"
-      tone="accent"
-      role="status"
-      :icon="cmsIcon('key')"
-      :title="created.title"
-      class="cms-credentials-alert"
+   <CmsSettingsUserCreate v-if="isNew" @created="onCreated" />
+   <CmsSettingsUserDetail
+      v-else-if="page && current"
+      :key="current.id"
+      :account="current"
+      @updated="store.upsert"
+   />
+   <KSkeletonForm v-else-if="page && !store.loaded.value" :fields="3" />
+   <KRecordList
+      v-else
+      :items="items"
+      :loading="!store.loaded.value"
+      avatar
+      label="Users"
+      :empty-icon="cmsIcon('users')"
+      empty-text="No users yet"
+      empty-description="Add a user to give someone access to the panel."
+      @row-click="(item) => open((item as UserItem).account)"
    >
-      <p>Share these credentials with the user. The password does not show again.</p>
+      <template #leading="{ item }">
+         <KAvatar :name="item.title" decorative />
+      </template>
+      <template #action="{ item }">
+         <KButton
+            :icon="cmsIcon(canManageUser((item as UserItem).account) ? 'pencil' : 'eye')"
+            variant="ghost"
+            tone="neutral"
+            size="sm"
+            square
+            :aria-label="canManageUser((item as UserItem).account) ? 'Edit' : 'View'"
+            @click="open((item as UserItem).account)"
+         />
+      </template>
+      <template #empty-actions>
+         <CmsSettingsEmptyAdd
+            label="Add user"
+            new-label="New user"
+            icon="user-plus"
+            @open="emit('open', $event)"
+         />
+      </template>
+   </KRecordList>
+   <KModal
+      v-if="created"
+      v-model:open="createdOpen"
+      size="sm"
+      title="User created"
+      description="Share these credentials with the user. The password does not show again."
+   >
       <KDescriptionList
          :items="[
             { key: 'email', label: 'Email', value: created.email },
             { key: 'password', label: 'Password', value: created.password },
          ]"
-         :divided="false"
-         class="cms-credentials-items"
       >
          <template #value-password="{ item }">
             <span class="k-mono">{{ item.value }}</span>
          </template>
       </KDescriptionList>
-      <template #actions>
+      <template #footer>
          <KCopyButton
+            variant="soft"
+            tone="neutral"
             :value="`Email: ${created.email}\nPassword: ${created.password}`"
             label="Copy credentials"
             copied-label="Copied"
             show-label
-            variant="soft"
-            tone="accent"
          />
-         <KButton label="Done" size="sm" @click="created = null" />
+         <KButton variant="ghost" tone="neutral" @click="createdOpen = false">Done</KButton>
       </template>
-   </KAlert>
-
-   <KCard v-if="creating" variant="subtle" title="New user" class="cms-user-create">
-      <KForm :form="draft">
-         <KGrid :columns="2">
-            <KFormField label="Email" name="email" required>
-               <KInput
-                  v-model="draft.values.email"
-                  type="email"
-                  :icon="cmsIcon('envelope')"
-                  placeholder="name@example.com"
-                  autocomplete="off"
-               />
-            </KFormField>
-            <KFormField label="Name" name="name">
-               <KInput v-model="draft.values.name" placeholder="Optional" autocomplete="off" />
-            </KFormField>
-         </KGrid>
-         <KFormField label="Password" name="password" required>
-            <KPasswordInput
-               v-model="draft.values.password"
-               icon="key"
-               autocomplete="new-password"
-               :generate="generatePassword"
-               copy
-            />
-         </KFormField>
-         <KStack direction="row" justify="end" gap="sm">
-            <KButton label="Cancel" variant="ghost" tone="neutral" size="sm" @click="cancel" />
-            <KButton
-               type="submit"
-               label="Create user"
-               size="sm"
-               :disabled="
-                  !draft.values.email || (draft.values.password ?? '').length < MIN_PASSWORD_LENGTH
-               "
-            />
-         </KStack>
-      </KForm>
-   </KCard>
-
-   <KSpinner v-if="loading" />
-
-   <ul v-else-if="users.length" class="cms-user-list">
-      <li v-for="account in users" :key="account.id" class="cms-user-row">
-         <div class="cms-user-main">
-            <KAvatar :name="account.name || account.email" size="sm" decorative />
-            <div class="cms-user-text">
-               <span class="cms-user-name">{{ account.name || account.email }}</span>
-               <span class="cms-user-meta">
-                  {{ account.name ? `${account.email} · ` : '' }}{{ lastLogin(account) }}
-               </span>
-            </div>
-            <KStack direction="row" gap="none">
-               <KButton
-                  :icon="cmsIcon('key')"
-                  variant="ghost"
-                  tone="neutral"
-                  size="sm"
-                  title="Set a new password"
-                  aria-label="Set a new password"
-                  @click="startReset(account)"
-               />
-               <KButton
-                  :icon="cmsIcon('trash')"
-                  variant="ghost"
-                  tone="danger"
-                  size="sm"
-                  title="Delete user"
-                  aria-label="Delete user"
-                  @click="remove(account)"
-               />
-            </KStack>
-         </div>
-         <KForm v-if="resetting === account.id" :form="reset" class="cms-user-reset">
-            <KFormField label="New password" name="password">
-               <KPasswordInput
-                  v-model="reset.values.password"
-                  icon="key"
-                  autocomplete="new-password"
-                  :generate="generatePassword"
-                  copy
-               />
-            </KFormField>
-            <KStack direction="row" justify="end" gap="sm">
-               <KButton
-                  label="Cancel"
-                  variant="ghost"
-                  tone="neutral"
-                  size="sm"
-                  @click="resetting = null"
-               />
-               <KButton
-                  type="submit"
-                  label="Set password"
-                  size="sm"
-                  :disabled="(reset.values.password ?? '').length < MIN_PASSWORD_LENGTH"
-               />
-            </KStack>
-         </KForm>
-      </li>
-   </ul>
-
-   <KEmptyState
-      v-else-if="!creating"
-      :icon="cmsIcon('users')"
-      title="No users yet"
-      description="Add a user to give someone access to the panel."
-   />
+   </KModal>
 </template>
 
 <script setup lang="ts">
 import type { CmsAccount } from '#nuxt-cms'
-import { MIN_PASSWORD_LENGTH } from '#nuxt-cms'
+import type { RecordListItem, SettingsModalPage } from '@xleddyl/443-components-vue'
 import {
-   Alert as KAlert,
    Avatar as KAvatar,
    Button as KButton,
-   Card as KCard,
    CopyButton as KCopyButton,
    DescriptionList as KDescriptionList,
-   EmptyState as KEmptyState,
-   Form as KForm,
-   FormField as KFormField,
-   Grid as KGrid,
-   Input as KInput,
-   PasswordInput as KPasswordInput,
-   Spinner as KSpinner,
-   Stack as KStack,
-   useForm,
+   Modal as KModal,
+   RecordList as KRecordList,
+   SkeletonForm as KSkeletonForm,
 } from '@xleddyl/443-components-vue'
-import { onMounted, ref, watch } from '#imports'
-import { generatePassword } from '../../composables/cms-account'
-import { useCmsConfirm } from '../../composables/cms-confirm'
-import { useCmsToast } from '../../composables/cms-toast'
-import { cmsApi } from '../../utils/api'
-import { cmsIcon, errorMessage } from '../../utils/ui'
+import { computed, onMounted, ref } from '#imports'
+import { CMS_NEW_RECORD } from '../../composables/cms-route'
+import { useCmsPermissions } from '../../composables/cms-permissions'
+import { useCmsUsers } from '../../composables/cms-settings-stores'
+import { cmsIcon } from '../../utils/ui'
+import { lastSignIn, roleBadge } from '../../utils/users'
 
-const toast = useCmsToast()
-const confirmAction = useCmsConfirm()
+type UserItem = RecordListItem & { account: CmsAccount }
 
-const creating = defineModel<boolean>('creating', { default: false })
+const props = defineProps<{ page?: SettingsModalPage }>()
+const emit = defineEmits<{ open: [page: SettingsModalPage]; back: [] }>()
 
-const users = ref<CmsAccount[]>([])
-const loading = ref(true)
+const store = useCmsUsers()
+const { canManageUser } = store
+const { roleOptions, roleLabel } = useCmsPermissions()
 
-async function load() {
-   try {
-      users.value = await cmsApi<CmsAccount[]>('/api/cms/users')
-   } catch (error) {
-      toast.add({ title: 'Could not load users', description: errorMessage(error), color: 'error' })
-   } finally {
-      loading.value = false
-   }
+onMounted(store.load)
+
+const isNew = computed(() => props.page?.id === CMS_NEW_RECORD)
+const current = computed(() => store.find(props.page?.id))
+
+const created = ref<{ email: string; password: string } | null>(null)
+const createdOpen = ref(false)
+
+function open(account: CmsAccount) {
+   emit('open', { id: account.id, label: store.label(account) })
 }
 
-onMounted(load)
-
-function lastLogin(account: CmsAccount) {
-   if (!account.lastLoginAt) return 'Never signed in'
-   return `Last sign-in ${new Date(account.lastLoginAt).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-   })}`
+function onCreated(account: CmsAccount, password: string) {
+   store.upsert(account)
+   created.value = { email: account.email, password }
+   createdOpen.value = true
+   emit('back')
 }
 
-const created = ref<{ title: string; email: string; password: string } | null>(null)
-
-const draft = useForm({
-   schema: {
-      email: { initial: (): string | number | null | undefined => '' },
-      name: { initial: (): string | number | null | undefined => '' },
-      password: { initial: (): string | null | undefined => '' },
-   },
-   onSubmit: create,
-})
-
-watch(
-   creating,
-   (value) => {
-      if (!value) return
-      created.value = null
-      draft.reset({ email: '', name: '', password: generatePassword() })
-   },
-   { immediate: true }
+const items = computed<UserItem[]>(() =>
+   store.items.value.map((account) => ({
+      id: account.id,
+      account,
+      title: account.name || account.email,
+      description: `${account.name ? `${account.email} · ` : ''}${lastSignIn(account)}`,
+      badge: roleBadge(account.role, roleOptions, roleLabel),
+   }))
 )
-
-function cancel() {
-   creating.value = false
-}
-
-async function create() {
-   const password = draft.values.password ?? ''
-   try {
-      const account = await cmsApi<CmsAccount>('/api/cms/users', {
-         method: 'POST',
-         body: {
-            email: String(draft.values.email ?? ''),
-            name: draft.values.name ? String(draft.values.name) : null,
-            password,
-         },
-      })
-      users.value = [...users.value, account]
-      created.value = { title: 'User created', email: account.email, password }
-      creating.value = false
-   } catch (error) {
-      draft.setError('', errorMessage(error) ?? 'User not created.')
-   }
-}
-
-const resetting = ref<string | null>(null)
-
-const reset = useForm({
-   schema: { password: { initial: (): string | null | undefined => '' } },
-   onSubmit: () => {
-      const account = users.value.find((candidate) => candidate.id === resetting.value)
-      return account ? saveReset(account) : undefined
-   },
-})
-
-function startReset(account: CmsAccount) {
-   reset.reset({ password: generatePassword() })
-   resetting.value = resetting.value === account.id ? null : account.id
-}
-
-async function saveReset(account: CmsAccount) {
-   const password = reset.values.password ?? ''
-   try {
-      const updated = await cmsApi<CmsAccount>(`/api/cms/users/${account.id}`, {
-         method: 'PUT',
-         body: { password },
-      })
-      users.value = users.value.map((u) => (u.id === updated.id ? updated : u))
-      created.value = { title: 'Password changed', email: account.email, password }
-      resetting.value = null
-   } catch (error) {
-      toast.add({ title: 'Password not changed', description: errorMessage(error), color: 'error' })
-   }
-}
-
-async function remove(account: CmsAccount) {
-   if (!(await confirmAction(`Delete ${account.email}? They lose access to the panel.`))) return
-   try {
-      await cmsApi(`/api/cms/users/${account.id}`, { method: 'DELETE' })
-      users.value = users.value.filter((u) => u.id !== account.id)
-      toast.add({ title: 'User deleted', color: 'success' })
-   } catch (error) {
-      toast.add({ title: 'User not deleted', description: errorMessage(error), color: 'error' })
-   }
-}
 </script>

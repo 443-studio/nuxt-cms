@@ -1,12 +1,14 @@
 import type { CmsValidationIssue } from '#nuxt-cms'
 import { defaultLocaleValue, defineCmsBlocks, defineCmsConfig } from '#nuxt-cms'
 
-const sections = defineCmsBlocks({
+const content = defineCmsBlocks({
    text: {
       label: 'Text',
       component: 'SectionText',
       icon: 'bars-3-bottom-left',
       description: 'A heading and a paragraph of rich text.',
+      group: 'Text',
+      tags: ['paragraph', 'heading'],
       fields: {
          heading: { label: 'Heading', type: 'text', translatable: true },
          body: { label: 'Body', type: 'richtext', translatable: true, required: true },
@@ -17,6 +19,8 @@ const sections = defineCmsBlocks({
       component: 'SectionImage',
       icon: 'photo',
       description: 'A full-width image with an optional caption.',
+      group: 'Media',
+      tags: ['photo', 'picture'],
       fields: {
          image: { label: 'Image', type: 'media', mediaType: 'image', required: true },
          caption: { label: 'Caption', type: 'text', translatable: true },
@@ -27,9 +31,87 @@ const sections = defineCmsBlocks({
       component: 'SectionQuote',
       icon: 'chat-bubble-bottom-center-text',
       description: 'A highlighted quote with its author.',
+      group: 'Text',
+      tags: ['citation', 'testimonial'],
       fields: {
          text: { label: 'Text', type: 'text', textarea: true, translatable: true, required: true },
-         author: { label: 'Author', type: 'text' },
+         author: { label: 'Author', type: 'text', max: 60 },
+      },
+      layout: ['text', { title: 'Attribution', description: 'Who said it.', rows: ['author'] }],
+   },
+   cta: {
+      label: 'Call to action',
+      component: 'SectionCta',
+      icon: 'cursor-arrow-rays',
+      description: 'A short pitch with a button to a page, an article or another site.',
+      fields: {
+         heading: { label: 'Heading', type: 'text', translatable: true, required: true },
+         text: { label: 'Text', type: 'text', textarea: true, translatable: true },
+         link: {
+            label: 'Button',
+            type: 'link',
+            withLabel: true,
+            translatable: true,
+            required: true,
+         },
+      },
+   },
+})
+
+const sections = defineCmsBlocks({
+   ...content,
+   columns: {
+      label: 'Columns',
+      component: 'SectionColumns',
+      icon: 'view-columns',
+      description: 'Two or three columns side by side, each with its own blocks.',
+      group: 'Layout',
+      tags: ['grid', 'side by side'],
+      fields: {
+         heading: { label: 'Heading', type: 'text', translatable: true },
+         columns: {
+            label: 'Columns',
+            type: 'blocks',
+            min: 2,
+            max: 3,
+            blocks: {
+               column: {
+                  label: 'Column',
+                  component: 'SectionColumn',
+                  icon: 'rectangle-stack',
+                  fields: {
+                     content: { label: 'Content', type: 'blocks', blocks: content },
+                  },
+               },
+            },
+         },
+      },
+   },
+   accordion: {
+      label: 'Accordion',
+      component: 'SectionAccordion',
+      icon: 'queue-list',
+      description: 'Panels that open one at a time, for FAQs and long details.',
+      group: 'Layout',
+      tags: ['faq', 'collapse', 'details'],
+      fields: {
+         heading: { label: 'Heading', type: 'text', translatable: true },
+         panels: {
+            label: 'Panels',
+            type: 'blocks',
+            min: 1,
+            blocks: {
+               panel: {
+                  label: 'Panel',
+                  component: 'SectionAccordionPanel',
+                  icon: 'chevron-down',
+                  fields: {
+                     title: { label: 'Title', type: 'text', translatable: true, required: true },
+                     content: { label: 'Content', type: 'blocks', blocks: content },
+                  },
+               },
+            },
+         },
       },
    },
 })
@@ -71,21 +153,29 @@ export default defineCmsConfig({
             tab: 'images',
             description: 'The mobile version is optional. Without it, the site uses the cover.',
          },
-         metaTitle: { label: 'Meta title', type: 'text', translatable: true, tab: 'seo' },
-         metaDescription: {
-            label: 'Meta description',
+         seoTitle: { label: 'SEO title', type: 'text', translatable: true, tab: 'seo' },
+         seoDescription: {
+            label: 'SEO description',
             type: 'text',
             textarea: true,
             translatable: true,
             tab: 'seo',
             description: 'About 155 characters. Search engines show it under the link.',
          },
-         noIndex: { label: 'Hide from search engines', type: 'boolean', tab: 'seo' },
+         seoImage: {
+            label: 'Share image',
+            type: 'media',
+            mediaType: 'image',
+            tab: 'seo',
+            description: 'Shown when the page is shared. Without it, the cover or the site image.',
+         },
+         seoNoindex: { label: 'Hide from search engines', type: 'boolean', tab: 'seo' },
       },
       overrides: {
          '/about': {
             intro: { label: 'Intro', type: 'text', textarea: true, translatable: true },
             founded: { label: 'Founded in', type: 'number', integer: true },
+            body: { label: 'Body', type: 'blocks', blocks: sections },
          },
          '/guides/knots': {
             difficulty: {
@@ -103,7 +193,7 @@ export default defineCmsConfig({
          {
             title: 'Search engines',
             description: 'How the page shows up in search results.',
-            rows: [['metaTitle', 'noIndex'], 'metaDescription'],
+            rows: [['seoTitle', 'seoNoindex'], 'seoDescription', 'seoImage'],
          },
       ],
    },
@@ -213,6 +303,42 @@ export default defineCmsConfig({
       layout: [['email', 'phone'], 'address', ['bookingOpen', 'bookingUrl'], 'socials'],
    },
 
+   footer: {
+      id: 'footer',
+      label: 'Footer',
+      kind: 'single',
+      icon: 'bars-3',
+      fields: {
+         menu: {
+            label: 'Menu',
+            type: 'blocks',
+            description: 'Links in the footer of every page.',
+            max: 8,
+            blocks: {
+               item: {
+                  label: 'Link',
+                  fields: {
+                     link: {
+                        label: 'Link',
+                        type: 'link',
+                        withLabel: true,
+                        translatable: true,
+                        required: true,
+                     },
+                  },
+               },
+            },
+         },
+         privacy: {
+            label: 'Privacy page',
+            type: 'link',
+            to: ['pages'],
+            external: false,
+            description: 'Only pages of the site.',
+         },
+      },
+   },
+
    events: {
       id: 'events',
       label: 'Events',
@@ -230,7 +356,19 @@ export default defineCmsConfig({
             label: 'Title',
             type: 'text',
             required: true,
+            max: 80,
             placeholder: 'Spring cup',
+         },
+         code: {
+            label: 'Code',
+            type: 'text',
+            unique: true,
+            immutable: true,
+            min: 3,
+            max: 12,
+            placeholder: 'SPR-26',
+            description: 'Unique internal code, fixed once saved.',
+            tab: 'advanced',
          },
          slug: {
             label: 'Slug',
@@ -240,14 +378,22 @@ export default defineCmsConfig({
             description: 'Filled from the title. Change it only before you publish.',
          },
          description: { label: 'Description', type: 'richtext', translatable: true },
-         seats: { label: 'Seats', type: 'number', integer: true, placeholder: '24' },
+         seats: {
+            label: 'Seats',
+            type: 'number',
+            integer: true,
+            min: 1,
+            max: 500,
+            default: 24,
+         },
          price: {
             label: 'Price (EUR)',
             type: 'number',
+            min: 0,
             placeholder: '0.00',
             description: 'Leave it empty for free events.',
          },
-         date: { label: 'Date', type: 'date', required: true },
+         date: { label: 'Date', type: 'date', required: true, default: 'today' },
          doorsOpen: {
             label: 'Doors open',
             type: 'datetime',
@@ -257,6 +403,7 @@ export default defineCmsConfig({
          visibility: {
             label: 'Visibility',
             type: 'select',
+            default: 'public',
             options: [
                { value: 'public', label: 'Everyone' },
                { value: 'members', label: 'Club members' },
@@ -285,9 +432,14 @@ export default defineCmsConfig({
             type: 'text',
             showIf: [
                { field: 'featured', eq: true },
-               { field: 'visibility', in: ['public', 'members'] },
+               {
+                  any: [
+                     { field: 'visibility', notIn: ['hidden'] },
+                     { field: 'keywords', has: 'sponsored' },
+                  ],
+               },
             ],
-            description: 'Shown only on featured events that are not hidden.',
+            description: 'Shown on featured events that are not hidden or are tagged "sponsored".',
          },
          category: { label: 'Category', type: 'relation', to: 'categories' },
          tags: { label: 'Tags', type: 'relation', to: 'tags', cardinality: 'many-to-many' },
@@ -345,6 +497,11 @@ export default defineCmsConfig({
                   fields: {
                      text: { label: 'Text', type: 'text', textarea: true, required: true },
                      author: { label: 'Author', type: 'text' },
+                     role: {
+                        label: 'Role',
+                        type: 'text',
+                        showIf: { field: 'author', empty: false },
+                     },
                   },
                },
                session: {
@@ -355,8 +512,18 @@ export default defineCmsConfig({
                      day: { label: 'Day', type: 'date' },
                      startsAt: { label: 'Starts at', type: 'datetime' },
                      minutes: { label: 'Minutes', type: 'number', integer: true },
-                     fee: { label: 'Fee (EUR)', type: 'number' },
                      indoor: { label: 'Indoor', type: 'boolean' },
+                     fee: {
+                        label: 'Fee (EUR)',
+                        type: 'number',
+                        required: true,
+                        showIf: {
+                           all: [
+                              { field: 'indoor', eq: true },
+                              { field: 'minutes', gt: 0 },
+                           ],
+                        },
+                     },
                      level: {
                         label: 'Level',
                         type: 'select',
@@ -366,6 +533,18 @@ export default defineCmsConfig({
                      handout: { label: 'Handout', type: 'media', mediaType: 'file' },
                      extra: { label: 'Extra', type: 'json' },
                   },
+                  layout: [
+                     'title',
+                     ['day', 'startsAt', 'minutes'],
+                     ['fee', 'level', 'indoor'],
+                     'notes',
+                     {
+                        title: 'Extras',
+                        description: 'Who runs it and what to bring.',
+                        collapsed: true,
+                        rows: [['host', 'handout'], 'extra'],
+                     },
+                  ],
                   validate: (values) =>
                      typeof values.minutes === 'number' && values.minutes <= 0
                         ? [{ field: 'minutes', message: 'A session lasts at least one minute' }]
@@ -404,7 +583,7 @@ export default defineCmsConfig({
             title: 'Advanced',
             description: 'Data for integrations and the team.',
             collapsed: true,
-            rows: ['metadata', 'internalNotes'],
+            rows: ['code', 'metadata', 'internalNotes'],
          },
       ],
       list: { columns: ['title', 'date', 'category', 'featured', 'status'] },
@@ -430,6 +609,7 @@ export default defineCmsConfig({
       kind: 'content',
       icon: 'newspaper',
       blocks: sections,
+      route: '/news/[slug]',
       labels: { excerpt: 'Summary' },
       fields: {
          category: { label: 'Category', type: 'relation', to: 'categories' },
@@ -443,6 +623,7 @@ export default defineCmsConfig({
       kind: 'content',
       icon: 'pencil-square',
       blocks: sections,
+      route: { en: '/blog/[slug]', it: '/it/blog/[slug]' },
       preview: { component: 'BlogPost' },
       labels: { cover: 'Header image', seoTitle: 'Search title' },
       tabs: [
@@ -478,7 +659,7 @@ export default defineCmsConfig({
       titleField: 'name',
       fields: {
          name: { label: 'Name', type: 'text', required: true },
-         email: { label: 'Email', type: 'email' },
+         email: { label: 'Email', type: 'email', unique: true },
          avatar: {
             label: 'Avatar',
             type: 'media',

@@ -1,248 +1,244 @@
 <template>
-   <div class="cms-page" :class="{ 'is-fill': isCollectionKind(config) && !error }">
+   <div v-if="config.kind === 'single'" class="k-page">
       <KPageHeader
          :title="config.label"
          :icon="cmsIcon(kindMeta.icon)"
          :description="kindMeta.description"
       >
-         <template v-if="config.kind !== 'single' && total" #badge>
-            <span :key="total" class="cms-count">{{ total }}</span>
-         </template>
-         <template v-if="config.kind === 'single'" #actions>
-            <KButton type="submit" :form="FORM_ID" label="Save" :loading="saving" />
+         <template v-if="!singleLock" #actions>
+            <CmsTranslationMenu v-model="formState" :fields="config.fields" size="sm" />
+            <KButton type="submit" :form="FORM_ID" label="Save" size="sm" :loading="saving" />
          </template>
       </KPageHeader>
 
-      <KEmptyState
-         v-if="error"
-         :icon="cmsIcon('exclamation-triangle')"
-         title="Could not load entries"
-      >
-         <template #actions>
-            <KButton
-               label="Retry"
-               :icon="cmsIcon('arrow-path')"
-               variant="soft"
-               :loading="status === 'pending'"
-               @click="reload"
-            />
-         </template>
-      </KEmptyState>
+      <KCard v-if="error" padding="lg" role="alert" fill>
+         <KEmptyState
+            variant="plain"
+            :icon="cmsIcon('exclamation-triangle')"
+            title="Could not load entry"
+            :description="errorMessage(error)"
+            :level="2"
+            fill
+         >
+            <template #actions>
+               <KButton
+                  label="Retry"
+                  :icon="cmsIcon('arrow-path')"
+                  variant="soft"
+                  tone="neutral"
+                  size="sm"
+                  :loading="status === 'pending'"
+                  @click="reload"
+               />
+            </template>
+         </KEmptyState>
+      </KCard>
 
-      <KCard v-else-if="config.kind === 'single'" variant="outline" padding="lg">
+      <KCard v-else padding="lg" fill>
          <CmsEntryForm
+            ref="singleForm"
             v-model="formState"
             :fields="config.fields"
             :tabs="config.tabs"
             :entry-name="name"
             :form-id="FORM_ID"
-            :loading="saving"
+            :tab-query="CMS_TAB_QUERY"
             :focus="focus"
+            :lock="singleLock"
+            :locked="singleLocked"
             @submit="saveSingle"
          />
       </KCard>
+   </div>
 
-      <template v-else-if="config.kind === 'page'">
-         <div v-if="total || searchTerm" class="cms-toolbar">
-            <KInput
-               v-model="search"
-               :icon="cmsIcon('magnifying-glass')"
-               placeholder="Search…"
-               aria-label="Search pages"
-               class="cms-toolbar-search"
+   <KListPage
+      v-else
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      v-model:search="search"
+      v-model:sort="sort"
+      v-model:selected="selected"
+      :title="config.label"
+      :icon="cmsIcon(kindMeta.icon)"
+      :description="kindMeta.description"
+      :rows="rows"
+      :columns="columns"
+      :row-key="rowKey"
+      :table-label="config.label"
+      :selectable="selectable"
+      :loading="pending"
+      :error="error ? errorMessage(error) : undefined"
+      error-title="Could not load entries"
+      :total="total"
+      :page-sizes="PAGE_SIZES"
+      :all-ids="selectable ? allIds : undefined"
+      fill
+      count
+      searchable
+      :search-placeholder="isPages ? 'Search pages' : 'Search entries'"
+      :search-label="isPages ? 'Search pages' : 'Search entries'"
+      toolbar-label="Search and filters"
+      :filtered="filterCount > 0"
+      :empty-icon="cmsIcon(isPages ? 'document-text' : 'sparkles')"
+      :empty-title="isPages ? 'No pages yet' : 'Nothing here yet'"
+      :empty-description="
+         isPages
+            ? 'Pages come from the routes of the app.'
+            : 'Entries you create will show up here.'
+      "
+      no-results-title="No matching entries"
+      no-results-description="Try another search or clear the filters."
+      clear-label="Clear filters"
+      :results-text="resultsLabel"
+      @retry="reload"
+      @clear="clearNarrowing"
+      @row-click="onSelect"
+   >
+      <template v-if="isCollectionKind(config)" #actions>
+         <KDropdownMenu v-if="transferItems.length" :items="transferItems" placement="bottom-end">
+            <KButton
+               :icon="cmsIcon('arrows-up-down')"
+               variant="ghost"
+               tone="neutral"
+               size="sm"
+               square
+               :loading="exporting"
+               aria-label="Import and export"
             />
-         </div>
-
-         <KCard v-if="pageTree.length" variant="outline" padding="none" class="cms-tree">
-            <NuxtLink
-               v-for="(node, index) in pageTree"
-               :key="String(node.row.id)"
-               :to="`/cms/${name}/${node.row.id}`"
-               class="cms-tree-row"
-               :style="{
-                  paddingLeft: `${1 + node.depth * 1.5}rem`,
-                  '--cms-row-delay': `${Math.min(index, 14) * 24}ms`,
-               }"
-            >
-               <KIcon
-                  v-if="node.depth"
-                  :name="cmsIcon('arrow-turn-left-up')"
-                  class="cms-tree-branch"
-               />
-               <span class="cms-tree-doc">
-                  <KIcon :name="cmsIcon('document-text')" />
-               </span>
-               <span class="cms-tree-text">
-                  <span class="cms-tree-title">{{ node.row.label }}</span>
-                  <span class="cms-tree-path">{{ node.row.path }}</span>
-               </span>
-               <span class="cms-tree-meta">{{ lastEdit(node.row.updatedAt) }}</span>
-               <KIcon name="chevron-right" class="cms-tree-chevron" />
-            </NuxtLink>
-         </KCard>
-
-         <KSpinner v-else-if="status === 'pending'" block />
-
-         <KEmptyState
-            v-else-if="searchTerm"
-            :icon="cmsIcon('magnifying-glass')"
-            title="No matching pages"
-         />
-
-         <KEmptyState
-            v-else
-            :icon="cmsIcon('document-text')"
-            title="No pages yet"
-            description="Pages come from the routes of the app."
-         />
-
-         <KPagination
-            v-model:page="page"
-            :total="total"
-            :page-size="PAGE_SIZE"
-            :show-summary="false"
-         />
+         </KDropdownMenu>
+         <KCommandButton v-if="newCommand" :command="newCommand" size="sm" />
       </template>
 
-      <template v-else>
-         <div class="cms-toolbar">
-            <KInput
-               v-if="total || narrowed"
-               v-model="search"
-               :icon="cmsIcon('magnifying-glass')"
-               placeholder="Search…"
-               aria-label="Search entries"
-               class="cms-toolbar-search"
-            />
-            <div class="cms-toolbar-actions">
-               <KSelectionBar
-                  :count="selected.length"
-                  :total="rows.length"
-                  :on-select-all="selectAll"
-                  :on-clear="clearSelection"
-               >
-                  <template #actions>
-                     <template v-if="drafts">
-                        <KButton
-                           label="Draft"
-                           :icon="cmsIcon('pencil-square')"
-                           variant="soft"
-                           :disabled="saving"
-                           @click="bulkStatus('draft')"
-                        />
-                        <KButton
-                           label="Publish"
-                           :icon="cmsIcon('check-circle')"
-                           variant="soft"
-                           :disabled="saving"
-                           @click="bulkStatus('published')"
-                        />
-                     </template>
-                     <KButton
-                        v-if="selected.length === 1"
-                        label="Duplicate"
-                        :icon="cmsIcon('document-duplicate')"
-                        variant="soft"
-                        :disabled="saving"
-                        @click="duplicateSelected"
-                     />
-                     <KButton
-                        label="Delete"
-                        :icon="cmsIcon('trash')"
-                        tone="danger"
-                        :loading="saving"
-                        @click="bulkDelete"
-                     />
-                  </template>
-               </KSelectionBar>
-               <template v-if="!selected.length">
-                  <KDropdownMenu :items="transferItems" placement="bottom-end">
-                     <KButton
-                        :icon="cmsIcon('arrows-up-down')"
-                        variant="soft"
-                        tone="neutral"
-                        :loading="exporting"
-                        aria-label="Import and export"
-                        title="Import and export"
-                     />
-                  </KDropdownMenu>
-                  <KButton label="New entry" icon="plus" @click="openCreate" />
-               </template>
-            </div>
-         </div>
+      <template v-if="newCommand" #empty-actions>
+         <KCommandButton :command="newCommand" size="sm" />
+      </template>
 
+      <template v-if="filterKeys.length" #toolbar>
          <CmsListFilters
-            v-if="filterKeys.length && (total || narrowed)"
             v-model="filters"
             :config="config"
             :keys="filterKeys"
             :relations="relations"
          />
+      </template>
 
-         <KTable
-            v-if="rows.length"
-            v-model:selected="selected"
-            v-model:sort="sort"
-            selectable
-            :rows="rows"
-            :columns="columns"
-            :row-key="rowKey"
-            @row-click="onSelect"
+      <template v-if="selectable" #bulk>
+         <template v-if="canBulkStatus">
+            <KButton
+               label="Draft"
+               :icon="cmsIcon('pencil-square')"
+               variant="soft"
+               tone="neutral"
+               size="sm"
+               :disabled="saving"
+               @click="bulkStatus('draft')"
+            />
+            <KButton
+               label="Publish"
+               :icon="cmsIcon('check-circle')"
+               variant="soft"
+               tone="neutral"
+               size="sm"
+               :disabled="saving"
+               @click="bulkStatus('published')"
+            />
+         </template>
+         <KButton
+            v-if="canCreate"
+            label="Duplicate"
+            :icon="cmsIcon('document-duplicate')"
+            variant="soft"
+            tone="neutral"
+            size="sm"
+            :disabled="saving || selected.length !== 1"
+            disabled-reason="Select one entry to duplicate"
+            @click="duplicateSelected"
+         />
+         <KButton
+            v-if="canDelete"
+            label="Delete"
+            icon="trash"
+            variant="soft"
+            tone="danger"
+            size="sm"
+            :loading="saving"
+            @click="bulkDelete"
+         />
+      </template>
+
+      <template v-if="isPages" #table>
+         <KSkeletonList
+            v-if="pending && !pageTree.length"
+            :rows="6"
+            :lines="2"
+            class="cms-list-loading"
+         />
+         <KTree
+            v-else-if="pageTree.length"
+            v-model:expanded="pageExpanded"
+            :nodes="pageTree"
+            :bordered="false"
+            :selectable="false"
+            label="Pages"
          >
-            <template v-for="key in mediaKeys" #[`cell-${key}`]="{ row }" :key="key">
-               <CmsMediaThumb :value="mediaThumbValue(key, row[key])" />
+            <template #meta="{ node }">
+               <KStack direction="row" gap="sm" align="center">
+                  <CmsTranslationBadges
+                     v-if="pageTranslations"
+                     :progress="pageProgress(pageRows.get(String(node.id))!)"
+                  />
+                  <span>{{ node.meta }}</span>
+               </KStack>
             </template>
-            <template v-if="drafts" #cell-status="{ row }">
-               <CmsStatusBadge
-                  :published="row.status === 'published'"
-                  :scheduled="mounted && isContent && isScheduledContent(row)"
-                  :at="formatDateTime(row.publishedAt)"
-               />
-            </template>
-         </KTable>
-
-         <KSpinner v-else-if="status === 'pending'" block />
-
-         <KEmptyState
-            v-else-if="narrowed"
-            :icon="cmsIcon('magnifying-glass')"
-            title="No matching entries"
-            fill
-         >
-            <template v-if="filterCount" #actions>
-               <KButton label="Clear filters" icon="x-mark" variant="soft" @click="filters = {}" />
-            </template>
-         </KEmptyState>
-
+         </KTree>
          <KEmptyState
             v-else
-            :icon="cmsIcon('sparkles')"
-            title="Nothing here yet"
-            description="Entries you create will show up here."
-            fill
+            variant="plain"
+            size="sm"
+            icon="magnifying-glass"
+            title="No matching pages"
+            class="cms-list-loading"
          >
             <template #actions>
-               <KButton label="New entry" icon="plus" variant="soft" @click="openCreate" />
+               <KButton
+                  label="Clear search"
+                  variant="soft"
+                  tone="neutral"
+                  size="sm"
+                  @click="clearNarrowing"
+               />
             </template>
          </KEmptyState>
+      </template>
 
-         <KPagination
-            v-model:page="page"
-            :total="total"
-            :page-size="PAGE_SIZE"
-            :show-summary="false"
+      <template v-for="key in mediaKeys" #[`cell-${key}`]="{ row }" :key="key">
+         <CmsMediaThumb :value="mediaThumbValue(key, row[key])" />
+      </template>
+      <template v-if="translationsShown" #[`cell-${TRANSLATIONS_COLUMN}`]="{ row }">
+         <CmsTranslationBadges :progress="rowProgress(row)" />
+      </template>
+      <template v-if="drafts" #cell-status="{ row }">
+         <CmsStatusBadge
+            :published="row.status === 'published'"
+            :scheduled="mounted && isContent && isScheduledContent(row)"
+            :at="formatDateTime(row.publishedAt)"
          />
+      </template>
 
+      <template v-if="isCollectionKind(config)">
          <CmsEntryDrawer
             v-if="!isContent"
             v-model:open="drawerOpen"
             :collection="name"
             :config="config"
-            :entry-id="drawerEntryId"
-            :initial="drawerInitial"
-            @saved="refresh"
+            :entry-id="entryRecord.isNew.value ? null : entryRecord.id.value"
+            :duplicate-id="duplicateId"
+            :focus="drawerFocus"
+            @saved="() => refresh()"
+            @created="onCreated"
             @deleted="onDrawerDeleted"
-            @duplicate="openDuplicate"
+            @duplicate="(id: string) => openRecord(CMS_NEW_RECORD, { duplicate: id })"
+            @missing="entryRecord.close()"
          />
 
          <CmsImportModal
@@ -252,7 +248,7 @@
             @imported="refresh"
          />
       </template>
-   </div>
+   </KListPage>
 </template>
 
 <script setup lang="ts">
@@ -262,8 +258,11 @@ import {
    isScheduledContent,
    isTranslatableField,
    isTranslatableMediaField,
+   linkDisplayText,
+   pageFields,
    pageParentPath,
    pickTranslatedMedia,
+   relationTarget,
    selectDisplayValue,
 } from '#nuxt-cms'
 import {
@@ -272,55 +271,88 @@ import {
    definePageMeta,
    navigateTo,
    onMounted,
+   useRouter,
+   useState,
    ref,
    useFetch,
    useRoute,
    watch,
 } from '#imports'
-import type { MenuEntry, RowKey, TableColumn, TableSort } from '@xleddyl/443-components-vue'
+import type {
+   CommandItem,
+   MenuEntry,
+   PageSize,
+   RowKey,
+   TableColumn,
+   TableSort,
+   TreeNode,
+} from '@xleddyl/443-components-vue'
 import {
    Button as KButton,
    Card as KCard,
+   CommandButton as KCommandButton,
    DropdownMenu as KDropdownMenu,
    EmptyState as KEmptyState,
-   Icon as KIcon,
-   Input as KInput,
+   ListPage as KListPage,
    PageHeader as KPageHeader,
-   Pagination as KPagination,
-   SelectionBar as KSelectionBar,
-   Spinner as KSpinner,
-   Table as KTable,
+   SkeletonList as KSkeletonList,
+   Stack as KStack,
+   Tree as KTree,
+   routeHashValue,
+   toast,
+   useLeaveGuard,
+   usePageCommands,
+   useRouteRecord,
 } from '@xleddyl/443-components-vue'
 import cmsConfig from '#cms-config'
-import { duplicateEntryValues } from '../../shared/duplicate'
+import { entryDefaults, lockedFieldKeys } from '../../shared/field-options'
 import type { CmsListFilters } from '../../shared/list-filters'
 import {
+   LIST_FILTER_PREFIX,
+   LIST_SEARCH_PARAM as CMS_LIST_SEARCH_PARAM,
    entryListFilterKeys,
    listFilterQuery,
    parseListFilters,
    withoutListFilterQuery,
 } from '../../shared/list-filters'
-import { readSearchFocus } from '../../shared/search'
+import {
+   CMS_ENTRY_FOCUS_KEYS,
+   CMS_ENTRY_ROUTE_KEY,
+   CMS_ENTRY_TAB_ROUTE_KEY,
+   CMS_TAB_QUERY,
+   cmsPageKey,
+   readSearchFocus,
+} from '../../shared/search'
 import type { CmsTransferFormat } from '../../shared/transfer'
+import {
+   TRANSLATIONS_COLUMN,
+   entryHasTranslations,
+   translationProgress,
+} from '../../shared/translations'
 import { canTransferCsv, exportFileName } from '../../shared/transfer'
-import { useCmsConfirm } from '../composables/cms-confirm'
+import { useCmsPermissions } from '../composables/cms-permissions'
+import { CMS_NEW_RECORD, useCmsPageQuery, useCmsRouteFlag } from '../composables/cms-route'
+import { useCmsLinkedDelete } from '../composables/cms-link-usage'
 import { useCmsRuntime } from '../composables/cms-runtime'
 import { entryListColumns, useCmsSettingsState } from '../composables/cms-settings'
-import { useCmsToast } from '../composables/cms-toast'
 import { cmsApi } from '../utils/api'
-import { cmsIcon, errorMessage } from '../utils/ui'
+import type { CmsResponseIssue } from '../utils/ui'
+import { cmsIcon, errorIssues, errorMessage } from '../utils/ui'
 
 definePageMeta({
    layout: 'cms-admin',
    middleware: 'cms-auth',
    validate: (route) => Object.hasOwn(cmsConfig, route.params.collection as string),
-   key: (route) => `${route.path}${JSON.stringify(withoutListFilterQuery(route.query))}`,
+   key: (route) =>
+      cmsPageKey({ path: route.path, query: withoutListFilterQuery(route.query) }, [
+         CMS_LIST_SEARCH_PARAM,
+         CMS_TAB_QUERY,
+      ]),
 })
 
 const FORM_ID = 'cms-single-form'
 
 const route = useRoute()
-const toast = useCmsToast()
 const focus = readSearchFocus(route.query)
 
 const name = route.params.collection as string
@@ -338,24 +370,57 @@ const kindMeta = { ...KIND_META[config.kind], icon: config.icon ?? KIND_META[con
 const fieldKeys = Object.keys(config.fields)
 const mediaKeys = fieldKeys.filter((key) => config.fields[key]!.type === 'media')
 const isContent = config.kind === 'content'
+const isPages = config.kind === 'page'
 const drafts = isCollectionKind(config) && !!config.drafts
 const formKeys = drafts ? [...fieldKeys, 'status'] : fieldKeys
+
+const { can, entryLock } = useCmsPermissions()
+const canCreate = computed(() => can(`${name}.create`))
+const canDelete = computed(() => can(`${name}.delete`))
+const canBulkStatus = computed(() => drafts && can(`${name}.update`) && can(`${name}.publish`))
+const selectable = computed(
+   () => isCollectionKind(config) && (canCreate.value || canDelete.value || canBulkStatus.value)
+)
+const singleLock = computed(() =>
+   config.kind === 'single' ? entryLock(name, config, { isNew: false }) : null
+)
 
 type Row = Record<string, unknown>
 
 const endpoint: string = `/api/cms/admin/${name}`
 
-const PAGE_SIZE = 25
+const PAGE_SIZES: PageSize[] = [25, 50, 100]
 const page = ref(1)
-const search = ref('')
-const searchTerm = ref('')
+const pageSize = ref<PageSize>(25)
+const limit = computed(() => (typeof pageSize.value === 'number' ? pageSize.value : 100))
+const routeSearch = useCmsPageQuery(CMS_LIST_SEARCH_PARAM)
+const search = ref(routeSearch.value)
+const searchTerm = ref(search.value.trim())
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 watch(search, (value) => {
    clearTimeout(searchTimer)
    searchTimer = setTimeout(() => {
+      if (searchTerm.value === value.trim()) return
       searchTerm.value = value.trim()
+      routeSearch.value = searchTerm.value
       page.value = 1
    }, 300)
+})
+const router = useRouter()
+const listPath = route.path
+
+function onListPage() {
+   return router.currentRoute.value.path === listPath
+}
+
+watch(routeSearch, (value) => {
+   if (value === searchTerm.value || !onListPage()) return
+   search.value = value
+   searchTerm.value = value
+   page.value = 1
+})
+watch(pageSize, () => {
+   page.value = 1
 })
 
 interface ListResponse {
@@ -374,30 +439,60 @@ const filters = computed<CmsListFilters>({
    get: () => (isCollectionKind(config) ? parseListFilters(config, route.query).filters : {}),
    set: (value) => {
       void navigateTo(
-         { query: { ...withoutListFilterQuery(route.query), ...listFilterQuery(value) } },
+         {
+            query: { ...withoutListFilterQuery(route.query), ...listFilterQuery(value) },
+            hash: route.hash,
+         },
          { replace: true }
       )
    },
 })
 
-const filterQuery = computed(() => listFilterQuery(filters.value))
+const filterQueryKey = computed(() => JSON.stringify(listFilterQuery(filters.value)))
+const filterQuery = computed<Record<string, string>>(() => JSON.parse(filterQueryKey.value))
 const filterCount = computed(() => Object.keys(filterQuery.value).length)
 const narrowed = computed(() => !!searchTerm.value || filterCount.value > 0)
 
-watch(
-   () => JSON.stringify(filterQuery.value),
-   () => {
-      page.value = 1
+const rememberedQuery = useState<Record<string, string>>(`cms-list-query-${name}`, () => ({}))
+
+watch([filterQuery, searchTerm], () => {
+   if (!onListPage()) return
+   rememberedQuery.value = {
+      ...filterQuery.value,
+      ...(searchTerm.value ? { [CMS_LIST_SEARCH_PARAM]: searchTerm.value } : {}),
    }
-)
+})
+
+onMounted(() => {
+   const remembered = rememberedQuery.value
+   const hasListQuery = Object.keys(route.query).some(
+      (key) => key === CMS_LIST_SEARCH_PARAM || key.startsWith(LIST_FILTER_PREFIX)
+   )
+   if (hasListQuery || !Object.keys(remembered).length || !isCollectionKind(config)) return
+   void navigateTo(
+      { query: { ...route.query, ...remembered }, hash: route.hash },
+      { replace: true }
+   )
+})
+
+function clearNarrowing() {
+   search.value = ''
+   searchTerm.value = ''
+   routeSearch.value = ''
+   filters.value = {}
+}
+
+watch(filterQueryKey, () => {
+   page.value = 1
+})
 
 const sortQuery = computed(() =>
    sort.value ? { sort: sort.value.key, order: sort.value.direction } : {}
 )
 
 const listQuery = computed(() => ({
-   limit: PAGE_SIZE,
-   offset: (page.value - 1) * PAGE_SIZE,
+   limit: limit.value,
+   offset: (page.value - 1) * limit.value,
    ...(searchTerm.value ? { search: searchTerm.value } : {}),
    ...sortQuery.value,
    ...filterQuery.value,
@@ -431,36 +526,89 @@ function lastEdit(value: unknown) {
    })}`
 }
 
-const pageTree = computed(() => {
-   const byPath = new Set(rows.value.map((row) => String(row.path)))
-   const depthOf = (path: string) => {
-      let depth = 0
+const pageRows = computed(() => new Map(rows.value.map((row) => [String(row.id), row])))
+
+const pageTree = computed<TreeNode[]>(() => {
+   const byPath = new Map(rows.value.map((row) => [String(row.path), row]))
+   const parentOf = (path: string) => {
       let parent = pageParentPath(path)
       while (parent) {
-         if (byPath.has(parent)) depth++
+         const row = byPath.get(parent)
+         if (row) return String(row.id)
          parent = pageParentPath(parent)
       }
-      return depth
+      return null
    }
-   return rows.value.map((row) => ({ row, depth: depthOf(String(row.path)) }))
+   const children = new Map<string | null, Row[]>()
+   for (const row of rows.value) {
+      const parent = parentOf(String(row.path))
+      children.set(parent, [...(children.get(parent) ?? []), row])
+   }
+   const build = (parent: string | null): TreeNode[] =>
+      (children.get(parent) ?? []).map((row) => {
+         const nested = build(String(row.id))
+         return {
+            id: String(row.id),
+            label: String(row.label),
+            description: String(row.path),
+            meta: lastEdit(row.updatedAt),
+            icon: cmsIcon('document-text'),
+            to: `/cms/${name}/${row.id}`,
+            children: nested.length ? nested : undefined,
+         }
+      })
+   return build(null)
+})
+
+const collapsedPages = ref<TreeNode['id'][]>([])
+
+const pageExpanded = computed<TreeNode['id'][]>({
+   get: () => [...pageTreeParents.value].filter((id) => !collapsedPages.value.includes(id)),
+   set: (ids) => {
+      collapsedPages.value = [...pageTreeParents.value].filter((id) => !ids.includes(id))
+   },
+})
+
+const pageTreeParents = computed(() => {
+   const ids = new Set<TreeNode['id']>()
+   const walk = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+         if (!node.children) continue
+         ids.add(node.id)
+         walk(node.children)
+      }
+   }
+   walk(pageTree.value)
+   return ids
 })
 const total = computed(() => (isList(data.value) ? data.value.total : 0))
 const relations = computed(() => (isList(data.value) ? data.value.relations ?? {} : {}))
+const pending = computed(() => status.value === 'pending')
 
 const reload = async () => {
    await refresh()
-   if (config.kind === 'single' && !error.value) {
-      formState.value =
-         data.value && !isList(data.value) ? pickFields(data.value as Row) : emptyState()
-   }
+   if (config.kind === 'single' && !error.value) resetSingle()
 }
 
 const saving = ref(false)
 const formState = ref<Record<string, unknown>>({})
 
+const { i18n: contentI18n } = useCmsRuntime()
+
 function emptyState() {
-   return Object.fromEntries(formKeys.map((k) => [k, null]))
+   return {
+      ...Object.fromEntries(formKeys.map((k) => [k, null])),
+      ...entryDefaults(config!.fields, contentI18n, { local: true }),
+   }
 }
+
+const singleForm = ref<{ setIssues: (issues: CmsResponseIssue[]) => void } | null>(null)
+
+const singleLocked = computed(() =>
+   config!.kind === 'single' && data.value && !isList(data.value)
+      ? lockedFieldKeys(config!.fields, data.value as Row)
+      : []
+)
 
 function pickFields(row: Record<string, unknown>) {
    return Object.fromEntries(formKeys.map((k) => [k, row[k] ?? null]))
@@ -474,28 +622,37 @@ async function submit(action: () => Promise<unknown>) {
       await refresh()
       return true
    } catch (error) {
-      toast.add({
-         title: 'Save failed',
-         description: errorMessage(error),
-         color: 'error',
-      })
+      singleForm.value?.setIssues(errorIssues(error))
+      toast.error('Save failed', { description: errorMessage(error) })
       return false
    } finally {
       saving.value = false
    }
 }
 
-if (config.kind === 'single') {
+const singleSnapshot = ref('')
+
+function resetSingle() {
    formState.value =
       data.value && !isList(data.value) ? pickFields(data.value as Row) : emptyState()
+   singleSnapshot.value = JSON.stringify(formState.value)
 }
+
+if (config.kind === 'single') resetSingle()
+
+useLeaveGuard(
+   () =>
+      config!.kind === 'single' &&
+      !singleLock.value &&
+      JSON.stringify(formState.value) !== singleSnapshot.value
+)
 
 async function saveSingle() {
+   const submitted = JSON.stringify(formState.value)
    const ok = await submit(() => cmsApi(endpoint, { method: 'PUT', body: formState.value }))
-   if (ok) toast.add({ title: 'Saved', color: 'success' })
+   if (ok) singleSnapshot.value = submitted
+   if (ok) toast.success('Saved')
 }
-
-const { i18n: contentI18n } = useCmsRuntime()
 
 function stripHtml(html: string) {
    return html
@@ -533,7 +690,7 @@ function formatDateTime(value: unknown): string {
 function relationLabel(field: FieldConfig, key: string, id: unknown): string {
    const title = relations.value[key]?.[String(id)]
    if (title == null || title === '') return `#${id}`
-   const target = (cmsConfig as CmsConfig)[field.to!]
+   const target = (cmsConfig as CmsConfig)[relationTarget(field)]
    const titleField = target?.titleField ? target.fields[target.titleField] : undefined
    const label =
       titleField && isTranslatableField(titleField)
@@ -557,6 +714,10 @@ function displayValue(field: FieldConfig, key: string, value: unknown): string {
          return truncate(stripHtml(String(value)))
       case 'json':
          return truncate(JSON.stringify(value))
+      case 'link':
+         return truncate(
+            linkDisplayText(value, contentI18n.defaultLocale, contentI18n.defaultLocale)
+         )
       case 'datetime':
          return formatDateTime(value)
       case 'select':
@@ -576,22 +737,39 @@ function displayValue(field: FieldConfig, key: string, value: unknown): string {
 }
 
 function isSortable(field: FieldConfig) {
-   if (field.type === 'blocks') return false
+   if (field.type === 'blocks' || field.type === 'link') return false
    return !(field.type === 'relation' && field.cardinality === 'many-to-many')
 }
 
 const settings = useCmsSettingsState()
 
+const listColumns = computed(() => entryListColumns(name, settings.value, contentI18n))
+
+const translationsShown = computed(() => listColumns.value.includes(TRANSLATIONS_COLUMN))
+
+const pageTranslations =
+   config.kind === 'page' && contentI18n.locales.length > 1 && entryHasTranslations(config)
+
+function rowProgress(row: Row) {
+   return translationProgress(config!.fields, row, contentI18n)
+}
+
+function pageProgress(row: Row) {
+   return translationProgress(pageFields(config!, String(row.path)), row, contentI18n)
+}
+
 const columns = computed<TableColumn<Row>[]>(() =>
-   entryListColumns(name, settings.value).map((key) =>
-      key === 'status' && !config.fields.status
-         ? { key: 'status', label: 'Status', sortable: true }
-         : {
-              key,
-              label: config.fields[key]!.label,
-              value: (row: Row) => displayValue(config.fields[key]!, key, row[key]),
-              sortable: isSortable(config.fields[key]!),
-           }
+   listColumns.value.map((key) =>
+      key === TRANSLATIONS_COLUMN
+         ? { key, label: 'Translations' }
+         : key === 'status' && !config.fields.status
+           ? { key: 'status', label: 'Status', sortable: true }
+           : {
+                key,
+                label: config.fields[key]!.label,
+                value: (row: Row) => displayValue(config.fields[key]!, key, row[key]),
+                sortable: isSortable(config.fields[key]!),
+             }
    )
 )
 
@@ -601,23 +779,40 @@ function rowKey(row: Row) {
 
 const filterKeys = computed(() => {
    if (!isCollectionKind(config)) return []
-   const shown = entryListFilterKeys(config, entryListColumns(name, settings.value))
+   const shown = entryListFilterKeys(config, listColumns.value)
    const active = Object.keys(filters.value).filter((key) => !shown.includes(key))
    return [...shown, ...active]
 })
 
-const drawerOpen = ref(false)
-const drawerEntryId = ref<string | null>(null)
-const drawerInitial = ref<Row | null>(null)
+const entryRecord = useRouteRecord(CMS_ENTRY_ROUTE_KEY, {
+   canCreate: () => canCreate.value,
+   linkedKeys: [CMS_ENTRY_TAB_ROUTE_KEY, 'duplicate', ...CMS_ENTRY_FOCUS_KEYS],
+})
+const { openRecord } = entryRecord
+
+const drawerOpen = computed({
+   get: () => !isContent && !!entryRecord.param.value,
+   set: (value: boolean) => {
+      if (!value) void entryRecord.close()
+   },
+})
+
+const duplicateId = computed(() =>
+   entryRecord.isNew.value ? routeHashValue(route.hash, 'duplicate') ?? null : null
+)
+
+const drawerFocus = computed(() =>
+   readSearchFocus(
+      Object.fromEntries(CMS_ENTRY_FOCUS_KEYS.map((key) => [key, routeHashValue(route.hash, key)]))
+   )
+)
 
 function onSelect(row: Row) {
    if (isContent) {
       void navigateTo(`/cms/${name}/${row.id}`)
       return
    }
-   drawerInitial.value = null
-   drawerEntryId.value = String(row.id)
-   drawerOpen.value = true
+   void openRecord(String(row.id))
 }
 
 function openCreate() {
@@ -625,37 +820,40 @@ function openCreate() {
       void navigateTo(`/cms/${name}/new`)
       return
    }
-   drawerInitial.value = null
-   drawerEntryId.value = null
-   drawerOpen.value = true
+   void openRecord(CMS_NEW_RECORD)
 }
 
-function openDuplicate(values: Row) {
-   drawerInitial.value = values
-   drawerEntryId.value = null
-   drawerOpen.value = true
+const newCommand = computed<CommandItem | null>(() =>
+   isCollectionKind(config) && canCreate.value
+      ? {
+           id: 'new-entry',
+           label: 'New entry',
+           icon: 'plus',
+           keywords: [config.label],
+           onSelect: openCreate,
+        }
+      : null
+)
+
+usePageCommands(() => (newCommand.value ? [newCommand.value] : []))
+
+function onCreated(id: string) {
+   void refresh()
+   void entryRecord.replaceId(id)
 }
 
-async function duplicateSelected() {
+function duplicateSelected() {
    const id = selected.value.map(String)[0]
-   if (!id || saving.value) return
+   if (!id) return
    if (isContent) {
       void navigateTo({ path: `/cms/${name}/new`, query: { duplicate: id } })
       return
    }
-   saving.value = true
-   try {
-      const entry = await cmsApi<Row>(`${endpoint}/${id}`)
-      selected.value = []
-      openDuplicate(duplicateEntryValues(config!, entry))
-   } catch (error) {
-      toast.add({ title: 'Could not load entry', description: errorMessage(error), color: 'error' })
-   } finally {
-      saving.value = false
-   }
+   selected.value = []
+   void openRecord(CMS_NEW_RECORD, { duplicate: id })
 }
 
-const importOpen = ref(false)
+const importOpen = useCmsRouteFlag('import')
 const exporting = ref(false)
 const csvAvailable = canTransferCsv(config)
 
@@ -677,7 +875,7 @@ async function exportEntries(format: CmsTransferFormat, narrow: boolean) {
       link.click()
       URL.revokeObjectURL(url)
    } catch (error) {
-      toast.add({ title: 'Export failed', description: errorMessage(error), color: 'error' })
+      toast.error('Export failed', { description: errorMessage(error) })
    } finally {
       exporting.value = false
    }
@@ -691,47 +889,72 @@ const transferItems = computed<MenuEntry[]>(() => {
          onSelect: () => void exportEntries(format, narrow),
       }))
    return [
-      ...(narrowed.value ? exports(true) : []),
-      ...exports(false),
-      {
-         label: 'Import from file…',
-         onSelect: () => {
-            importOpen.value = true
-         },
-      },
+      ...(can(`${name}.export`)
+         ? [...(narrowed.value ? exports(true) : []), ...exports(false)]
+         : []),
+      ...(can(`${name}.import`) && canCreate.value
+         ? [
+              {
+                 label: 'Import from file…',
+                 onSelect: () => {
+                    importOpen.value = true
+                 },
+              },
+           ]
+         : []),
    ]
 })
 
 async function onDrawerDeleted() {
+   const id = entryRecord.id.value
+   if (id) selected.value = selected.value.filter((key) => String(key) !== id)
    if (rows.value.length === 1 && page.value > 1) page.value -= 1
    else await refresh()
 }
 
-const confirmAction = useCmsConfirm()
+const confirmLinkedDelete = useCmsLinkedDelete()
 
 const selected = ref<RowKey[]>([])
 
-watch(rows, (current) => {
-   const ids = new Set(current.map((row) => String(row.id)))
-   selected.value = selected.value.filter((id) => ids.has(String(id)))
+watch([searchTerm, filterQueryKey], () => {
+   selected.value = []
 })
 
-function selectAll() {
-   selected.value = rows.value.map(rowKey)
-}
-
-function clearSelection() {
-   selected.value = []
+async function allIds(): Promise<RowKey[]> {
+   const { ids } = await cmsApi<{ ids: string[] }>(endpoint, {
+      query: {
+         ids: true,
+         ...(searchTerm.value ? { search: searchTerm.value } : {}),
+         ...sortQuery.value,
+         ...filterQuery.value,
+      },
+   })
+   return ids
 }
 
 function entriesLabel(count: number) {
    return `${count} ${count === 1 ? 'entry' : 'entries'}`
 }
 
+function resultsLabel(count: number) {
+   return isPages ? `${count} ${count === 1 ? 'page' : 'pages'}` : entriesLabel(count)
+}
+
+const BULK_CONCURRENCY = 6
+
+async function settleInBatches(ids: string[], action: (id: string) => Promise<unknown>) {
+   const results: PromiseSettledResult<unknown>[] = []
+   for (let start = 0; start < ids.length; start += BULK_CONCURRENCY)
+      results.push(
+         ...(await Promise.allSettled(ids.slice(start, start + BULK_CONCURRENCY).map(action)))
+      )
+   return results
+}
+
 async function runBulk(ids: string[], action: (id: string) => Promise<unknown>) {
    saving.value = true
    try {
-      const results = await Promise.allSettled(ids.map(action))
+      const results = await settleInBatches(ids, action)
       const failed = results.flatMap((result, index) =>
          result.status === 'rejected' ? [{ id: ids[index]!, reason: result.reason }] : []
       )
@@ -745,12 +968,10 @@ async function runBulk(ids: string[], action: (id: string) => Promise<unknown>) 
 
 function reportBulk(done: string, total: number, failed: { reason: unknown }[]) {
    const succeeded = total - failed.length
-   if (succeeded) toast.add({ title: `${done}: ${entriesLabel(succeeded)}`, color: 'success' })
+   if (succeeded) toast.success(`${done}: ${entriesLabel(succeeded)}`)
    if (failed.length) {
-      toast.add({
-         title: `${entriesLabel(failed.length)} not changed`,
+      toast.error(`${entriesLabel(failed.length)} not changed`, {
          description: errorMessage(failed[0]!.reason),
-         color: 'error',
       })
    }
 }
@@ -758,11 +979,23 @@ function reportBulk(done: string, total: number, failed: { reason: unknown }[]) 
 async function bulkDelete() {
    const ids = selected.value.map(String)
    if (!ids.length || saving.value) return
-   if (!(await confirmAction(`Delete ${entriesLabel(ids.length)}?`))) return
-   const emptiesPage = ids.length >= rows.value.length && page.value > 1
+   const titles = Object.fromEntries(
+      ids.map((id) => {
+         const row = rows.value.find((candidate) => String(candidate.id) === id)
+         const field = config?.titleField ? config.fields[config.titleField] : undefined
+         const title =
+            row && field && config?.titleField
+               ? displayValue(field, config.titleField, row[config.titleField])
+               : ''
+         return [id, title || `#${id}`]
+      })
+   )
+   if (!(await confirmLinkedDelete(name, ids, `Delete ${entriesLabel(ids.length)}?`, titles)))
+      return
    const failed = await runBulk(ids, (id) => cmsApi(`${endpoint}/${id}`, { method: 'DELETE' }))
    reportBulk('Deleted', ids.length, failed)
-   if (!failed.length && emptiesPage) page.value -= 1
+   if (page.value > 1 && !rows.value.length)
+      page.value = Math.max(1, Math.ceil(total.value / limit.value))
 }
 
 async function bulkStatus(status: 'draft' | 'published') {

@@ -12,7 +12,10 @@ import { normalizeCmsConfig, pageFields } from '../src/runtime/shared/index'
 import { resolvePageRoutes } from '../src/runtime/shared/page-routes'
 import type { CmsSearchHit, CmsSearchResponse } from '../src/runtime/shared/search'
 import {
+   CMS_TAB_QUERY,
+   cmsPageKey,
    cmsSearchLink,
+   cmsEntryLink,
    readSearchFocus,
    searchCmsLabels,
    searchLikePattern,
@@ -101,6 +104,21 @@ function searchConfig(): CmsConfig {
                      body: { label: 'Paragraph', type: 'richtext', translatable: true },
                   },
                },
+               columns: {
+                  label: 'Columns',
+                  fields: {
+                     items: {
+                        label: 'Column items',
+                        type: 'blocks',
+                        blocks: {
+                           note: {
+                              label: 'Note',
+                              fields: { text: { label: 'Note text', type: 'text' } },
+                           },
+                        },
+                     },
+                  },
+               },
             },
          },
       },
@@ -138,6 +156,21 @@ function searchConfig(): CmsConfig {
                      fields: { heading: { label: 'Heading', type: 'text', translatable: true } },
                   },
                   quote: { label: 'Quote', fields: { text: { label: 'Text', type: 'text' } } },
+                  group: {
+                     label: 'Group',
+                     fields: {
+                        inner: {
+                           label: 'Inner',
+                           type: 'blocks',
+                           blocks: {
+                              quote: {
+                                 label: 'Quote',
+                                 fields: { text: { label: 'Text', type: 'text' } },
+                              },
+                           },
+                        },
+                     },
+                  },
                },
             },
          },
@@ -256,6 +289,13 @@ beforeAll(async () => {
       body: [
          { type: 'hero', heading: { en: 'Welcome anglers', it: 'Benvenuti pescatori' } },
          { type: 'quote', text: 'Fish are friends' },
+         {
+            type: 'group',
+            inner: [
+               { type: 'quote', text: 'Lorem' },
+               { type: 'quote', text: 'Deeply nested carp' },
+            ],
+         },
       ],
    })
    await insert('events', { id: 'percent', title: '100% natural bait', slug: 'percent' })
@@ -282,7 +322,10 @@ beforeAll(async () => {
    await savePage('/', {
       metaTitle: { en: 'Home', de: 'Startseite' },
       intro: { en: '<p>Welcome</p>', de: '<p>Wir sind ein Verein für Fischer</p>' },
-      sections: [{ type: 'text', body: { en: '<p>Our <i>rivers</i> are clean</p>' } }],
+      sections: [
+         { type: 'text', body: { en: '<p>Our <i>rivers</i> are clean</p>' } },
+         { type: 'columns', items: [{ type: 'note', text: 'Pike season in the column' }] },
+      ],
    })
    await savePage('/about', {
       metaTitle: { en: 'About us', it: 'Chi siamo' },
@@ -315,6 +358,25 @@ describe('search helpers', () => {
       expect(searchSnippet('nothing here', 'lake')).toBeNull()
    })
 
+   it('builds hash links to a collection entry', () => {
+      expect(cmsEntryLink('events', 'spring')).toBe('/cms/events#entry/spring')
+      expect(
+         cmsEntryLink('events', 'a&b', { field: 'body', locale: 'it', block: '2.items.0' })
+      ).toBe('/cms/events#entry/a%26b&field/body&locale/it&block/2.items.0')
+      expect(cmsEntryLink('events', 'new', { tab: 'seo' })).toBe(
+         '/cms/events#entry/new&entrytab/seo'
+      )
+   })
+
+   it('keys a page by path and query without the omitted params', () => {
+      const route = { path: '/cms/pages/home', query: { field: 'intro', [CMS_TAB_QUERY]: 'seo' } }
+      expect(cmsPageKey(route)).toBe('/cms/pages/home{"field":"intro","tab":"seo"}')
+      expect(cmsPageKey(route, [CMS_TAB_QUERY])).toBe('/cms/pages/home{"field":"intro"}')
+      expect(cmsPageKey({ path: '/cms/news/1', query: { tab: 'seo' } }, [CMS_TAB_QUERY])).toBe(
+         cmsPageKey({ path: '/cms/news/1', query: {} })
+      )
+   })
+
    it('builds and reads focus links', () => {
       const link = cmsSearchLink('/cms/pages/home', { field: 'intro', locale: 'de', block: 2 })
       expect(link).toBe('/cms/pages/home?field=intro&locale=de&block=2')
@@ -322,12 +384,23 @@ describe('search helpers', () => {
          field: 'intro',
          locale: 'de',
          block: 2,
+         blockPath: ['intro', 2],
+      })
+      expect(cmsSearchLink('/cms/news/1', { field: 'body', block: '2.items.0' })).toBe(
+         '/cms/news/1?field=body&block=2.items.0'
+      )
+      expect(readSearchFocus({ field: 'body', block: '2.items.0' })).toEqual({
+         field: 'body',
+         locale: null,
+         block: 2,
+         blockPath: ['body', 2, 'items', 0],
       })
       expect(readSearchFocus({ block: '1' })).toBeNull()
       expect(readSearchFocus({ tab: 'seo', block: 'x' })).toEqual({
          tab: 'seo',
          locale: null,
          block: null,
+         blockPath: null,
       })
    })
 })
@@ -396,6 +469,27 @@ describe('label search', () => {
 })
 
 describe('value search', () => {
+   it('finds values inside nested blocks and links to their path', async () => {
+      expect(values(await search('nested carp'))).toEqual([
+         expect.objectContaining({
+            collection: 'events',
+            id: 'spring',
+            field: 'body',
+            fieldLabel: 'Body › Group › Inner › Quote › Text',
+            to: '/cms/events#entry/spring&field/body&block/2.inner.1',
+         }),
+      ])
+      expect(values(await search('pike season'))).toEqual([
+         expect.objectContaining({
+            collection: 'pages',
+            id: 'home',
+            field: 'sections',
+            fieldLabel: 'Sections › Columns › Column items › Note › Note text',
+            to: '/cms/pages/home?field=sections&block=1.items.0',
+         }),
+      ])
+   })
+
    it('returns label hits before value hits', async () => {
       const response = await search('hero')
       expect(response.hits[0]!.type).not.toBe('value')
@@ -425,7 +519,7 @@ describe('value search', () => {
          title: 'Spring fair',
          field: 'description',
          locale: 'en',
-         to: '/cms/events/spring?field=description&locale=en',
+         to: '/cms/events#entry/spring&field/description&locale/en',
       })
       expect(snippetText(hit!)).toBe('A lovely [fair by] the lake')
       const [tanz] = values(await search('tanz'))
@@ -463,12 +557,12 @@ describe('value search', () => {
          field: 'body',
          fieldLabel: 'Body › Hero › Heading',
          locale: 'it',
-         to: '/cms/events/spring?field=body&locale=it&block=0',
+         to: '/cms/events#entry/spring&field/body&locale/it&block/0',
       })
       expect(values(await search('friends'))[0]).toMatchObject({
          fieldLabel: 'Body › Quote › Text',
          locale: null,
-         to: '/cms/events/spring?field=body&block=1',
+         to: '/cms/events#entry/spring&field/body&block/1',
       })
       expect(values(await search('are clean'))[0]).toMatchObject({
          collection: 'pages',
@@ -504,7 +598,7 @@ describe('value search', () => {
             kind: 'media',
             id: 'library/sunset.webp',
             title: 'sunset.webp',
-            to: '/cms/media?folder=library',
+            to: '/cms/media?folder=library#media/library/sunset.webp',
          }),
       ])
    })

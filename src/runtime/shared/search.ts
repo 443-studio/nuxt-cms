@@ -1,3 +1,5 @@
+import type { CmsBlockPath } from './block-paths'
+import { parseBlockPath } from './block-paths'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsEntryKind, FieldConfig } from './index'
 import { entryTabs, fieldTab, pageAllFields, pageRoutes } from './index'
 
@@ -49,7 +51,12 @@ export interface CmsSearchFocus {
    field?: string
    locale?: string | null
    block?: number | null
+   blockPath?: CmsBlockPath | null
    tab?: string
+}
+
+export type CmsSearchLinkFocus = Omit<CmsSearchFocus, 'block' | 'blockPath'> & {
+   block?: number | string | null
 }
 
 const SNIPPET_BEFORE = 40
@@ -120,14 +127,61 @@ export function searchFieldPath(...labels: string[]): string {
    return labels.join(CMS_SEARCH_PATH_SEPARATOR)
 }
 
-export function cmsSearchLink(path: string, focus: CmsSearchFocus = {}): string {
+export const CMS_TAB_QUERY = 'tab'
+
+export function cmsSearchLink(path: string, focus: CmsSearchLinkFocus = {}): string {
    const params = new URLSearchParams()
    if (focus.field) params.set('field', focus.field)
    if (focus.locale) params.set('locale', focus.locale)
    if (focus.block != null) params.set('block', String(focus.block))
-   if (focus.tab) params.set('tab', focus.tab)
+   if (focus.tab) params.set(CMS_TAB_QUERY, focus.tab)
    const query = params.toString()
    return query ? `${path}?${query}` : path
+}
+
+export const CMS_ENTRY_ROUTE_KEY = 'entry'
+
+export const CMS_ENTRY_TAB_ROUTE_KEY = 'entrytab'
+
+export const CMS_ENTRY_FOCUS_KEYS = ['field', 'locale', 'block'] as const
+
+function escapeHashValue(value: string) {
+   return value.replace(/[%&]/g, (char) => (char === '%' ? '%25' : '%26'))
+}
+
+export function cmsHashLink(
+   path: string,
+   entries: Record<string, string | number | null | undefined>
+): string {
+   const text = Object.entries(entries)
+      .filter(([, value]) => value != null && value !== '')
+      .map(([key, value]) => `${key}/${escapeHashValue(String(value))}`)
+      .join('&')
+   return text ? `${path}#${text}` : path
+}
+
+export function cmsPageKey(
+   route: { path: string; query: Record<string, unknown> },
+   omit: string[] = []
+): string {
+   const query = Object.fromEntries(
+      Object.entries(route.query).filter(([key]) => !omit.includes(key))
+   )
+   return `${route.path}${JSON.stringify(query)}`
+}
+
+export function cmsEntryLink(
+   collection: string,
+   id: string,
+   focus: CmsSearchLinkFocus = {}
+): string {
+   return cmsHashLink(`/cms/${collection}`, {
+      [CMS_ENTRY_ROUTE_KEY]: id,
+      field: focus.field,
+      locale: focus.locale,
+      block: focus.block,
+      [CMS_ENTRY_TAB_ROUTE_KEY]: focus.tab,
+   })
 }
 
 export function readSearchFocus(query: Record<string, unknown>): CmsSearchFocus | null {
@@ -136,14 +190,17 @@ export function readSearchFocus(query: Record<string, unknown>): CmsSearchFocus 
       return typeof first === 'string' && first ? first : undefined
    }
    const field = text(query.field)
-   const tab = text(query.tab)
+   const tab = text(query[CMS_TAB_QUERY])
    if (!field && !tab) return null
-   const block = Number.parseInt(text(query.block) ?? '', 10)
+   const blockText = text(query.block)
+   const block = Number.parseInt(blockText ?? '', 10)
+   const blockPath = field && blockText ? parseBlockPath(`${field}.${blockText}`) : null
    return {
       ...(field ? { field } : {}),
       ...(tab ? { tab } : {}),
       locale: text(query.locale) ?? null,
       block: Number.isInteger(block) && block >= 0 ? block : null,
+      blockPath: blockPath && blockPath.length % 2 === 0 ? blockPath : null,
    }
 }
 
@@ -192,7 +249,8 @@ function overridePathsOf(entry: CmsEntry, key: string): string[] {
 function blockCandidates(
    key: string,
    field: FieldConfig,
-   link: { to: string; id: string | null; title: string | null }
+   link: { to: string; id: string | null; title: string | null },
+   labels: string[] = [field.label]
 ): LabelCandidate[] {
    const candidates: LabelCandidate[] = []
    for (const block of Object.values(field.blocks ?? {}) as BlockConfig[]) {
@@ -200,7 +258,7 @@ function blockCandidates(
          type: 'block',
          ...link,
          field: key,
-         fieldLabel: searchFieldPath(field.label, block.label),
+         fieldLabel: searchFieldPath(...labels, block.label),
          texts: [block.label],
       })
       for (const blockField of Object.values(block.fields)) {
@@ -208,9 +266,13 @@ function blockCandidates(
             type: 'field',
             ...link,
             field: key,
-            fieldLabel: searchFieldPath(field.label, block.label, blockField.label),
+            fieldLabel: searchFieldPath(...labels, block.label, blockField.label),
             texts: [blockField.label],
          })
+         if (blockField.type === 'blocks')
+            candidates.push(
+               ...blockCandidates(key, blockField, link, [...labels, block.label, blockField.label])
+            )
       }
    }
    return candidates

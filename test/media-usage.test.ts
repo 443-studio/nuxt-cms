@@ -82,4 +82,13 @@ describe('mediaUsageGroups', () => {
          expect.objectContaining({ id: '7', fields: ['hero', 'cover'] }),
       ])
    })
+
+   it('keeps a key used only by entries the role cannot read, as a count', () => {
+      const groups = mediaUsageGroups(
+         { 'library/hero.webp': [], 'library/unused.webp': [] },
+         ['library/hero.webp', 'library/unused.webp'],
+         { 'library/hero.webp': 2, 'library/unused.webp': 0 }
+      )
+      expect(groups).toEqual([{ key: 'library/hero.webp', entries: [], hidden: 2 }])
+   })
 })

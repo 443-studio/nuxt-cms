@@ -1,9 +1,35 @@
 import type { FieldConfig, FieldType } from '#nuxt-cms'
-import { isBuiltinIcon } from '@xleddyl/443-components-vue'
+import type { FormSubmitError } from '@xleddyl/443-components-vue'
+import { isBuiltinIcon, routeHash } from '@xleddyl/443-components-vue'
+
+export function cmsSettingsLink(section: string, path = '/cms') {
+   return `${path}${routeHash(undefined, { settings: section })}`
+}
 
 export function errorMessage(error: unknown): string | undefined {
    const err = error as { data?: { message?: string }; message?: string }
    return err.data?.message ?? err.message
+}
+
+export interface CmsResponseIssue {
+   path: (string | number)[]
+   message: string
+}
+
+export function errorIssues(error: unknown): CmsResponseIssue[] {
+   const issues = (error as { data?: { data?: { issues?: unknown } } })?.data?.data?.issues
+   if (!Array.isArray(issues)) return []
+   return issues.filter(
+      (issue): issue is CmsResponseIssue =>
+         !!issue &&
+         typeof issue === 'object' &&
+         Array.isArray((issue as CmsResponseIssue).path) &&
+         typeof (issue as CmsResponseIssue).message === 'string'
+   )
+}
+
+export function cmsSubmitError(error: unknown): FormSubmitError {
+   return { message: errorMessage(error) ?? 'Something went wrong.', issues: errorIssues(error) }
 }
 
 const FIELD_ICONS: Record<FieldType, string> = {
@@ -20,6 +46,7 @@ const FIELD_ICONS: Record<FieldType, string> = {
    json: 'code-bracket',
    media: 'photo',
    relation: 'arrows-right-left',
+   link: 'arrow-top-right-on-square',
    blocks: 'squares-2x2',
 }
 

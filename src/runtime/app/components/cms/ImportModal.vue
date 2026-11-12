@@ -1,34 +1,21 @@
 <template>
-   <KModal v-model:open="open" :title="`Import ${config.label}`" size="lg">
+   <KModal v-model:open="open" :title="`Import ${config.label}`" :description="intro" size="lg">
       <KStack gap="md">
-         <p class="cms-settings-hint">
-            {{ csv ? 'A JSON or CSV file' : 'A JSON file' }} in the format of the export, up to
-            {{ maxSize }} and {{ IMPORT_MAX_ROWS }} rows. Media fields take keys of files that are
-            already in the media library. Nothing is written until you confirm.
-         </p>
-
-         <KStack direction="row" gap="sm" wrap>
-            <input
-               ref="input"
-               type="file"
-               hidden
-               :accept="csv ? '.json,.csv,application/json,text/csv' : '.json,application/json'"
-               @change="onFile"
-            />
-            <KButton
-               :label="file ? 'Choose another file' : 'Choose file'"
-               :icon="cmsIcon('document-arrow-up')"
-               variant="soft"
-               tone="neutral"
-               :disabled="busy"
-               @click="input?.click()"
-            />
-            <span v-if="file" class="cms-import-file-name">
-               {{ file.name }} · {{ formatFileSize(file.size) }}
-            </span>
-         </KStack>
+         <KFileInput
+            :model-value="file"
+            :accept="csv ? '.json,.csv,application/json,text/csv' : '.json,application/json'"
+            :icon="cmsIcon('document-arrow-up')"
+            :title="file ? 'Choose another file' : 'Choose a file'"
+            :disabled="busy"
+            :previews="false"
+            size="sm"
+            list
+            aria-label="Import file"
+            @update:model-value="onFile"
+         />
 
          <KFormField
+            v-if="canUpsert"
             label="Mode"
             :description="
                mode === 'create'
@@ -46,18 +33,15 @@
             />
          </KFormField>
 
-         <KSpinner v-if="checking" />
+         <KSkeletonList v-if="checking" :rows="3" />
 
          <KAlert
             v-else-if="fileErrors.length"
             tone="danger"
             role="alert"
             title="The file cannot be imported"
-         >
-            <ul class="cms-import-list">
-               <li v-for="message in fileErrors" :key="message">{{ message }}</li>
-            </ul>
-         </KAlert>
+            :description="fileErrors"
+         />
 
          <template v-else-if="preview">
             <KAlert :tone="invalidCount ? 'warning' : 'success'" role="status" :title="summary" />
@@ -76,26 +60,27 @@
                   <KBadge :label="row.action === 'update' ? 'Update' : 'New'" size="sm" />
                </template>
                <template #cell-errors="{ row }">
-                  <ul v-if="row.errors.length" class="cms-import-list cms-import-issues">
-                     <li v-for="(issue, index) in row.errors" :key="index">
-                        {{ issue.path ? `${issue.path}: ` : '' }}{{ issue.message }}
-                     </li>
-                  </ul>
-                  <span v-else class="cms-import-ok">
-                     <KIcon name="check" />
-                     Ready
-                  </span>
+                  <KStack v-if="row.errors.length" gap="none" class="cms-import-issues">
+                     <KFieldMessage
+                        v-for="(issue, index) in row.errors"
+                        :key="index"
+                        :message="issue.path ? `${issue.path}: ${issue.message}` : issue.message"
+                        :icon="false"
+                     />
+                  </KStack>
+                  <KBadge v-else label="Ready" tone="success" icon="check" size="sm" />
                </template>
             </KTable>
          </template>
       </KStack>
 
       <template #footer>
-         <KButton label="Cancel" variant="soft" tone="neutral" @click="open = false" />
+         <KButton label="Cancel" variant="ghost" tone="neutral" @click="open = false" />
          <KButton
             :label="importLabel"
             :icon="cmsIcon('arrow-down-tray')"
             :disabled="!canImport"
+            disabled-reason="Choose a file without errors first"
             :loading="importing"
             @click="commit"
          />
@@ -111,13 +96,15 @@ import {
    Alert as KAlert,
    Badge as KBadge,
    Button as KButton,
+   FieldMessage as KFieldMessage,
+   FileInput as KFileInput,
    FormField as KFormField,
-   Icon as KIcon,
    Modal as KModal,
    SegmentedControl as KSegmentedControl,
-   Spinner as KSpinner,
+   SkeletonList as KSkeletonList,
    Stack as KStack,
    Table as KTable,
+   toast,
 } from '@xleddyl/443-components-vue'
 import { computed, ref, watch } from '#imports'
 import type {
@@ -127,7 +114,7 @@ import type {
    CmsTransferFormat,
 } from '../../../shared/transfer'
 import { canTransferCsv, IMPORT_MAX_BYTES, IMPORT_MAX_ROWS } from '../../../shared/transfer'
-import { useCmsToast } from '../../composables/cms-toast'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { cmsIcon, errorMessage } from '../../utils/ui'
 
 const MODE_OPTIONS: ChoiceOption<CmsImportMode>[] = [
@@ -150,13 +137,15 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{ imported: [] }>()
-
-const toast = useCmsToast()
+const { can } = useCmsPermissions()
+const canUpsert = computed(() => can(`${props.collection}.update`))
 
 const csv = canTransferCsv(props.config)
 const maxSize = formatFileSize(IMPORT_MAX_BYTES)
+const intro = `${
+   csv ? 'A JSON or CSV file' : 'A JSON file'
+} in the format of the export, up to ${maxSize} and ${IMPORT_MAX_ROWS} rows. Media fields take keys of files that are already in the media library. Nothing is written until you confirm.`
 
-const input = ref<HTMLInputElement | null>(null)
 const file = ref<File | null>(null)
 const text = ref('')
 const mode = ref<CmsImportMode>('create')
@@ -212,7 +201,6 @@ function reset() {
    preview.value = null
    fileErrors.value = []
    mode.value = 'create'
-   if (input.value) input.value.value = ''
 }
 
 watch(open, (value) => {
@@ -251,11 +239,15 @@ async function check() {
    }
 }
 
-async function onFile(event: Event) {
-   const picked = (event.target as HTMLInputElement).files?.[0]
-   if (!picked) return
+async function onFile(value: File | File[] | null | undefined) {
+   const picked = Array.isArray(value) ? value[0] : value
+   if (!picked) {
+      reset()
+      return
+   }
    file.value = picked
    preview.value = null
+   fileErrors.value = []
    if (picked.size > IMPORT_MAX_BYTES) {
       fileErrors.value = [`The file is larger than ${maxSize}`]
       return
@@ -280,10 +272,7 @@ async function commit() {
    try {
       const result = await send(false)
       const count = result.create + result.update
-      toast.add({
-         title: `Imported ${count} ${count === 1 ? 'entry' : 'entries'}`,
-         color: 'success',
-      })
+      toast.success(`Imported ${count} ${count === 1 ? 'entry' : 'entries'}`)
       emit('imported')
       open.value = false
    } catch (error) {
@@ -292,7 +281,7 @@ async function commit() {
          preview.value = returned
          fileErrors.value = returned.errors
       }
-      toast.add({ title: 'Import failed', description: errorMessage(error), color: 'error' })
+      toast.error('Import failed', { description: errorMessage(error) })
    } finally {
       importing.value = false
    }

@@ -5,6 +5,7 @@ const kit = vi.hoisted(() => ({
    addComponent: vi.fn(),
    addComponentsDir: vi.fn(),
    addImports: vi.fn(),
+   addPlugin: vi.fn(),
    addRouteMiddleware: vi.fn(),
    addServerHandler: vi.fn(),
    addServerPlugin: vi.fn(),
@@ -17,7 +18,9 @@ const kit = vi.hoisted(() => ({
    createResolver: vi.fn(() => ({ resolve: (path: string) => path })),
    defineNuxtModule: vi.fn((definition: unknown) => definition),
    extendPages: vi.fn(),
+   hasNuxtModule: vi.fn((_name: string) => false),
    resolvePath: vi.fn(async (path: string) => `/virtual/root/${path}.ts`),
+   tryResolveModule: vi.fn(async (_id: string) => undefined as string | undefined),
    useLogger: vi.fn(() => ({
       info: vi.fn(),
       warn: vi.fn(),
@@ -87,9 +90,14 @@ describe('module setup when disabled', () => {
          'useCmsContent',
          'useCmsContents',
          'useCmsPage',
+         'useCmsPreviewMode',
+         'useCmsRoute',
+         'useCmsSeo',
          'useCmsSingle',
+         'useCmsSite',
       ])
-      for (const entry of imports) {
+      const shared = ['useCmsSeo', 'useCmsPreviewMode']
+      for (const entry of imports.filter((item) => !shared.includes(item.name))) {
          expect(entry.from).toContain('-disabled')
       }
    })
@@ -104,7 +112,10 @@ describe('module setup when disabled', () => {
       expect(kit.addComponentsDir).not.toHaveBeenCalled()
       expect(nuxt.hook).not.toHaveBeenCalledWith('app:templates', expect.any(Function))
       expect(kit.addRouteMiddleware).not.toHaveBeenCalled()
-      expect(kit.addTypeTemplate).not.toHaveBeenCalled()
+      expect(kit.addTypeTemplate).toHaveBeenCalledTimes(1)
+      expect(kit.addTypeTemplate.mock.calls[0]![0]).toMatchObject({
+         filename: 'types/nuxt-cms-field.d.ts',
+      })
       expect(kit.addVitePlugin).not.toHaveBeenCalled()
    })
 
@@ -121,7 +132,18 @@ describe('module setup when disabled', () => {
          'cms/graphql-env.d.ts',
          'cms/graphql.ts',
          'cms/blocks.ts',
+         'cms/image.ts',
       ])
+   })
+
+   it('still registers the image component', async () => {
+      const nuxt = createNuxt()
+      await moduleDefinition.setup(options({ enabled: false }), nuxt)
+
+      expect(kit.addComponent).toHaveBeenCalledWith({
+         name: 'CmsImage',
+         filePath: expect.stringContaining('image/CmsImage.vue'),
+      })
    })
 
    it('still registers the block renderer', async () => {
@@ -132,6 +154,12 @@ describe('module setup when disabled', () => {
          name: 'CmsBlocks',
          filePath: expect.stringContaining('blocks/CmsBlocks.vue'),
       })
+      expect(kit.addComponent).toHaveBeenCalledWith({
+         name: 'CmsField',
+         filePath: expect.stringContaining('blocks/CmsField'),
+      })
+      expect(kit.addPlugin).toHaveBeenCalledTimes(1)
+      expect(kit.addPlugin).toHaveBeenCalledWith(expect.stringContaining('plugins/cms-field'))
    })
 
    it('registers no database or schema aliases', async () => {
@@ -145,6 +173,7 @@ describe('module setup when disabled', () => {
          '#cms-queries',
          '#cms-graphql',
          '#cms-blocks',
+         '#cms-image',
       ])
       expect(nuxt.options.runtimeConfig.cms).toBeUndefined()
    })
@@ -195,7 +224,11 @@ describe('module setup when enabled', () => {
          'useCmsContent',
          'useCmsContents',
          'useCmsPage',
+         'useCmsPreviewMode',
+         'useCmsRoute',
+         'useCmsSeo',
          'useCmsSingle',
+         'useCmsSite',
       ])
       for (const entry of imports) {
          expect(entry.from).toContain('composables/cms-')
@@ -423,4 +456,149 @@ describe('module setup with filesystem media storage', () => {
          ).rejects.toThrow(/publicBaseUrl/)
       }
    )
+})
+
+describe('module setup of the seo routes', () => {
+   const ORIGINAL_SITE_URL = process.env.NUXT_PUBLIC_SITE_URL
+
+   beforeEach(() => {
+      delete process.env.NUXT_PUBLIC_SITE_URL
+   })
+
+   afterEach(() => {
+      if (ORIGINAL_SITE_URL === undefined) delete process.env.NUXT_PUBLIC_SITE_URL
+      else process.env.NUXT_PUBLIC_SITE_URL = ORIGINAL_SITE_URL
+   })
+
+   function seoRoutes() {
+      return kit.addServerHandler.mock.calls
+         .map((call) => (call[0] as AnyRecord).route as string)
+         .filter((route) => route === '/sitemap.xml' || route === '/robots.txt')
+   }
+
+   async function setupAndFinish(overrides: AnyRecord = {}) {
+      const nuxt = createNuxt()
+      Object.assign(nuxt.options, { vite: {} })
+      await moduleDefinition.setup(options(overrides), nuxt)
+      const done = nuxt.hook.mock.calls.filter((call) => call[0] === 'modules:done')
+      for (const [, hook] of done) await hook()
+      return nuxt
+   }
+
+   it('pre-bundles zod for the admin, through the module when the app cannot resolve it', async () => {
+      const nested = (await setupAndFinish()).options as AnyRecord
+      expect(nested.vite.optimizeDeps.include).toContain('@xleddyl/nuxt-cms > zod')
+      kit.tryResolveModule.mockResolvedValue('/virtual/root/node_modules/zod/index.js')
+      const direct = (await setupAndFinish()).options as AnyRecord
+      kit.tryResolveModule.mockResolvedValue(undefined)
+      expect(direct.vite.optimizeDeps.include).toContain('zod')
+   })
+
+   it('rejects invalid options before anything else', async () => {
+      await expect(
+         moduleDefinition.setup(options({ seo: { sitemap: 'yes' } }), createNuxt())
+      ).rejects.toThrow('cms.seo.sitemap must be true or false')
+      await expect(
+         moduleDefinition.setup(
+            options({ enabled: false, site: { url: 'example.com' } }),
+            createNuxt()
+         )
+      ).rejects.toThrow('absolute URL')
+   })
+
+   it('exposes the site url as runtimeConfig.public.siteUrl', async () => {
+      const nuxt = createNuxt()
+      await moduleDefinition.setup(options({ site: { url: 'https://example.com/' } }), nuxt)
+      expect(nuxt.options.runtimeConfig.public.siteUrl).toBe('https://example.com')
+
+      process.env.NUXT_PUBLIC_SITE_URL = 'https://env.example.com'
+      const fromEnv = createNuxt()
+      await moduleDefinition.setup(options({ enabled: false }), fromEnv)
+      expect(fromEnv.options.runtimeConfig.public.siteUrl).toBe('https://env.example.com')
+   })
+
+   it('serves the sitemap and robots.txt by default', async () => {
+      const nuxt = await setupAndFinish()
+      expect(seoRoutes()).toEqual(['/sitemap.xml', '/robots.txt'])
+      expect(nuxt.options.runtimeConfig.cms.seo).toEqual({
+         sitemap: true,
+         robots: true,
+         robotsSitemap: true,
+      })
+   })
+
+   it('sends the hidden site header from a server middleware', async () => {
+      await setupAndFinish({ seo: { robots: false, sitemap: false } })
+      const middleware = kit.addServerHandler.mock.calls
+         .map((call) => call[0] as AnyRecord)
+         .filter((handler) => handler.middleware)
+         .map((handler) => handler.handler)
+      expect(middleware).toContain('./runtime/server/middleware/hidden-site')
+      expect(middleware).toContain('./runtime/server/middleware/redirects')
+   })
+
+   it('registers the redirects admin api', async () => {
+      await setupAndFinish()
+      const routes = kit.addServerHandler.mock.calls.map((call) => {
+         const handler = call[0] as AnyRecord
+         return `${handler.method ?? 'all'} ${handler.route}`
+      })
+      expect(routes).toEqual(
+         expect.arrayContaining([
+            'get /api/cms/redirects',
+            'post /api/cms/redirects',
+            'post /api/cms/redirects/import',
+            'put /api/cms/redirects/:id',
+            'delete /api/cms/redirects/:id',
+         ])
+      )
+   })
+
+   it('registers the preview link api, middleware and plugins', async () => {
+      await setupAndFinish()
+      const routes = kit.addServerHandler.mock.calls.map((call) => {
+         const handler = call[0] as AnyRecord
+         return `${handler.method ?? 'all'} ${handler.route ?? handler.handler}`
+      })
+      expect(routes).toEqual(
+         expect.arrayContaining([
+            'get /api/cms/preview',
+            'get /api/cms/preview-links/:collection/:id',
+            'post /api/cms/preview-links/:collection/:id',
+            'delete /api/cms/preview-links/:collection/:id/:linkId',
+            'all ./runtime/server/middleware/preview-links',
+         ])
+      )
+      expect(kit.addPlugin.mock.calls.map((call) => call[0])).toEqual([
+         './runtime/app/plugins/cms-field',
+         './runtime/app/plugins/cms-preview',
+         './runtime/app/plugins/cms-preview-banner.client',
+      ])
+   })
+
+   it('skips the automatic preview banner with preview.banner false', async () => {
+      await setupAndFinish({ preview: { banner: false } })
+      expect(kit.addPlugin.mock.calls.map((call) => call[0])).toEqual([
+         './runtime/app/plugins/cms-field',
+         './runtime/app/plugins/cms-preview',
+      ])
+   })
+
+   it('rejects a preview.banner that is not a boolean', async () => {
+      await expect(setupAndFinish({ preview: { banner: 'yes' } })).rejects.toThrow(
+         'preview.banner must be a boolean, got "yes"'
+      )
+   })
+
+   it('steps aside for @nuxtjs/sitemap and honors explicit switches', async () => {
+      kit.hasNuxtModule.mockImplementation((name: string) => name === '@nuxtjs/sitemap')
+      const nuxt = await setupAndFinish({ seo: { robots: false } })
+      kit.hasNuxtModule.mockImplementation(() => false)
+      expect(seoRoutes()).toEqual([])
+      expect(nuxt.options.runtimeConfig.cms.seo).toEqual({
+         sitemap: false,
+         robots: false,
+         robotsSitemap: true,
+      })
+   })
 })

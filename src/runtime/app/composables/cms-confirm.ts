@@ -1,37 +1,32 @@
 import type { FunctionalComponent } from 'vue'
 import { h, markRaw } from 'vue'
+import type { RecordListItem } from '@xleddyl/443-components-vue'
 import { useConfirm } from '@xleddyl/443-components-vue'
 import CmsConfirmGroups from '../components/cms/ConfirmGroups.vue'
 
-export interface CmsConfirmLink {
-   title: string
-   meta: string
-   to: string
-}
-
 export interface CmsConfirmGroup {
    title: string
-   links: CmsConfirmLink[]
+   items: RecordListItem[]
+   note?: string
 }
 
 export interface CmsConfirmOptions {
-   title?: string
+   title: string
+   description?: string
    confirmLabel?: string
    groups?: CmsConfirmGroup[]
 }
 
 export function useCmsConfirm() {
    const confirm = useConfirm()
-   return (message: string, options?: CmsConfirmOptions) => {
-      const groups = options?.groups
+   return (options: CmsConfirmOptions) => {
+      const groups = options.groups
       const body: FunctionalComponent | undefined = groups?.length
          ? (_props, { attrs }) => h(CmsConfirmGroups, { ...attrs, groups })
          : undefined
-      return confirm({
-         title: options?.title,
-         description: message,
-         confirmLabel: options?.confirmLabel,
-         tone: 'danger',
+      return confirm.delete(options.title, {
+         description: options.description,
+         confirmLabel: options.confirmLabel,
          body: body ? markRaw(body) : undefined,
       })
    }

@@ -4,6 +4,7 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { describe, expect, it, vi } from 'vitest'
 import type { CmsEntry, FieldConfig } from '../src/runtime/shared/index'
 import {
+   addSiteMediaUsage,
    assertKnownMedia,
    collectMediaUsage,
    mediaKeysInTable,
@@ -187,5 +188,27 @@ describe('collectMediaUsage', () => {
          ['library/other.webp']
       )
       expect(usage).toEqual({ 'library/other.webp': [] })
+   })
+})
+
+describe('addSiteMediaUsage', () => {
+   it('lists the site share image under the site settings', () => {
+      const usage = addSiteMediaUsage({ 'share.jpg': [], 'other.jpg': [] }, { image: 'share.jpg' })
+      expect(usage['share.jpg']).toEqual([
+         {
+            collection: 'cms:site',
+            label: 'Settings',
+            kind: 'site',
+            id: null,
+            title: 'Site settings',
+            field: 'Share image',
+         },
+      ])
+      expect(usage['other.jpg']).toEqual([])
+   })
+
+   it('adds nothing without a share image or for keys that were not asked for', () => {
+      expect(addSiteMediaUsage({ 'a.jpg': [] }, { image: null })).toEqual({ 'a.jpg': [] })
+      expect(addSiteMediaUsage({ 'a.jpg': [] }, { image: 'b.jpg' })).toEqual({ 'a.jpg': [] })
    })
 })

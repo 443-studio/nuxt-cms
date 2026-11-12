@@ -369,8 +369,27 @@ describe('page rows encoding', () => {
       expect(
          encoded.fields.some((row) => row.key === 'gallery.caption' && row.position === 2)
       ).toBe(false)
-      expect(encoded.fieldKeys).toContain('gallery._type')
-      expect(encoded.mediaKeys).toEqual(['hero', 'brochure', 'gallery.photo', 'gallery.cover'])
+      expect(encoded.fieldKeys).not.toContain('gallery._type')
+      expect(encoded.blockPrefixes).toEqual(['gallery.'])
+      expect(encoded.mediaKeys).toEqual(['hero', 'brochure'])
+   })
+
+   it('stores the hidden flag of a block without its own hidden field and no unknown keys', () => {
+      const entry = rowsConfig().pages!
+      const encoded = encodePageRows(entry, 'contact', {
+         gallery: [
+            { type: 'quote', text: 'a', hidden: true, stray: 'x' },
+            { type: 'image', photo: 'library/a.webp', hidden: true },
+         ],
+      })
+      const keys = encoded.fields.map((row) => `${row.key}@${row.position}=${row.value}`)
+      expect(keys).toEqual([
+         'gallery._type@0=quote',
+         'gallery.text@0=a',
+         'gallery.hidden@0=true',
+         'gallery._type@1=image',
+         'gallery.hidden@1=true',
+      ])
    })
 })
 
@@ -524,6 +543,49 @@ describe('page rows on sqlite', () => {
          )
          .get()
       expect(count).toEqual({ n: 1 })
+   })
+
+   it('round trips a hidden block and saves it again without a key conflict', async () => {
+      const entry = rowsConfig().pages!
+      rows.sqlite
+         .prepare(
+            `insert into pages_fields (page_id, key, position, value) values ('contact', 'gallery.removed', 3, '"old"')`
+         )
+         .run()
+      const save = async (gallery: unknown) => {
+         const statements = pageWriteStatements(
+            rows.db as unknown as PageDb,
+            'sqlite',
+            rowsTables,
+            entry,
+            { key: 'contact', path: '/contact' },
+            { gallery, updatedAt: 'later' }
+         )
+         rows.sqlite.exec('begin')
+         try {
+            for (const statement of statements) await statement
+            rows.sqlite.exec('commit')
+         } catch (error) {
+            rows.sqlite.exec('rollback')
+            throw error
+         }
+      }
+      const hidden = [{ type: 'quote', text: 'hello', author: 'me', cover: null, hidden: true }]
+      await save(hidden)
+      await save(hidden)
+      let [contact] = await readRows('/contact')
+      expect(contact!.gallery).toEqual(hidden)
+      await save([{ type: 'quote', text: 'hello', author: 'me', cover: null }])
+      ;[contact] = await readRows('/contact')
+      expect(contact!.gallery).toEqual([
+         { type: 'quote', text: 'hello', author: 'me', cover: null },
+      ])
+      const left = rows.sqlite
+         .prepare(`select key from pages_fields where page_id = 'contact' and key like 'gallery.%'`)
+         .all()
+         .map((row) => (row as { key: string }).key)
+         .sort()
+      expect(left).toEqual(['gallery._type', 'gallery.author', 'gallery.text'])
    })
 
    it('deletes the child rows with the page', () => {

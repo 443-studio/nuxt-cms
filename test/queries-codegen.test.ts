@@ -4,7 +4,7 @@ import { collectionQuery, renderQueriesFile, singleQuery } from '../src/queries-
 import { renderGraphqlSdl } from '../src/runtime/shared/graphql-sdl'
 import { sampleConfig } from './fixtures'
 
-const MEDIA = 'key url type alt folder mime size width height'
+const MEDIA = 'key url type alt folder mime size width height focalX focalY'
 
 describe('generated entry queries', () => {
    const config = sampleConfig()

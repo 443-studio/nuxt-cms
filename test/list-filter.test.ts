@@ -184,6 +184,14 @@ describe('list filter SDL', () => {
    })
 })
 
+describe('list fields on sqlite', () => {
+   it('resolves a null multi-select or tags column to an empty list', async () => {
+      const result = await run('{ guidesById(id: "dario") { species spots } }')
+      expect(result.errors).toBeUndefined()
+      expect(result.data).toEqual({ guidesById: { species: [], spots: [] } })
+   })
+})
+
 describe('list filters on sqlite', () => {
    it('filters a multi-select with hasAny, hasAll and isEmpty', async () => {
       expect(await ids('{ species: { hasAny: ["trout", "carp"] } }')).toEqual(['anna'])

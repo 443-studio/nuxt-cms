@@ -39,7 +39,7 @@ const { data } = await useCms(query, { locale }, {
 ```
 
 With [`cms.enabled: false`](configuration.md#enabled) the composables stay defined but become
-no-ops: `useCms().data`, `useCmsSingle().data`, `useCmsPage().data` and `useCmsContent().data` are
+no-ops: `useCms().data`, `useCmsSingle().data`, `useCmsPage().data`, `useCmsContent().data` and `useCmsRoute().data` are
 `null`, `useCmsCollection().data` and `useCmsContents().data` are `[]` and `$cmsQuery()` resolves to
 `{}`. `<CmsBlocks>` stays registered too. The generated types stay available too, so the same code type-checks
 in both modes. Callers therefore never need a `typeof useCms === 'function'` guard, they just render
@@ -67,8 +67,9 @@ events.value[0]?.poster?.url
 What they select:
 
 - every public field of the entry, plus `id` and `updatedAt` (and `createdAt` for a collection);
-- media fields with all their keys (`key url type alt folder mime size width height`);
-- blocks fields with `__typename`, `type` and an inline fragment per block type;
+- media fields with all their keys (`key url type alt folder mime size width height focalX focalY`);
+- blocks fields with `__typename`, `type` and an inline fragment per block type, nested blocks
+  included (down to the nesting limit);
 - relations one level deep. The related entry brings its own fields, but not its own relations.
 
 `data` holds `null` for a single and `[]` for a collection before the query resolves and after it
@@ -101,6 +102,69 @@ article.value?.body
 `null` when the slug is unknown, a draft, or scheduled. When the CMS is disabled both return their
 default without a request.
 
+### Content routes
+
+When a content entry has a [`route`](schema.md#routes), its items carry `path` (the public path in
+the requested locale) and `paths` (`[{ locale, path }]`, one per locale), and the content helpers
+select both, so a list links with `<NuxtLink :to="item.path">`.
+
+`useCmsRoute` finds the item a site path shows, across every routed content entry, so a site can
+serve all of them from one catch-all page:
+
+```vue
+<script setup lang="ts">
+const route = useRoute()
+const { data: match } = await useCmsRoute(route.path, { locale })
+if (!match.value) throw createError({ statusCode: 404, fatal: import.meta.client })
+</script>
+
+<template>
+   <NewsArticle v-if="match?.entry === 'news'" :item="match.item" />
+   <BlogPost v-else-if="match?.entry === 'blog'" :item="match.item" />
+</template>
+```
+
+`data` is `{ entry, item }`, typed as a union on `entry` (`CmsContentRouteMatch` in `#cms-types`),
+or `null` when no published item has that path. The path is matched against the pattern of
+`locale` (the default locale when omitted), so pass the locale the site is showing; query string,
+hash and trailing slash are ignored. When two patterns could match the same path, the one with
+more fixed segments wins. It sends one request (`<entry>ByPath` per routed entry).
+
+### Preview links
+
+An editor can share a draft or scheduled item with a [preview link](admin.md#share-preview):
+the item address plus `?cms-preview=<token>`. Nothing changes in the page code: `useCmsRoute`,
+`useCmsContent`, `useCms` and the other helpers read the token from the current route and send it
+as the `x-cms-preview` header, on the server render and in the browser. The server checks the
+hash, the expiry and the revocation, then lets `<entry>ByPath`, `<entry>BySlug` and `<entry>ById`
+return that one item even if it is a draft or scheduled. Every other item, lists, counts and
+relations stay published only. A wrong, expired or revoked token falls back to the public behavior,
+so the catch-all page answers 404 for a draft. `$cmsQuery` reads the token when called with the
+Nuxt app available (setup, plugins, middleware); elsewhere send the header yourself.
+
+Requests with the token (the page, by the `cms-preview` query, and GraphQL, by the header) answer
+with `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow` and
+`Referrer-Policy: same-origin`. Preview queries skip the in-flight dedupe and go out in their own
+batch, and their `useAsyncData` keys end with `:cms-preview`. If a CDN or route rule (`swr`,
+`isr`, `cache`) caches your pages, bypass it for requests with `cms-preview` in the query.
+
+On such a page the module shows a small "Preview" banner with the expiry (turn it off with
+[`preview.banner: false`](configuration.md#preview)). `useCmsPreviewMode()` returns a computed
+`{ entry, id, expiresAt }` while a valid link is open, else `null`, for your own banner or to skip
+analytics. It is filled by `GET /api/cms/preview` with the header.
+
+### SEO tags
+
+`useCmsSeo(item, { locale })` writes the title, description, canonical, Open Graph, Twitter,
+`robots` and hreflang tags of a page from a content item or a page row, with the site settings as
+fallback; `useCmsSite({ locale })` reads those settings (`cmsSite` in GraphQL). See
+[SEO](seo.md).
+
+```ts
+const { data: match } = await useCmsRoute(route.path, { locale })
+useCmsSeo(() => match.value?.item, { locale })
+```
+
 Write a query with `useCms` when you need a count, a relation two levels deep, several entries in
 one request, or a narrower selection.
 
@@ -130,6 +194,16 @@ newsCount(filters: NewsFilters): Int!
 ```
 
 Without `sort`, the list is ordered by `publishedAt` descending.
+
+A content entry with a [`route`](schema.md#routes) also gets a query by public path, and its type
+gets `path: String!` and `paths: [CmsLocalePath!]!` (`type CmsLocalePath { locale: String! path: String! }`):
+
+```graphql
+newsByPath(path: String!, locale: String): News
+```
+
+It returns the published, non-scheduled item whose path in `locale` (default locale when omitted)
+is `path`, or `null`.
 
 For a **page** entry (e.g. `pages`):
 
@@ -206,13 +280,51 @@ const { data } = await useCmsCollection('guides', {
 `media` fields resolve to a `CmsMedia` object:
 
 ```graphql
-poster { key url type alt folder mime size width height }
+poster { key url type alt folder mime size width height focalX focalY }
 ```
 
 - **`key`**: the object key in your S3-compatible storage (the media field stores only this).
 - **`url`**: the public URL, built as `publicBaseUrl` + "/" + `key`. A relative `publicBaseUrl` (e.g. `/images`) gives a root-relative URL. `url` is `null` only when `publicBaseUrl` is not configured.
 - **`type`**: the enum `CmsMediaType`, derived from the mime type: `image`, `video` or `file`.
+- **`focalX`** / **`focalY`**: the focal point an editor marked on the image, as floats from 0
+  (left / top) to 1 (right / bottom). Both are `null` until it is set, which means the center. See
+  [Media → Focal point](media.md#focal-point).
 - Other fields: metadata set at upload time (alt text, folder, dimensions).
+
+To render an image, use `<CmsImage>` (see [Media → Rendering images](media.md#rendering-images)):
+
+```vue
+<CmsImage :media="event.poster" sizes="sm:100vw md:50vw" class="aspect-video w-full object-cover" />
+```
+
+## Links
+
+`link` fields resolve to a `CmsLink` object (typed `CmsLink` in `#cms-types`, selected in full by
+the generated queries):
+
+```graphql
+cta { href label newTab external entry id }
+```
+
+- **`href`**: the address to render. For an address it is the stored URL. For a page it is the page
+  path. For a content item it is the item path in the requested `locale` (from the entry
+  `route`). It is `null` when the target was deleted, is a draft or is scheduled, so the site never
+  links to an item it cannot show.
+- **`label`**: the link text in the requested locale (falls back to the default locale), or `null`.
+- **`newTab`**: open in a new tab. **`external`**: the address has a scheme (`https:`, `mailto:`,
+  `tel:`), as opposed to a site path or anchor.
+- **`entry`** / **`id`**: the internal target, `null` for addresses.
+
+Internal targets of one request are loaded in one query per entry, whatever the number of links.
+
+Render it with `<CmsLink>` (auto-imported). It renders a `<NuxtLink>` to `href` with
+`target="_blank"` and `rel="noopener noreferrer"` when `newTab` is set, shows `label` (or the href)
+unless you pass slot content, and renders nothing when `href` is `null`:
+
+```vue
+<CmsLink :link="block.cta" class="button" />
+<CmsLink :link="footer.privacy">Privacy</CmsLink>
+```
 
 ## Blocks
 
@@ -238,6 +350,27 @@ Every block field is nullable in the API and in the generated types, even when i
 block items are stored as JSON, so older items can lack a field added or made required later.
 `type` and `__typename` are always set.
 
+[Nested blocks](schema.md#nested-blocks) follow the same pattern one level down. The interface of
+a nested field adds the block and the field to the name, `<Entry><Field><Block><SubField>Block`,
+and so do its block types:
+
+```graphql
+body {
+   __typename type
+   ... on NewsBodyColumns {
+      columns {
+         __typename type
+         ... on NewsBodyColumnsColumnsColumn {
+            content { __typename type ... on NewsBodyColumnsColumnsColumnContentText { heading body } }
+         }
+      }
+   }
+}
+```
+
+Hidden items are dropped at every level, translatable fields are localized and media and links are
+resolved inside nested blocks as at the top level.
+
 ## Rendering blocks
 
 `<CmsBlocks>` renders a blocks value with the components named by `component` on each block (see
@@ -262,9 +395,63 @@ For a value without `__typename` (a hand-written query, or raw data), pass the e
 
 The components are imported at build time from `#components`, as lazy components, through a
 generated map (`#cms-blocks`). Nothing is registered globally and nothing is resolved by name at
-runtime. The `annotate` prop adds `data-cms-block` (the index) and `data-cms-block-type` to the root
-element of each block, for tools that need to find a block in the page. The visual editor uses it,
-so give each block component a single root element.
+runtime. The `annotate` prop adds `data-cms-block` (the index), `data-cms-block-path` (the item path,
+`body.2`) and `data-cms-block-type` to the root element of each block, for tools that need to find a
+block in the page. The visual editor uses it, so give each block component a single root element.
+
+For [nested blocks](schema.md#nested-blocks), render the nested field with `<CmsBlocks>` inside the
+block component:
+
+```vue
+<template>
+   <div class="grid md:grid-cols-2">
+      <CmsBlocks :blocks="columns" />
+   </div>
+</template>
+
+<script setup lang="ts">
+import type { NewsBodyColumnsProps } from '#cms-types'
+
+defineProps<NewsBodyColumnsProps>()
+</script>
+```
+
+A nested `<CmsBlocks>` knows its parent block: it inherits `entry` and `annotate`, and finds the
+name of the field from the prop you pass it (pass `field="columns"` when you pass a filtered or
+copied list). With `annotate`, nested roots get `data-cms-block-path` (`body.2.columns.0`),
+`data-cms-block-parent` (`body.2`) and `data-cms-block-type`, but no `data-cms-block`, so
+`data-cms-block` keeps meaning a top-level block. The visual editor finds blocks at every level by
+`data-cms-block-path`. Keep the nested `<CmsBlocks>` rendered when its list is empty: in the editor
+preview it shows an **Add a block** placeholder there (empty nested lists reach the preview as `[]`),
+and on the site it renders nothing.
+
+### Marking fields
+
+Tell the visual editor which element shows which field, so that a click on it in the canvas opens
+that field in the inspector. Use the `<CmsField>` component or the `v-cms-field` directive, both
+registered by the module:
+
+```vue
+<template>
+   <section>
+      <CmsField name="heading" as="h2">{{ heading }}</CmsField>
+      <div v-cms-field="'body'" v-html="body" />
+   </section>
+</template>
+```
+
+`<CmsField>` renders the tag given by `as` (default `span`) with its slot; attributes like `class`
+pass through. Both add `data-cms-field` only inside the editor preview: on the public site they
+render nothing extra. Inside a block, the name is a field of that block (the block is the nearest
+`data-cms-block-path` ancestor, so a field of a nested block belongs to that nested block). Outside every block, for example in a
+[preview component](schema.md#preview-component), the name is a field of the item (`title`,
+`excerpt`, an extra field). Unknown names and private fields are ignored.
+
+A marked `text` field can also be edited in place from the canvas (double-click). For that, the
+element must render the value as is, as its only content: `{{ heading }}` inside the element, no
+formatting of the value and no child elements. Keep rendering the element when the value is empty
+if it should stay clickable. For a `textarea` field, add `white-space: pre-line` so the line
+breaks show. Rich text fields are not edited in place: a click opens them in the inspector.
 
 ## Example
 
@@ -292,7 +479,8 @@ const { data } = useCms(`query ($cat: String!) {
 
 ## Behavior notes
 
-- Entries with `drafts: true` return **published rows only**; drafts are invisible to the API.
+- Entries with `drafts: true` return **published rows only**; drafts are invisible to the API
+  (except the one item of a valid [preview link](#preview-links)).
 - Content entries also hide **scheduled** items: a published item whose `publishedAt` is still in
   the future stays out of every query, relations included, until that moment.
 - Fields declared with [`private: true`](schema.md#private-fields) are absent from the schema

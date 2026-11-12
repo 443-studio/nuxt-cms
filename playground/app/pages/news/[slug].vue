@@ -18,4 +18,6 @@
 <script setup lang="ts">
 const route = useRoute()
 const { data: item } = await useCmsContent('news', String(route.params.slug))
+
+useCmsSeo(item)
 </script>

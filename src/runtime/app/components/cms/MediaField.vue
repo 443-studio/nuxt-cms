@@ -4,27 +4,29 @@
       variant="outline"
       padding="none"
       class="cms-media-single"
-      :class="{ 'is-missing': missing }"
+      :class="{ 'is-disabled': disabled }"
    >
       <button
          type="button"
-         class="cms-media-single-preview"
+         class="cms-tile-preview"
          aria-label="Replace media"
+         :disabled="disabled || undefined"
          @click="openGallery"
       >
-         <img v-if="kind === 'image' && url" :src="url" alt="" loading="lazy" />
-         <video
-            v-else-if="kind === 'video' && url"
-            :src="url"
-            preload="metadata"
-            muted
-            playsinline
+         <KThumbnail
+            :src="url ?? undefined"
+            :kind="kind"
+            aspect="4/3"
+            rounded="none"
+            :missing="missing"
+            missing-text="Not found in the media library"
          />
-         <KIcon v-else :name="cmsIcon(icon)" />
       </button>
-      <div class="cms-media-single-bar">
-         <span class="cms-media-single-name" :title="model">{{ mediaFilename(model) }}</span>
-         <KStack direction="row" gap="none" align="center">
+      <div class="cms-tile-bar">
+         <KTooltip :text="model">
+            <span class="cms-tile-name">{{ mediaFilename(model) }}</span>
+         </KTooltip>
+         <KStack v-if="!disabled" direction="row" gap="none" align="center">
             <KButton
                :icon="cmsIcon('arrow-path')"
                size="xs"
@@ -45,15 +47,18 @@
       </div>
    </KCard>
 
-   <button v-else type="button" class="cms-media-single-add" @click="openGallery">
-      <KIcon :name="cmsIcon('photo')" />
-      <span>Choose</span>
-   </button>
+   <KCard
+      v-else
+      variant="dashed"
+      as="button"
+      :icon="cmsIcon('photo')"
+      title="Choose"
+      :disabled="disabled"
+      class="cms-media-single-add"
+      @click="openGallery"
+   />
 
-   <p v-if="missing" class="cms-media-missing">
-      <KIcon :name="cmsIcon('exclamation-triangle')" />
-      <span>Not found in the media library</span>
-   </p>
+   <KFieldMessage v-if="missing" tone="warning" message="Not found in the media library" />
 
    <KModal v-model:open="galleryOpen" title="Media" size="lg">
       <CmsMediaGallery
@@ -72,11 +77,14 @@ import { computed, ref, useState } from '#imports'
 import {
    Button as KButton,
    Card as KCard,
-   Icon as KIcon,
+   FieldMessage as KFieldMessage,
    Modal as KModal,
    Stack as KStack,
+   Thumbnail as KThumbnail,
+   Tooltip as KTooltip,
+   useFieldControl,
 } from '@xleddyl/443-components-vue'
-import { mediaFilename, mediaIconFor, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
+import { mediaFilename, mediaPublicUrl, mediaTypeForKey } from '#nuxt-cms'
 import { useCmsMediaKeys } from '../../composables/cms-media-keys'
 import { useCmsRuntime } from '../../composables/cms-runtime'
 import { cmsIcon } from '../../utils/ui'
@@ -91,6 +99,8 @@ const model = defineModel<string | null>({ required: true })
 const { mediaBaseUrl } = useCmsRuntime()
 const mediaKeys = useCmsMediaKeys()
 
+const { disabled } = useFieldControl()
+
 const galleryOpen = ref(false)
 const pickerFolder = useState<string | null>('cms-media-picker-folder', () => null)
 
@@ -101,15 +111,16 @@ function onSelect(item: { key: string }) {
 }
 
 function openGallery() {
+   if (disabled.value) return
    galleryOpen.value = true
 }
 
 function clear() {
+   if (disabled.value) return
    model.value = null
 }
 
 const missing = computed(() => mediaKeys.isMissing(model.value))
 const url = computed(() => (model.value ? mediaPublicUrl(mediaBaseUrl, model.value) : null))
 const kind = computed(() => (model.value ? mediaTypeForKey(model.value) : 'file'))
-const icon = computed(() => mediaIconFor(kind.value))
 </script>

@@ -1,16 +1,16 @@
 <template>
-   <div class="cms-page">
+   <div class="k-page">
       <KPageHeader
          title="Media"
          :icon="cmsIcon('photo')"
          description="Images, videos and files used across your content."
       >
          <template #badge>
-            <KBadge :label="runtime.mediaStorage" size="sm" class="cms-code-badge" />
+            <KBadge :label="runtime.mediaStorage" size="sm" class="cms-code" />
          </template>
       </KPageHeader>
 
-      <CmsMediaGallery v-model:folder="folder" />
+      <CmsMediaGallery v-model:folder="folder" fill />
    </div>
 </template>
 

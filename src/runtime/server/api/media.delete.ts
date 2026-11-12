@@ -6,12 +6,13 @@ import { cms_media } from '#cms-tables'
 import { isMediaFolderMarker } from '../../shared/index'
 import { objectKeySchema } from '../../shared/validation'
 import { useMediaStorage } from '../utils/media'
-import { requireAdmin } from '../utils/require-admin'
+import { emitMediaChange } from '../utils/hooks'
+import { requireCmsPermission } from '../utils/permissions'
 
 const querySchema = z.object({ key: objectKeySchema })
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const { user } = await requireCmsPermission(event, 'media.delete')
    const { store } = useMediaStorage(event)
    const { key } = await getValidatedQuery(event, querySchema.parse)
 
@@ -25,5 +26,6 @@ export default defineEventHandler(async (event) => {
 
    await store.remove(key)
 
+   emitMediaChange(event, user, { action: 'delete', keys: [key], folder: row.folder })
    return { ok: true }
 })

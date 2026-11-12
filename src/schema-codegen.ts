@@ -1,10 +1,19 @@
-import { typeName } from './runtime/shared/graphql-sdl'
+import { blockTypeName, blocksFieldTypeName, typeName } from './runtime/shared/graphql-sdl'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsI18n, FieldConfig } from './runtime/shared/index'
+import type { CmsUniqueTextColumn } from './runtime/shared/migrations-dir'
 import {
+   CONTENT_ROUTE_FIELDS,
    CONTENT_SYSTEM_FIELDS,
    PAGE_PATH_FIELD,
-   fieldConditions,
+   CONDITION_GROUPS,
+   CONDITION_OPERATORS,
+   MAX_BLOCKS_DEPTH,
+   blocksFieldPaths,
+   contentRouteClashErrors,
+   contentRouteConfigErrors,
+   declaredLinkTargets,
    isCollectionKind,
+   isLinkTargetEntry,
    isMultiSelect,
    isRequiredField,
    isStringListField,
@@ -19,8 +28,18 @@ import {
    pageFieldsTableName,
    pageMediaTableName,
    pageRoutes,
+   normalizeTags,
+   relationTarget,
    selectOptionValues,
 } from './runtime/shared/index'
+import {
+   DEFAULT_FIELD_TYPES,
+   DEFAULT_NOW,
+   DEFAULT_TODAY,
+   IMMUTABLE_FIELD_TYPES,
+   UNIQUE_FIELD_TYPES,
+   isUniqueValueField,
+} from './runtime/shared/field-options'
 
 export type Dialect = 'sqlite' | 'postgres'
 export type Driver = Dialect | 'libsql' | 'd1'
@@ -35,13 +54,16 @@ const RESERVED_ENTRY_KEYS = [
    'graphql',
    'settings',
    'cms_media',
+   'cms_preview_links',
+   'cms_redirects',
    'cms_settings',
    'cms_users',
 ]
 const RESERVED_COLUMNS = ['id', 'status', 'created_at', 'updated_at']
 const TITLE_FIELD_TYPES = ['text', 'slug', 'email', 'number', 'date', 'datetime', 'select']
 const TRANSLATABLE_FIELD_TYPES = ['text', 'richtext', 'media']
-const CONDITION_FIELD_TYPES = [
+const TRANSLATABLE_ERROR = 'translatable is only supported on text, richtext, media and link fields'
+const CONDITION_VALUE_TYPES = [
    'select',
    'boolean',
    'text',
@@ -51,12 +73,19 @@ const CONDITION_FIELD_TYPES = [
    'email',
    'slug',
 ]
+const CONDITION_ORDER_TYPES = ['number', 'date', 'datetime']
+const CONDITION_LIST_TYPES = ['tags', 'select (multiple)', 'relation (many-to-many)']
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
 const COMPONENT_RESERVED_KEYS = ['key', 'ref', 'class', 'style']
 const RESERVED_TYPE_NAMES = [
    'Query',
    'Mutation',
    'Subscription',
    'CmsMedia',
+   'CmsLink',
+   'CmsLocalePath',
+   'CmsSite',
    'JSON',
    'SortDirection',
    'IntFilter',
@@ -109,6 +138,11 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
          errors.push(`${at}: kind must be 'collection', 'single', 'page' or 'content'`)
       if (entry.kind === 'content') errors.push(...contentErrors(at, entry))
       else if (entry.preview !== undefined) errors.push(`${at}: preview needs kind 'content'`)
+      if (entry.route !== undefined) {
+         if (entry.kind === 'content')
+            errors.push(...contentRouteConfigErrors(at, entry.route, { locales }))
+         else errors.push(`${at}: route needs kind 'content'`)
+      }
       if (entry.kind === 'page') {
          if (pageEntry) {
             errors.push(
@@ -221,13 +255,12 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
             columnNames.add(column)
          }
          if (field.translatable) {
-            if (!TRANSLATABLE_FIELD_TYPES.includes(field.type))
-               errors.push(
-                  `${fat}: translatable is only supported on text, richtext and media fields`
-               )
+            if (field.type !== 'link' && !TRANSLATABLE_FIELD_TYPES.includes(field.type))
+               errors.push(`${fat}: ${TRANSLATABLE_ERROR}`)
             if (!locales.length)
                errors.push(`${fat}: translatable requires cms.i18n.locales in nuxt.config`)
          }
+         errors.push(...linkFieldErrors(fat, field, config))
          if (field.mobile) {
             const mobileKey = mobileMediaKey(key)
             if (field.type !== 'media')
@@ -236,50 +269,10 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
                errors.push(`${fat}: mobile needs the key '${mobileKey}', which is already declared`)
          }
          if (field.type === 'select') errors.push(...selectOptionErrors(fat, field))
-         if (field.showIf) {
+         if (field.showIf !== undefined) {
             if (entry.titleField === key)
                errors.push(`${fat}: the titleField cannot be conditional`)
-            for (const condition of fieldConditions(field)) {
-               const cat = `${fat}, showIf on '${condition.field}'`
-               const target = allFields[condition.field]
-               if (!condition.field || !target) {
-                  errors.push(`${cat}: '${condition.field}' is not a declared field`)
-                  continue
-               }
-               if (condition.field === key) {
-                  errors.push(`${cat}: a field cannot depend on itself`)
-                  continue
-               }
-               if (!CONDITION_FIELD_TYPES.includes(target.type) || isMultiSelect(target)) {
-                  errors.push(
-                     `${cat}: showIf can only depend on ${CONDITION_FIELD_TYPES.join(
-                        ', '
-                     )} fields (got '${target.type}')`
-                  )
-                  continue
-               }
-               if (isTranslatableField(target)) {
-                  errors.push(`${cat}: showIf cannot depend on a translatable field`)
-                  continue
-               }
-               const values = condition.in ?? (condition.eq === undefined ? null : [condition.eq])
-               if (!values || !values.length) {
-                  errors.push(`${cat}: showIf requires 'eq' or a non-empty 'in'`)
-                  continue
-               }
-               if (condition.in && condition.eq !== undefined)
-                  errors.push(`${cat}: showIf accepts either 'eq' or 'in', not both`)
-               if (target.type === 'select') {
-                  const options = selectOptionValues(target)
-                  const unknown = values.filter((value) => !options.includes(String(value)))
-                  if (unknown.length)
-                     errors.push(
-                        `${cat}: ${unknown
-                           .map((value) => `'${String(value)}'`)
-                           .join(', ')} not in the options of '${condition.field}'`
-                     )
-               }
-            }
+            errors.push(...showIfErrors(fat, key, field.showIf, allFields, 'a declared field'))
          }
          if (field.type === 'slug' && field.from) {
             const source = entry.fields?.[field.from]
@@ -292,63 +285,16 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
          } else if (field.suggestions !== undefined) {
             errors.push(`${fat}: suggestions is only supported on tags fields`)
          }
-         if (
-            field.type !== 'blocks' &&
-            field.type !== 'tags' &&
-            (field.min !== undefined || field.max !== undefined)
-         )
-            errors.push(`${fat}: min and max are only supported on blocks and tags fields`)
+         errors.push(...valueBoundsErrors(fat, field))
+         errors.push(...fieldOptionErrors(fat, field, entry, null))
          if (field.type === 'blocks') {
             if (field.translatable) errors.push(`${fat}: blocks fields cannot be translatable`)
-            errors.push(...blocksCountErrors(fat, field))
-            if (!field.blocks || !Object.keys(field.blocks).length) {
-               errors.push(`${fat}: blocks requires a non-empty blocks map`)
-            }
-            for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
-               const bat = `${fat}, block '${blockName}'`
-               if (!IDENTIFIER.test(blockName))
-                  errors.push(`${bat}: key must be a valid identifier`)
-               if (!block.fields || !Object.keys(block.fields).length)
-                  errors.push(`${bat}: fields must not be empty`)
-               errors.push(...blockMetaErrors(bat, block))
-               for (const [blockFieldKey, blockField] of Object.entries(block.fields ?? {})) {
-                  const bfat = `${bat}, field '${blockFieldKey}'`
-                  if (!IDENTIFIER.test(blockFieldKey))
-                     errors.push(`${bfat}: key must be a valid identifier`)
-                  if (blockFieldKey === 'type')
-                     errors.push(`${bfat}: 'type' is reserved inside blocks`)
-                  if (['relation', 'blocks', 'slug', 'tags'].includes(blockField.type)) {
-                     errors.push(
-                        `${bfat}: ${blockField.type} fields are not supported inside blocks`
-                     )
-                  }
-                  if (blockField.translatable) {
-                     if (!TRANSLATABLE_FIELD_TYPES.includes(blockField.type))
-                        errors.push(
-                           `${bfat}: translatable is only supported on text, richtext and media fields`
-                        )
-                     if (!locales.length)
-                        errors.push(
-                           `${bfat}: translatable requires cms.i18n.locales in nuxt.config`
-                        )
-                  }
-                  if (blockField.private)
-                     errors.push(`${bfat}: private fields are not supported inside blocks`)
-                  if (blockField.showIf)
-                     errors.push(`${bfat}: showIf is not supported inside blocks`)
-                  if ((blockField as FieldConfig).mobile)
-                     errors.push(`${bfat}: mobile is not supported inside blocks`)
-                  if (blockField.type === 'select')
-                     errors.push(...selectOptionErrors(bfat, blockField))
-                  if (blockField.type === 'select' && blockField.multiple) {
-                     errors.push(`${bfat}: multiple select is not supported inside blocks`)
-                  }
-               }
-            }
+            errors.push(...blocksFieldErrors(fat, field, 1, { config, entry, locales }))
          }
          if (field.type === 'relation') {
-            const target = field.to ? config[field.to] : undefined
-            if (!field.to || !target) {
+            const to = relationTarget(field)
+            const target = to ? config[to] : undefined
+            if (!to || !target) {
                errors.push(`${fat}: relation target '${field.to}' is not in the registry`)
             } else {
                if (!isCollectionKind(target))
@@ -382,6 +328,8 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
 
    const sqlTableNames = new Map<string, string>([
       ['cms_media', 'the built-in media table'],
+      ['cms_preview_links', 'the built-in preview links table'],
+      ['cms_redirects', 'the built-in redirects table'],
       ['cms_settings', 'the built-in settings table'],
       ['cms_users', 'the built-in users table'],
    ])
@@ -408,6 +356,112 @@ export function validateConfig(config: CmsConfig, i18n?: CmsI18n): string[] {
       }
    }
 
+   errors.push(...contentRouteClashErrors(config))
+   errors.push(...blockTypeNameErrors(config))
+
+   return errors
+}
+
+interface BlocksScope {
+   config: CmsConfig
+   entry: CmsEntry
+   locales: string[]
+}
+
+function blocksFieldErrors(
+   fat: string,
+   field: FieldConfig,
+   depth: number,
+   scope: BlocksScope
+): string[] {
+   const { config, entry, locales } = scope
+   const errors: string[] = []
+   errors.push(...blocksCountErrors(fat, field))
+   if (!field.blocks || !Object.keys(field.blocks).length) {
+      errors.push(`${fat}: blocks requires a non-empty blocks map`)
+   }
+   for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
+      const bat = `${fat}, block '${blockName}'`
+      if (!IDENTIFIER.test(blockName)) errors.push(`${bat}: key must be a valid identifier`)
+      if (!block.fields || !Object.keys(block.fields).length)
+         errors.push(`${bat}: fields must not be empty`)
+      errors.push(...blockMetaErrors(bat, block))
+      errors.push(...layoutErrors(bat, block.fields ?? {}, block.layout))
+      for (const [blockFieldKey, blockField] of Object.entries(block.fields ?? {})) {
+         const bfat = `${bat}, field '${blockFieldKey}'`
+         if (!IDENTIFIER.test(blockFieldKey)) errors.push(`${bfat}: key must be a valid identifier`)
+         if (blockFieldKey === 'type') errors.push(`${bfat}: 'type' is reserved inside blocks`)
+         if (['relation', 'slug', 'tags'].includes(blockField.type)) {
+            errors.push(`${bfat}: ${blockField.type} fields are not supported inside blocks`)
+         }
+         errors.push(...linkFieldErrors(bfat, blockField, config))
+         if (blockField.translatable) {
+            if (blockField.type === 'blocks')
+               errors.push(`${bfat}: blocks fields cannot be translatable`)
+            else if (
+               blockField.type !== 'link' &&
+               !TRANSLATABLE_FIELD_TYPES.includes(blockField.type)
+            )
+               errors.push(`${bfat}: ${TRANSLATABLE_ERROR}`)
+            if (!locales.length)
+               errors.push(`${bfat}: translatable requires cms.i18n.locales in nuxt.config`)
+         }
+         if (blockField.private)
+            errors.push(`${bfat}: private fields are not supported inside blocks`)
+         if (blockField.showIf !== undefined)
+            errors.push(
+               ...showIfErrors(
+                  bfat,
+                  blockFieldKey,
+                  blockField.showIf,
+                  block.fields ?? {},
+                  'a field of this block'
+               )
+            )
+         if ((blockField as FieldConfig).mobile)
+            errors.push(`${bfat}: mobile is not supported inside blocks`)
+         if (blockField.type === 'blocks') {
+            if (depth >= MAX_BLOCKS_DEPTH)
+               errors.push(
+                  `${bfat}: blocks nest at most ${MAX_BLOCKS_DEPTH} levels deep (a blocks field in a block in a blocks field counts as 2)`
+               )
+            else errors.push(...blocksFieldErrors(bfat, blockField, depth + 1, scope))
+            errors.push(...fieldOptionErrors(bfat, blockField, entry, 'blocks'))
+            continue
+         }
+         errors.push(...valueBoundsErrors(bfat, blockField))
+         errors.push(...fieldOptionErrors(bfat, blockField, entry, 'blocks'))
+         if (blockField.type === 'select') errors.push(...selectOptionErrors(bfat, blockField))
+         if (blockField.type === 'select' && blockField.multiple) {
+            errors.push(`${bfat}: multiple select is not supported inside blocks`)
+         }
+      }
+   }
+   return errors
+}
+
+function blockTypeNameErrors(config: CmsConfig): string[] {
+   const errors: string[] = []
+   const seen = new Map<string, string>()
+   for (const [name, entry] of Object.entries(config)) seen.set(typeName(name), `entry '${name}'`)
+   const claim = (type: string, owner: string) => {
+      const existing = seen.get(type)
+      if (existing && existing !== owner)
+         errors.push(
+            `cms.config: GraphQL type name '${type}' of ${owner} clashes with ${existing}, rename a block or field`
+         )
+      else seen.set(type, owner)
+   }
+   for (const [name, entry] of Object.entries(config)) {
+      const fields = entry.kind === 'page' ? pageAllFields(entry) : entry.fields ?? {}
+      for (const { field, schemaPath } of blocksFieldPaths(fields)) {
+         if (field.private) continue
+         const where = `'${name}.${schemaPath.join('.')}'`
+         claim(blocksFieldTypeName(name, schemaPath), `the blocks of ${where}`)
+         for (const blockName of Object.keys(field.blocks ?? {}))
+            claim(blockTypeName(name, schemaPath, blockName), `block '${blockName}' of ${where}`)
+      }
+   }
    return errors
 }
 
@@ -417,6 +471,8 @@ function contentErrors(at: string, entry: CmsEntry): string[] {
    for (const key of entry.declared?.fields ?? []) {
       if (system.includes(key))
          errors.push(`${at}: '${key}' is a system field of content entries, remove it from fields`)
+      else if (entry.route !== undefined && CONTENT_ROUTE_FIELDS.includes(key))
+         errors.push(`${at}: '${key}' is reserved on content entries with a route`)
    }
    if (entry.declared?.titleField !== undefined)
       errors.push(`${at}: content entries use 'title' as titleField, remove titleField`)
@@ -436,6 +492,44 @@ function contentErrors(at: string, entry: CmsEntry): string[] {
       if (!system.includes(key))
          errors.push(`${at}: labels names '${key}', which is not a system field`)
    }
+   return errors
+}
+
+function linkFieldErrors(at: string, field: FieldConfig, config: CmsConfig): string[] {
+   const errors: string[] = []
+   if (field.type !== 'link') {
+      if (field.external !== undefined)
+         errors.push(`${at}: external is only supported on link fields`)
+      if (field.withLabel !== undefined)
+         errors.push(`${at}: withLabel is only supported on link fields`)
+      return errors
+   }
+   if (field.external !== undefined && typeof field.external !== 'boolean')
+      errors.push(`${at}: external must be a boolean`)
+   if (field.withLabel !== undefined && typeof field.withLabel !== 'boolean')
+      errors.push(`${at}: withLabel must be a boolean`)
+   if (field.translatable && !field.withLabel)
+      errors.push(`${at}: translatable needs withLabel (only the link text is translated)`)
+   const to: unknown = field.to
+   const declared = declaredLinkTargets(field)
+   if (to !== undefined && (!declared || declared.length !== (to as unknown[]).length)) {
+      errors.push(`${at}: to must be a list of entry names`)
+      return errors
+   }
+   const seen = new Set<string>()
+   for (const name of declared ?? []) {
+      if (seen.has(name)) errors.push(`${at}: link target '${name}' is listed twice`)
+      seen.add(name)
+      const target = config[name]
+      if (!target) errors.push(`${at}: link target '${name}' is not in the registry`)
+      else if (!isLinkTargetEntry(target))
+         errors.push(
+            `${at}: link target '${name}' must be the page entry or a content entry with a route`
+         )
+   }
+   const targets = declared ?? Object.keys(config).filter((name) => isLinkTargetEntry(config[name]))
+   if (field.external === false && !targets.length)
+      errors.push(`${at}: the link allows no target: list entries in 'to' or allow external URLs`)
    return errors
 }
 
@@ -481,6 +575,352 @@ function blocksCountErrors(at: string, field: FieldConfig): string[] {
    return errors
 }
 
+function conditionTypeName(field: FieldConfig): string {
+   if (isMultiSelect(field)) return 'select (multiple)'
+   if (field.type === 'relation') return `relation (${field.cardinality ?? 'many-to-one'})`
+   return field.type
+}
+
+function isConditionListTarget(field: FieldConfig): boolean {
+   return isStringListField(field) || isManyToMany(field)
+}
+
+function isDateValue(value: unknown): boolean {
+   return (
+      typeof value === 'string' &&
+      DATE_PATTERN.test(value) &&
+      !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())
+   )
+}
+
+function isDateTimeValue(value: unknown): boolean {
+   return (
+      typeof value === 'string' &&
+      DATETIME_PATTERN.test(value) &&
+      !Number.isNaN(new Date(value).getTime())
+   )
+}
+
+function conditionValueExpectation(field: FieldConfig): {
+   label: string
+   test: (value: unknown) => boolean
+} {
+   switch (field.type) {
+      case 'boolean':
+         return { label: 'a boolean', test: (value) => typeof value === 'boolean' }
+      case 'number':
+         return {
+            label: 'a number',
+            test: (value) => typeof value === 'number' && Number.isFinite(value),
+         }
+      case 'date':
+         return { label: 'a yyyy-mm-dd date', test: isDateValue }
+      case 'datetime':
+         return {
+            label: 'an ISO 8601 date and time with a time zone',
+            test: isDateTimeValue,
+         }
+      default:
+         return { label: 'a string', test: (value) => typeof value === 'string' }
+   }
+}
+
+function conditionOptionErrors(
+   at: string,
+   name: string,
+   target: FieldConfig,
+   values: unknown[]
+): string[] {
+   const options = selectOptionValues(target)
+   const unknown = values.filter((value) => !options.includes(String(value)))
+   if (!unknown.length) return []
+   return [
+      `${at}: ${unknown
+         .map((value) => `'${String(value)}'`)
+         .join(', ')} not in the options of '${name}'`,
+   ]
+}
+
+const ORDER_OPERATORS: readonly string[] = ['gt', 'gte', 'lt', 'lte']
+
+function conditionLeafErrors(
+   at: string,
+   key: string,
+   condition: Record<string, unknown>,
+   scope: Record<string, FieldConfig>,
+   scopeLabel: string
+): string[] {
+   const name = condition.field
+   const cat = `${at}, showIf on '${String(name)}'`
+   if (typeof name !== 'string' || !name || !Object.hasOwn(scope, name))
+      return [`${cat}: '${String(name)}' is not ${scopeLabel}`]
+   if (name === key) return [`${cat}: a field cannot depend on itself`]
+   const errors: string[] = []
+   const target = scope[name]!
+   const operators: readonly string[] = CONDITION_OPERATORS
+   const unknown = Object.keys(condition).filter((k) => k !== 'field' && !operators.includes(k))
+   if (unknown.length)
+      errors.push(`${cat}: unknown showIf key ${unknown.map((k) => `'${k}'`).join(', ')}`)
+   const used = CONDITION_OPERATORS.filter((operator) => condition[operator] !== undefined)
+   if (!used.length) {
+      errors.push(`${cat}: showIf needs an operator (${CONDITION_OPERATORS.join(', ')})`)
+      return errors
+   }
+   const type = conditionTypeName(target)
+   for (const operator of used) {
+      const value = condition[operator]
+      if (operator === 'empty') {
+         if (target.type === 'boolean')
+            errors.push(`${cat}: 'empty' does not apply to boolean fields, use 'eq'`)
+         else if (typeof value !== 'boolean') errors.push(`${cat}: 'empty' must be true or false`)
+         continue
+      }
+      if (isTranslatableField(target)) {
+         errors.push(
+            `${cat}: showIf cannot depend on a translatable field with '${operator}', only with 'empty'`
+         )
+         continue
+      }
+      if (operator === 'has') {
+         if (!isConditionListTarget(target))
+            errors.push(
+               `${cat}: showIf can only depend on ${CONDITION_LIST_TYPES.join(
+                  ', '
+               )} fields with 'has' (got '${type}')`
+            )
+         else if (typeof value !== 'string' || !value)
+            errors.push(`${cat}: 'has' needs a non-empty string`)
+         else if (target.type === 'select')
+            errors.push(...conditionOptionErrors(cat, name, target, [value]))
+         continue
+      }
+      const allowed = ORDER_OPERATORS.includes(operator)
+         ? CONDITION_ORDER_TYPES
+         : CONDITION_VALUE_TYPES
+      if (!allowed.includes(target.type) || isMultiSelect(target)) {
+         errors.push(
+            `${cat}: showIf can only depend on ${allowed.join(
+               ', '
+            )} fields with '${operator}' (got '${type}')`
+         )
+         continue
+      }
+      const isList = operator === 'in' || operator === 'notIn'
+      if (isList && (!Array.isArray(value) || !value.length)) {
+         errors.push(`${cat}: '${operator}' needs a non-empty list`)
+         continue
+      }
+      const values = isList ? (value as unknown[]) : [value]
+      const expectation = conditionValueExpectation(target)
+      const wrong = values.filter((item) => !expectation.test(item))
+      if (wrong.length)
+         errors.push(
+            `${cat}: '${operator}' needs ${expectation.label} for a ${type} field (got ${wrong
+               .map((item) => JSON.stringify(item))
+               .join(', ')})`
+         )
+      else if (target.type === 'select')
+         errors.push(...conditionOptionErrors(cat, name, target, values))
+   }
+   return errors
+}
+
+function showIfErrors(
+   at: string,
+   key: string,
+   showIf: unknown,
+   scope: Record<string, FieldConfig>,
+   scopeLabel: string
+): string[] {
+   const errors: string[] = []
+   const visit = (node: unknown) => {
+      if (Array.isArray(node)) {
+         if (!node.length) errors.push(`${at}: showIf needs at least one condition`)
+         for (const child of node) visit(child)
+         return
+      }
+      if (!node || typeof node !== 'object') {
+         errors.push(`${at}: every showIf condition must be an object`)
+         return
+      }
+      const record = node as Record<string, unknown>
+      const group = CONDITION_GROUPS.find((name) => Object.hasOwn(record, name))
+      if (!group) {
+         errors.push(...conditionLeafErrors(at, key, record, scope, scopeLabel))
+         return
+      }
+      if (Object.keys(record).length !== 1) {
+         errors.push(`${at}: a showIf group holds only one of 'all', 'any' or 'not'`)
+         return
+      }
+      const inner = record[group]
+      if (group === 'not') {
+         if (!inner || typeof inner !== 'object' || Array.isArray(inner))
+            errors.push(`${at}: showIf 'not' takes one condition`)
+         else visit(inner)
+         return
+      }
+      if (!Array.isArray(inner) || !inner.length) {
+         errors.push(`${at}: showIf '${group}' takes a non-empty list of conditions`)
+         return
+      }
+      for (const child of inner) visit(child)
+   }
+   visit(showIf)
+   return errors
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function valueBoundsErrors(at: string, field: FieldConfig): string[] {
+   if (field.type === 'blocks' || field.type === 'tags') return []
+   const errors: string[] = []
+   const raw = field as unknown as Record<string, unknown>
+   for (const name of ['minLength', 'maxLength'])
+      if (raw[name] !== undefined)
+         errors.push(
+            `${at}: ${name} is not an option, use ${name.slice(0, 3)} (characters on text fields)`
+         )
+   if (field.min === undefined && field.max === undefined) return errors
+   if (field.type === 'number') {
+      const isBound = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
+      if (field.min !== undefined && !isBound(field.min)) errors.push(`${at}: min must be a number`)
+      if (field.max !== undefined && !isBound(field.max)) errors.push(`${at}: max must be a number`)
+      if (isBound(field.min) && isBound(field.max) && field.min! > field.max!)
+         errors.push(`${at}: min (${field.min}) cannot be greater than max (${field.max})`)
+      return errors
+   }
+   if (field.type === 'text') {
+      const isLength = (value: unknown, least: number) =>
+         typeof value === 'number' && Number.isInteger(value) && value >= least
+      if (field.min !== undefined && !isLength(field.min, 0))
+         errors.push(`${at}: min must be an integer of 0 or more (characters)`)
+      if (field.max !== undefined && !isLength(field.max, 1))
+         errors.push(`${at}: max must be an integer of 1 or more (characters)`)
+      if (isLength(field.min, 0) && isLength(field.max, 1) && field.min! > field.max!)
+         errors.push(`${at}: min (${field.min}) cannot be greater than max (${field.max})`)
+      return errors
+   }
+   errors.push(`${at}: min and max are only supported on number, text, blocks and tags fields`)
+   return errors
+}
+
+function defaultValueError(field: FieldConfig): string | null {
+   const value = field.default
+   switch (field.type) {
+      case 'text':
+      case 'richtext': {
+         if (typeof value !== 'string') return 'default must be a string'
+         if (field.type === 'text' && value.trim()) {
+            if (field.min !== undefined && value.length < field.min)
+               return `default is shorter than min (${field.min})`
+            if (field.max !== undefined && value.length > field.max)
+               return `default is longer than max (${field.max})`
+         }
+         return null
+      }
+      case 'number':
+         if (typeof value !== 'number' || !Number.isFinite(value)) return 'default must be a number'
+         if (field.integer && !Number.isInteger(value)) return 'default must be an integer'
+         if (field.min !== undefined && value < field.min)
+            return `default is lower than min (${field.min})`
+         if (field.max !== undefined && value > field.max)
+            return `default is greater than max (${field.max})`
+         return null
+      case 'boolean':
+         return typeof value === 'boolean' ? null : 'default must be true or false'
+      case 'date':
+         return value === DEFAULT_TODAY || isDateValue(value)
+            ? null
+            : `default must be '${DEFAULT_TODAY}' or a yyyy-mm-dd date`
+      case 'datetime':
+         return value === DEFAULT_NOW || isDateTimeValue(value)
+            ? null
+            : `default must be '${DEFAULT_NOW}' or an ISO 8601 date and time with a time zone`
+      case 'email':
+         return typeof value === 'string' && EMAIL_PATTERN.test(value)
+            ? null
+            : 'default must be a valid email'
+      case 'select': {
+         const options = selectOptionValues(field)
+         if (!field.multiple)
+            return typeof value === 'string' && options.includes(value)
+               ? null
+               : `default must be one of the options (${options.join(', ')})`
+         if (!Array.isArray(value)) return 'default of a multiple select must be a list of options'
+         const unknown = value.filter((item) => typeof item !== 'string' || !options.includes(item))
+         if (unknown.length)
+            return `default holds values that are not options: ${unknown
+               .map((item) => JSON.stringify(item))
+               .join(', ')}`
+         return new Set(value).size === value.length ? null : 'default repeats an option'
+      }
+      case 'tags': {
+         if (
+            !Array.isArray(value) ||
+            value.some((item) => typeof item !== 'string' || !item.trim())
+         )
+            return 'default must be a list of non-empty strings'
+         const count = normalizeTags(value).length
+         return field.max !== undefined && count > field.max
+            ? `default holds more than max (${field.max}) tags`
+            : null
+      }
+      default:
+         return `default is only supported on ${DEFAULT_FIELD_TYPES.join(', ')} fields`
+   }
+}
+
+function fieldOptionErrors(
+   at: string,
+   field: FieldConfig,
+   entry: CmsEntry,
+   scope: 'blocks' | null
+): string[] {
+   const errors: string[] = []
+   const place = scope === 'blocks' ? 'inside blocks' : entry.kind === 'page' ? 'on pages' : null
+   if (field.default !== undefined) {
+      if (place) errors.push(`${at}: default is not supported ${place}`)
+      else {
+         const problem = defaultValueError(field)
+         if (problem) errors.push(`${at}: ${problem}`)
+      }
+   }
+   if (field.unique !== undefined && typeof field.unique !== 'boolean')
+      errors.push(`${at}: unique must be a boolean`)
+   if (field.unique === true) {
+      if (!UNIQUE_FIELD_TYPES.includes(field.type))
+         errors.push(
+            `${at}: unique is only supported on ${UNIQUE_FIELD_TYPES.join(', ')} fields${
+               field.type === 'slug' ? ' (a slug is always unique)' : ''
+            }`
+         )
+      else if (place) errors.push(`${at}: unique is not supported ${place}`)
+      else if (entry.kind === 'single')
+         errors.push(`${at}: unique is not supported on singles, which hold one item`)
+      else if (field.translatable)
+         errors.push(`${at}: unique is not supported on translatable fields`)
+      else if (field.default !== undefined)
+         errors.push(
+            `${at}: default is not supported on unique fields (every new item would get the same value)`
+         )
+   }
+   if (field.immutable !== undefined && typeof field.immutable !== 'boolean')
+      errors.push(`${at}: immutable must be a boolean`)
+   if (field.immutable === true) {
+      if (!IMMUTABLE_FIELD_TYPES.includes(field.type) || isManyToMany(field))
+         errors.push(
+            `${at}: immutable is only supported on ${IMMUTABLE_FIELD_TYPES.join(
+               ', '
+            )} fields (not many-to-many)`
+         )
+      else if (place) errors.push(`${at}: immutable is not supported ${place}`)
+      else if (field.translatable)
+         errors.push(`${at}: immutable is not supported on translatable fields`)
+   }
+   return errors
+}
+
 function tagsOptionErrors(at: string, field: FieldConfig): string[] {
    const errors: string[] = []
    if (field.min !== undefined) errors.push(`${at}: min is not supported on tags fields`)
@@ -512,6 +952,16 @@ function blockMetaErrors(at: string, block: BlockConfig): string[] {
       errors.push(`${at}: icon must be a non-empty string`)
    if (block.description !== undefined && typeof block.description !== 'string')
       errors.push(`${at}: description must be a string`)
+   if (block.group !== undefined && (typeof block.group !== 'string' || !block.group.trim()))
+      errors.push(`${at}: group must be a non-empty string`)
+   if (
+      block.tags !== undefined &&
+      !(
+         Array.isArray(block.tags) &&
+         block.tags.every((tag: unknown) => typeof tag === 'string' && !!tag.trim())
+      )
+   )
+      errors.push(`${at}: tags must be an array of non-empty strings`)
    return errors
 }
 
@@ -543,6 +993,19 @@ function pageColumnsErrors(at: string, entry: CmsEntry): string[] {
          errors.push(`${fat}: ${field.type} fields on pages need to be listed in columns`)
    }
    return errors
+}
+
+export function uniqueTextColumns(config: CmsConfig): CmsUniqueTextColumn[] {
+   return Object.entries(config)
+      .filter(([, entry]) => !entry.table && entry.kind !== 'page')
+      .flatMap(([name, entry]) =>
+         Object.entries(entry.fields)
+            .filter(
+               ([, field]) =>
+                  isUniqueValueField(field) && field.type !== 'number' && !isRequiredField(field)
+            )
+            .map(([key]) => ({ table: name, column: snakeCase(key) }))
+      )
 }
 
 function snakeCase(key: string) {
@@ -578,6 +1041,7 @@ function columnExpr(key: string, field: FieldConfig, dialect: Dialect, table: st
          break
       case 'json':
       case 'blocks':
+      case 'link':
          expr = jsonExpr(col, dialect)
          break
       case 'select':
@@ -601,6 +1065,7 @@ function columnExpr(key: string, field: FieldConfig, dialect: Dialect, table: st
       default:
          expr = `text('${col}')`
    }
+   if (isUniqueValueField(field)) expr += '.unique()'
    if (isRequiredField(field)) expr += '.notNull()'
    return `  ${key}: ${expr},`
 }
@@ -724,6 +1189,43 @@ function usersTableExpr(dialect: Dialect): string {
    )
 }
 
+function redirectsTableExpr(dialect: Dialect): string {
+   const pg = dialect === 'postgres'
+   const tableFn = pg ? 'pgTable' : 'sqliteTable'
+   return (
+      `export const cms_redirects = ${tableFn}('cms_redirects', {\n` +
+      `  id: text('id').primaryKey(),\n` +
+      `  from: text('from_path').notNull().unique(),\n` +
+      `  to: text('to_path').notNull(),\n` +
+      `  status: integer('status').notNull().default(301),\n` +
+      `  keepQuery: ${
+         pg ? `boolean('keep_query')` : `integer('keep_query', { mode: 'boolean' })`
+      }.notNull().default(true),\n` +
+      `  source: text('source').notNull().default('manual'),\n` +
+      `  createdAt: ${nowExpr(pg, 'created_at')},\n` +
+      `  updatedAt: ${nowExpr(pg, 'updated_at')},\n` +
+      `})`
+   )
+}
+
+function previewLinksTableExpr(dialect: Dialect): string {
+   const pg = dialect === 'postgres'
+   const tableFn = pg ? 'pgTable' : 'sqliteTable'
+   return (
+      `export const cms_preview_links = ${tableFn}('cms_preview_links', {\n` +
+      `  id: text('id').primaryKey(),\n` +
+      `  tokenHash: text('token_hash').notNull().unique(),\n` +
+      `  entry: text('entry').notNull(),\n` +
+      `  itemId: text('item_id').notNull(),\n` +
+      `  locale: text('locale'),\n` +
+      `  createdBy: text('created_by'),\n` +
+      `  createdAt: ${nowExpr(pg, 'created_at')},\n` +
+      `  expiresAt: text('expires_at').notNull(),\n` +
+      `  revokedAt: text('revoked_at'),\n` +
+      `})`
+   )
+}
+
 function mediaTableExpr(dialect: Dialect): string {
    const pg = dialect === 'postgres'
    const tableFn = pg ? 'pgTable' : 'sqliteTable'
@@ -737,6 +1239,8 @@ function mediaTableExpr(dialect: Dialect): string {
       `  size: integer('size'),\n` +
       `  width: integer('width'),\n` +
       `  height: integer('height'),\n` +
+      `  focalX: ${pg ? `doublePrecision('focal_x')` : `real('focal_x')`},\n` +
+      `  focalY: ${pg ? `doublePrecision('focal_y')` : `real('focal_y')`},\n` +
       `  createdAt: ${nowExpr(pg, 'created_at')},\n` +
       `})`
    )
@@ -756,8 +1260,7 @@ export function renderSchemaFile(
    const pg = dialect === 'postgres'
 
    const core = new Set(['integer', 'text', pg ? 'pgTable' : 'sqliteTable'])
-   if (fields.some((f) => f.type === 'number' && !f.integer))
-      core.add(pg ? 'doublePrecision' : 'real')
+   core.add(pg ? 'doublePrecision' : 'real')
    if (pg && fields.some((f) => f.type === 'date')) core.add('date')
    if (pg) core.add('boolean')
    if (
@@ -766,6 +1269,7 @@ export function renderSchemaFile(
          (f) =>
             f.type === 'json' ||
             f.type === 'blocks' ||
+            f.type === 'link' ||
             (isTranslatableField(f) && !isTranslatableMediaField(f)) ||
             isStringListField(f)
       )
@@ -802,6 +1306,8 @@ export function renderSchemaFile(
       mediaTableExpr(dialect),
       settingsTableExpr(dialect),
       usersTableExpr(dialect),
+      redirectsTableExpr(dialect),
+      previewLinksTableExpr(dialect),
       ...tables,
       ...joins,
       ...rows,

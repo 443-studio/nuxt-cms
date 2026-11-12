@@ -1,9 +1,11 @@
 import type { SQL } from 'drizzle-orm'
-import { and, eq, getTableColumns, getTableName, inArray, sql } from 'drizzle-orm'
+import { and, eq, getTableColumns, getTableName, inArray, or, sql } from 'drizzle-orm'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { CmsEntry, CmsPageRoute, FieldConfig } from '../../shared/index'
 import {
+   BLOCK_HIDDEN_KEY,
    PAGE_PATH_FIELD,
+   declaresHiddenField,
    isMultiSelect,
    isTranslatableField,
    isTranslatableMediaField,
@@ -44,6 +46,7 @@ export interface EncodedPage {
    media: PageMediaRow[]
    fieldKeys: string[]
    mediaKeys: string[]
+   blockPrefixes: string[]
 }
 
 type Row = Record<string, unknown>
@@ -109,22 +112,20 @@ export function pageBlockKey(fieldKey: string, blockFieldKey: string) {
    return `${fieldKey}.${blockFieldKey}`
 }
 
-function blockOwnedKeys(key: string, field: FieldConfig) {
-   const fields = new Set([pageBlockKey(key, PAGE_BLOCK_TYPE_KEY)])
-   const media = new Set<string>()
-   for (const block of Object.values(field.blocks ?? {})) {
-      for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
-         const blockKey = pageBlockKey(key, blockFieldKey)
-         if (blockField.type === 'media') media.add(blockKey)
-         else fields.add(blockKey)
-      }
-   }
-   return { fields: [...fields], media: [...media] }
+export function pageBlockPrefix(fieldKey: string) {
+   return pageBlockKey(fieldKey, '')
 }
 
 export function encodePageRows(entry: CmsEntry, pageId: string, values: Row): EncodedPage {
    const rowFields = pageRowFields(entry)
-   const encoded: EncodedPage = { columns: {}, fields: [], media: [], fieldKeys: [], mediaKeys: [] }
+   const encoded: EncodedPage = {
+      columns: {},
+      fields: [],
+      media: [],
+      fieldKeys: [],
+      mediaKeys: [],
+      blockPrefixes: [],
+   }
    const pushField = (key: string, position: number, value: string) =>
       encoded.fields.push({ pageId, key, position, value })
    const pushMedia = (key: string, position: number, value: unknown) =>
@@ -137,21 +138,22 @@ export function encodePageRows(entry: CmsEntry, pageId: string, values: Row): En
          continue
       }
       if (field.type === 'blocks') {
-         const owned = blockOwnedKeys(key, field)
-         encoded.fieldKeys.push(...owned.fields)
-         encoded.mediaKeys.push(...owned.media)
+         encoded.blockPrefixes.push(pageBlockPrefix(key))
          if (!Array.isArray(value)) continue
          value.forEach((item: Row, position) => {
             const type = String(item.type)
             const block = field.blocks?.[type]
             pushField(pageBlockKey(key, PAGE_BLOCK_TYPE_KEY), position, type)
-            for (const [blockFieldKey, blockValue] of Object.entries(item)) {
-               if (blockFieldKey === 'type' || blockValue == null) continue
-               const blockField = block?.fields[blockFieldKey]
+            for (const [blockFieldKey, blockField] of Object.entries(block?.fields ?? {})) {
+               const blockValue = item[blockFieldKey]
+               if (blockValue == null) continue
                const blockKey = pageBlockKey(key, blockFieldKey)
-               if (blockField?.type === 'media') pushMedia(blockKey, position, blockValue)
+               if (blockField.type === 'media') pushMedia(blockKey, position, blockValue)
                else pushField(blockKey, position, encodeValue(blockField, blockValue))
             }
+            const hidden = item[BLOCK_HIDDEN_KEY]
+            if (!declaresHiddenField(block) && typeof hidden === 'boolean')
+               pushField(pageBlockKey(key, BLOCK_HIDDEN_KEY), position, JSON.stringify(hidden))
          })
          continue
       }
@@ -204,6 +206,10 @@ function decodeBlocks(key: string, field: FieldConfig, fields: ChildIndex, media
             }
             const raw = fields.get(blockKey)?.get(position)
             item[blockFieldKey] = raw == null ? null : decodeValue(blockField, raw)
+         }
+         if (!declaresHiddenField(field.blocks?.[type])) {
+            const hidden = fields.get(pageBlockKey(key, BLOCK_HIDDEN_KEY))?.get(position)
+            if (hidden === 'true' || hidden === 'false') item[BLOCK_HIDDEN_KEY] = hidden === 'true'
          }
          return item
       })
@@ -280,6 +286,17 @@ function chunks<T>(items: T[], size: number): T[][] {
    return out
 }
 
+function ownedRowConditions(key: AnySQLiteColumn, keys: string[], prefixes: string[]): SQL[] {
+   const prefixed = prefixes.map(
+      (prefix) => sql`substr(${key}, 1, ${sql.raw(String(prefix.length))}) = ${prefix}`
+   )
+   const groups = chunks(keys, KEY_CHUNK)
+   if (!groups.length) return prefixed.length ? [or(...prefixed)!] : []
+   return groups.map((group, index) =>
+      index === 0 && prefixed.length ? or(inArray(key, group), ...prefixed)! : inArray(key, group)
+   )
+}
+
 export function pageWriteStatements(
    db: PageDb,
    dialect: PageDialect,
@@ -299,19 +316,13 @@ export function pageWriteStatements(
          .values({ ...set, id: route.key, [PAGE_PATH_FIELD]: route.path } as Row)
          .onConflictDoUpdate({ target: pageId, set }),
    ]
-   for (const keys of chunks(encoded.fieldKeys, KEY_CHUNK)) {
-      statements.push(
-         db
-            .delete(tables.fields)
-            .where(and(eq(fieldColumns.pageId!, route.key), inArray(fieldColumns.key!, keys)))
-      )
-   }
-   for (const keys of chunks(encoded.mediaKeys, KEY_CHUNK)) {
-      statements.push(
-         db
-            .delete(tables.media)
-            .where(and(eq(mediaColumns.pageId!, route.key), inArray(mediaColumns.key!, keys)))
-      )
+   for (const [table, columns, keys] of [
+      [tables.fields, fieldColumns, encoded.fieldKeys],
+      [tables.media, mediaColumns, encoded.mediaKeys],
+   ] as const) {
+      for (const condition of ownedRowConditions(columns.key!, keys, encoded.blockPrefixes)) {
+         statements.push(db.delete(table).where(and(eq(columns.pageId!, route.key), condition)))
+      }
    }
    for (const rows of chunks(encoded.fields, INSERT_CHUNK)) {
       statements.push(db.insert(tables.fields).values(rows))

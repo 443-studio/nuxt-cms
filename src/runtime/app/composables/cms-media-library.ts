@@ -1,4 +1,13 @@
-import type { MediaItem, MediaSourceInfo, MediaUsage } from '../../shared/index'
+import type { RecordListItem } from '@xleddyl/443-components-vue'
+import { toast } from '@xleddyl/443-components-vue'
+import type { CmsConfig } from '#nuxt-cms'
+import type {
+   MediaItem,
+   MediaSourceInfo,
+   MediaUsage,
+   MediaUsageEntry,
+   MediaUsageReport,
+} from '../../shared/index'
 import {
    expandMediaFolders,
    isWithinMediaFolder,
@@ -6,9 +15,10 @@ import {
    mediaFolderParent,
 } from '../../shared/index'
 import { computed, ref } from '#imports'
-import { errorMessage } from '../utils/ui'
+import cmsConfig from '#cms-config'
+import { cmsIcon, cmsSettingsLink, errorMessage } from '../utils/ui'
+import { CMS_ENTRY_KIND_ICONS } from './cms-entry-settings'
 import { invalidateCmsMediaKeys } from './cms-media-keys'
-import { useCmsToast } from './cms-toast'
 
 const endpoint = '/api/cms/admin/media'
 const USAGE_CHUNK = 1000
@@ -19,8 +29,6 @@ export interface MediaFolderStats {
 }
 
 export function useCmsMediaLibrary() {
-   const toast = useCmsToast()
-
    const items = ref<MediaItem[]>([])
    const serverFolders = ref<string[]>([])
    const source = ref<MediaSourceInfo | null>(null)
@@ -80,7 +88,7 @@ export function useCmsMediaLibrary() {
          await action()
          return true
       } catch (err) {
-         toast.add({ title, description: errorMessage(err), color: 'error' })
+         toast.error(title, { description: errorMessage(err) })
          return false
       }
    }
@@ -125,24 +133,33 @@ export function useCmsMediaLibrary() {
       })
    }
 
-   function updateItem(key: string, changes: { alt?: string | null; folder?: string | null }) {
-      return attempt('Save failed', async () => {
+   function updateItem(
+      key: string,
+      changes: {
+         alt?: string | null
+         folder?: string | null
+         focalX?: number | null
+         focalY?: number | null
+      }
+   ) {
+      return (async () => {
          await $fetch(endpoint, { method: 'PUT', body: { key, ...changes } })
          await reload({ quiet: true })
-      })
+      })()
    }
 
-   async function usage(keys: string[]): Promise<Record<string, MediaUsage[]> | null> {
+   async function usage(keys: string[]): Promise<MediaUsageReport | null> {
       const unique = [...new Set(keys)]
-      if (!unique.length) return {}
+      const merged: MediaUsageReport = { usage: {}, hidden: {} }
+      if (!unique.length) return merged
       try {
-         const merged: Record<string, MediaUsage[]> = {}
          for (let index = 0; index < unique.length; index += USAGE_CHUNK) {
-            const result = await $fetch<{ usage: Record<string, MediaUsage[]> }>(
-               `${endpoint}/usage`,
-               { method: 'POST', body: { keys: unique.slice(index, index + USAGE_CHUNK) } }
-            )
-            Object.assign(merged, result.usage)
+            const result = await $fetch<MediaUsageReport>(`${endpoint}/usage`, {
+               method: 'POST',
+               body: { keys: unique.slice(index, index + USAGE_CHUNK) },
+            })
+            Object.assign(merged.usage, result.usage)
+            Object.assign(merged.hidden, result.hidden)
          }
          return merged
       } catch {
@@ -172,6 +189,24 @@ export function useCmsMediaLibrary() {
 
 export type CmsMediaLibrary = ReturnType<typeof useCmsMediaLibrary>
 
-export function usageLink(usage: Pick<MediaUsage, 'collection' | 'id'>) {
+export function usageLink(usage: Pick<MediaUsage, 'collection' | 'id' | 'kind'>) {
+   if (usage.kind === 'site') return cmsSettingsLink('site', '/cms/media')
    return usage.id === null ? `/cms/${usage.collection}` : `/cms/${usage.collection}/${usage.id}`
+}
+
+function usageIcon(usage: Pick<MediaUsage, 'collection' | 'kind'>) {
+   if (usage.kind === 'site') return cmsIcon('globe-alt')
+   const entry = (cmsConfig as CmsConfig)[usage.collection]
+   return cmsIcon(entry?.icon ?? CMS_ENTRY_KIND_ICONS[usage.kind])
+}
+
+export function usageItem(entry: MediaUsageEntry, index: number): RecordListItem {
+   return {
+      id: index,
+      title: entry.title ?? entry.label,
+      description: entry.fields.join(', '),
+      meta: entry.title ? entry.label : undefined,
+      icon: usageIcon(entry),
+      to: usageLink(entry),
+   }
 }

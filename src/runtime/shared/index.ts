@@ -1,6 +1,9 @@
 import type { PgTable } from 'drizzle-orm/pg-core'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { CmsShowIf } from './conditions'
+import type { CmsContentRoute } from './content-routes'
 import type { CmsLayoutBlock, CmsListInput } from './layout'
+import { MAX_BLOCKS_DEPTH, blockFieldsDeep, mapBlocks } from './block-paths'
 
 export type CmsTable = SQLiteTable | PgTable
 
@@ -18,6 +21,7 @@ export type FieldType =
    | 'json'
    | 'media'
    | 'relation'
+   | 'link'
    | 'blocks'
 
 export interface CmsI18n {
@@ -188,6 +192,8 @@ export interface MediaItem {
    size: number | null
    width: number | null
    height: number | null
+   focalX: number | null
+   focalY: number | null
    createdAt: string | null
    type: MediaType
    url: string | null
@@ -201,10 +207,12 @@ export interface MediaSourceInfo {
    builtAt: string | null
 }
 
+export type MediaUsageKind = CmsEntryKind | 'site'
+
 export interface MediaUsage {
    collection: string
    label: string
-   kind: CmsEntryKind
+   kind: MediaUsageKind
    id: string | null
    title: string | null
    field: string
@@ -213,7 +221,7 @@ export interface MediaUsage {
 export interface MediaUsageEntry {
    collection: string
    label: string
-   kind: CmsEntryKind
+   kind: MediaUsageKind
    id: string | null
    title: string | null
    fields: string[]
@@ -230,18 +238,33 @@ export function groupMediaUsage(usage: MediaUsage[]): MediaUsageEntry[] {
    return [...entries.values()]
 }
 
+export interface MediaUsageReport {
+   usage: Record<string, MediaUsage[]>
+   hidden: Record<string, number>
+}
+
 export interface MediaUsageGroup {
    key: string
    entries: MediaUsageEntry[]
+   hidden: number
 }
 
 export function mediaUsageGroups(
    usage: Record<string, MediaUsage[]>,
-   keys: string[]
+   keys: string[],
+   hidden: Record<string, number> = {}
 ): MediaUsageGroup[] {
    return [...new Set(keys)]
-      .map((key) => ({ key, entries: groupMediaUsage(usage[key] ?? []) }))
-      .filter((group) => group.entries.length > 0)
+      .map((key) => ({
+         key,
+         entries: groupMediaUsage(usage[key] ?? []),
+         hidden: hidden[key] ?? 0,
+      }))
+      .filter((group) => group.entries.length > 0 || group.hidden > 0)
+}
+
+export function otherEntriesLabel(count: number): string {
+   return `${count} other entr${count === 1 ? 'y' : 'ies'}`
 }
 
 export interface BlockConfig {
@@ -249,7 +272,10 @@ export interface BlockConfig {
    component?: string
    icon?: string
    description?: string
+   group?: string
+   tags?: readonly string[]
    fields: Record<string, FieldConfig>
+   layout?: CmsLayoutBlock[]
    validate?: CmsBlockValidate
 }
 
@@ -269,6 +295,7 @@ export interface CmsValidateContext {
 
 export interface CmsBlockValidateContext extends CmsValidateContext {
    index: number
+   blockPath: string
 }
 
 export type CmsValidateResult = readonly CmsValidationIssue[] | null | undefined | void
@@ -334,14 +361,6 @@ export function selectDisplayValue(field: Pick<FieldConfig, 'options'>, value: u
    return selectOptionLabel(field, value)
 }
 
-export type ConditionValue = string | number | boolean
-
-export interface FieldCondition {
-   field: string
-   eq?: ConditionValue
-   in?: ConditionValue[]
-}
-
 export interface CmsTab {
    id: string
    label: string
@@ -355,6 +374,9 @@ export interface FieldConfig {
    tab?: string
    required?: boolean
    private?: boolean
+   default?: unknown
+   unique?: boolean
+   immutable?: boolean
    textarea?: boolean
    integer?: boolean
    translatable?: boolean
@@ -369,10 +391,16 @@ export interface FieldConfig {
    accept?: string[]
    mobile?: boolean
    mobileOf?: string
-   to?: string
+   to?: string | readonly string[]
+   external?: boolean
+   withLabel?: boolean
    cardinality?: 'many-to-one' | 'one-to-one' | 'many-to-many'
    onDelete?: 'set null' | 'cascade' | 'restrict'
-   showIf?: FieldCondition | FieldCondition[]
+   showIf?: CmsShowIf
+}
+
+export function relationTarget(field: Pick<FieldConfig, 'to'>): string {
+   return typeof field.to === 'string' ? field.to : ''
 }
 
 export function isPrivateField(field: FieldConfig): boolean {
@@ -383,30 +411,15 @@ export function isRequiredField(field: FieldConfig): boolean {
    return !!field.required && !field.showIf
 }
 
-export function fieldConditions(field: FieldConfig): FieldCondition[] {
-   if (!field.showIf) return []
-   return Array.isArray(field.showIf) ? field.showIf : [field.showIf]
-}
-
-function matchesCondition(condition: FieldCondition, value: unknown): boolean {
-   if (condition.in) return condition.in.some((option) => option === value)
-   return condition.eq === value
-}
-
-export function isFieldVisible(
-   field: FieldConfig,
-   values: Record<string, unknown> | null | undefined
-): boolean {
-   const conditions = fieldConditions(field)
-   if (!conditions.length) return true
-   return conditions.every((condition) => matchesCondition(condition, values?.[condition.field]))
-}
-
 export function isTranslatableField(field: FieldConfig): boolean {
    return (
       !!field.translatable &&
       (field.type === 'text' || field.type === 'richtext' || field.type === 'media')
    )
+}
+
+export function isLocalizedLinkField(field: FieldConfig): boolean {
+   return field.type === 'link' && !!field.translatable && !!field.withLabel
 }
 
 export function isTranslatableMediaField(field: FieldConfig): boolean {
@@ -566,8 +579,8 @@ export function translatableBlockFieldKeys(block: BlockConfig): string[] {
 
 export function hasTranslatableBlockFields(field: FieldConfig): boolean {
    if (field.type !== 'blocks') return false
-   return Object.values(field.blocks ?? {}).some((block) =>
-      Object.values(block.fields).some(isTranslatableField)
+   return blockFieldsDeep(field).some(
+      (blockField) => isTranslatableField(blockField) || isLocalizedLinkField(blockField)
    )
 }
 
@@ -586,11 +599,9 @@ export function isHiddenBlock(item: unknown): boolean {
 }
 
 export function publicBlocks(field: FieldConfig, value: unknown): unknown {
-   if (!Array.isArray(value)) return value
-   return value.filter((item) => {
-      if (!isHiddenBlock(item)) return true
-      return declaresHiddenField(field.blocks?.[String((item as Record<string, unknown>).type)])
-   })
+   return mapBlocks(field, value, (item, block) =>
+      isHiddenBlock(item) && !declaresHiddenField(block) ? null : item
+   )
 }
 
 export function localizeBlock(
@@ -620,8 +631,12 @@ export function localizeBlocks(
    locale: string,
    defaultLocale: string
 ): unknown {
-   if (!Array.isArray(value)) return value
-   return value.map((item) => localizeBlock(field, item, locale, defaultLocale))
+   return mapBlocks(
+      field,
+      value,
+      (item, _block, owner) =>
+         localizeBlock(owner, item, locale, defaultLocale) as Record<string, unknown>
+   )
 }
 
 export const CMS_GRAPHQL_BATCH_LIMIT = 20
@@ -656,6 +671,7 @@ export interface CmsEntry {
    list?: CmsListInput
    blocks?: Record<string, BlockConfig>
    preview?: CmsPreviewOptions
+   route?: CmsContentRoute
    declared?: CmsContentDeclared
    validate?: CmsValidate
 }
@@ -748,7 +764,10 @@ export const CONTENT_SYSTEM_FIELDS = [
    'seoTitle',
    'seoDescription',
    'seoImage',
+   'seoNoindex',
 ] as const
+
+export const CONTENT_NOINDEX_FIELD = 'seoNoindex'
 
 export type CmsContentSystemField = (typeof CONTENT_SYSTEM_FIELDS)[number]
 
@@ -799,6 +818,11 @@ function contentSystemFields(
          ...localized,
       },
       seoImage: { label: label('seoImage', 'SEO image'), type: 'media', mediaType: 'image' },
+      seoNoindex: {
+         label: label('seoNoindex', 'Hide from search engines'),
+         type: 'boolean',
+         description: 'Adds noindex to the page and leaves it out of the sitemap.',
+      },
    }
 }
 
@@ -809,7 +833,7 @@ function normalizeContentEntry(entry: CmsEntry, translatable: boolean): CmsEntry
    const extra = Object.fromEntries(
       Object.entries(declared).filter(([key]) => !Object.hasOwn(system, key))
    )
-   const { body, seoTitle, seoDescription, seoImage, ...head } = system
+   const { body, seoTitle, seoDescription, seoImage, seoNoindex, ...head } = system
    return Object.assign(entry, {
       declared: {
          fields: Object.keys(declared),
@@ -818,7 +842,7 @@ function normalizeContentEntry(entry: CmsEntry, translatable: boolean): CmsEntry
       },
       titleField: CONTENT_TITLE_FIELD,
       drafts: true,
-      fields: { ...head, ...extra, body, seoTitle, seoDescription, seoImage },
+      fields: { ...head, ...extra, body, seoTitle, seoDescription, seoImage, seoNoindex },
       list: entry.list ?? { columns: [...CONTENT_LIST_COLUMNS] },
    })
 }
@@ -834,11 +858,82 @@ export function normalizeContentEntries<T extends Record<string, unknown>>(
    return config
 }
 
+function boundBlocksField(
+   field: FieldConfig,
+   depth: number,
+   trail: ReadonlySet<object>
+): FieldConfig {
+   const blocks = field.blocks
+   if (!blocks || typeof blocks !== 'object') return field
+   const inner = new Set(trail).add(blocks)
+   let changed = false
+   const bounded: Record<string, BlockConfig> = {}
+   for (const [name, block] of Object.entries(blocks)) {
+      if (!block?.fields || typeof block.fields !== 'object') {
+         bounded[name] = block
+         continue
+      }
+      let fields: Record<string, FieldConfig> | null = null
+      let dropped = false
+      for (const [key, subfield] of Object.entries(block.fields)) {
+         if (subfield?.type !== 'blocks' || !subfield.blocks) continue
+         const cyclic = inner.has(subfield.blocks)
+         if (depth >= MAX_BLOCKS_DEPTH) {
+            if (cyclic) dropped = true
+            continue
+         }
+         const next = boundBlocksField(subfield, depth + 1, inner)
+         if (next === subfield) continue
+         fields ??= { ...block.fields }
+         fields[key] = next
+      }
+      if (dropped) {
+         changed = true
+         continue
+      }
+      if (fields) {
+         changed = true
+         bounded[name] = { ...block, fields }
+      } else {
+         bounded[name] = block
+      }
+   }
+   return changed ? { ...field, blocks: bounded } : field
+}
+
+function boundFields<T extends FieldConfig | null>(fields: Record<string, T>): Record<string, T> {
+   let next: Record<string, T> | null = null
+   for (const [key, field] of Object.entries(fields)) {
+      if (field?.type !== 'blocks') continue
+      const bounded = boundBlocksField(field, 1, new Set())
+      if (bounded === field) continue
+      next ??= { ...fields }
+      next[key] = bounded as T
+   }
+   return next ?? fields
+}
+
+export function boundBlockNesting<T extends Record<string, unknown>>(config: T): T {
+   for (const entry of Object.values(config) as CmsEntry[]) {
+      if (!entry?.fields || typeof entry.fields !== 'object') continue
+      entry.fields = boundFields(entry.fields)
+      if (entry.overrides && typeof entry.overrides === 'object') {
+         entry.overrides = Object.fromEntries(
+            Object.entries(entry.overrides).map(([path, override]) => [
+               path,
+               override && typeof override === 'object' ? boundFields(override) : override,
+            ])
+         )
+      }
+   }
+   return config
+}
+
 export function normalizeCmsConfig<T extends Record<string, unknown>>(
    config: T,
    i18n?: Pick<CmsI18n, 'locales'>
 ): T {
-   return expandMobileMedia(normalizeContentEntries(config, i18n))
+   return boundBlockNesting(expandMobileMedia(normalizeContentEntries(config, i18n)))
 }
 
 export function slugSourceValue(
@@ -869,12 +964,9 @@ export function resolveBlocksMedia(
    value: unknown,
    resolve: (key: string) => unknown
 ): unknown {
-   if (!Array.isArray(value)) return value
-   return value.map((item) => {
-      if (!item || typeof item !== 'object') return item
-      const block = field.blocks?.[String((item as Record<string, unknown>).type)]
+   return mapBlocks(field, value, (item, block) => {
       if (!block) return item
-      const resolved: Record<string, unknown> = { ...(item as Record<string, unknown>) }
+      const resolved: Record<string, unknown> = { ...item }
       for (const [key, blockField] of Object.entries(block.fields)) {
          if (blockField.type !== 'media') continue
          const media = resolved[key]
@@ -1013,12 +1105,21 @@ export function typeName(name: string) {
    return name.replace(/(?:^|_)([a-z0-9])/gi, (_, c: string) => c.toUpperCase())
 }
 
-export function blocksFieldTypeName(entryName: string, fieldKey: string) {
-   return `${typeName(entryName)}${typeName(fieldKey)}Block`
+export function blocksTypePrefix(entryName: string, schemaPath: string | readonly string[]) {
+   const segments = typeof schemaPath === 'string' ? schemaPath.split('.') : schemaPath
+   return `${typeName(entryName)}${segments.map(typeName).join('')}`
 }
 
-export function blockTypeName(entryName: string, fieldKey: string, blockName: string) {
-   return `${typeName(entryName)}${typeName(fieldKey)}${typeName(blockName)}`
+export function blocksFieldTypeName(entryName: string, schemaPath: string | readonly string[]) {
+   return `${blocksTypePrefix(entryName, schemaPath)}Block`
+}
+
+export function blockTypeName(
+   entryName: string,
+   schemaPath: string | readonly string[],
+   blockName: string
+) {
+   return `${blocksTypePrefix(entryName, schemaPath)}${typeName(blockName)}`
 }
 
 interface FieldInputBase {
@@ -1028,56 +1129,80 @@ interface FieldInputBase {
    required?: boolean
    private?: boolean
    tab?: string
-   showIf?: FieldCondition | FieldCondition[]
+   showIf?: CmsShowIf
 }
 
 export interface TextFieldInput extends FieldInputBase {
    type: 'text'
    textarea?: boolean
    translatable?: boolean
+   default?: string
+   min?: number
+   max?: number
+   unique?: boolean
+   immutable?: boolean
 }
 
 export interface RichtextFieldInput extends FieldInputBase {
    type: 'richtext'
    translatable?: boolean
+   default?: string
 }
 
 export interface NumberFieldInput extends FieldInputBase {
    type: 'number'
    integer?: boolean
+   default?: number
+   min?: number
+   max?: number
+   unique?: boolean
+   immutable?: boolean
 }
 
 export interface BooleanFieldInput extends FieldInputBase {
    type: 'boolean'
+   default?: boolean
+   immutable?: boolean
 }
 
 export interface DateFieldInput extends FieldInputBase {
    type: 'date'
+   default?: 'today' | (string & {})
+   immutable?: boolean
 }
 
 export interface DateTimeFieldInput extends FieldInputBase {
    type: 'datetime'
+   default?: 'now' | (string & {})
+   immutable?: boolean
 }
 
 export interface EmailFieldInput extends FieldInputBase {
    type: 'email'
+   default?: string
+   unique?: boolean
+   immutable?: boolean
 }
 
 export interface SlugFieldInput extends FieldInputBase {
    type: 'slug'
    from: string
+   immutable?: boolean
 }
 
 export interface SelectFieldInput extends FieldInputBase {
    type: 'select'
    options: readonly SelectOptionInput[]
    multiple?: boolean
+   default?: string | readonly string[]
+   immutable?: boolean
 }
 
 export interface TagsFieldInput extends FieldInputBase {
    type: 'tags'
    max?: number
    suggestions?: boolean
+   default?: readonly string[]
 }
 
 export interface JsonFieldInput extends FieldInputBase {
@@ -1097,9 +1222,25 @@ export interface RelationFieldInput extends FieldInputBase {
    to: string
    cardinality?: 'many-to-one' | 'one-to-one' | 'many-to-many'
    onDelete?: 'set null' | 'cascade' | 'restrict'
+   immutable?: boolean
 }
 
-type BlockField<T> = Omit<T, 'private' | 'showIf' | 'tab'>
+export interface LinkFieldInput extends FieldInputBase {
+   type: 'link'
+   to?: readonly string[]
+   external?: boolean
+   withLabel?: boolean
+   translatable?: boolean
+}
+
+type BlockField<T> = Omit<T, 'private' | 'tab' | 'default' | 'unique' | 'immutable'>
+
+export interface NestedBlocksFieldInput extends Omit<FieldInputBase, 'private' | 'tab'> {
+   type: 'blocks'
+   blocks: Record<string, BlockInput>
+   min?: number
+   max?: number
+}
 
 export type BlockFieldInput =
    | BlockField<TextFieldInput>
@@ -1111,14 +1252,19 @@ export type BlockFieldInput =
    | BlockField<EmailFieldInput>
    | BlockField<SelectFieldInput>
    | BlockField<JsonFieldInput>
+   | BlockField<LinkFieldInput>
    | Omit<BlockField<MediaFieldInput>, 'mobile'>
+   | NestedBlocksFieldInput
 
 export interface BlockInput {
    label: string
    component?: string
    icon?: string
    description?: string
+   group?: string
+   tags?: readonly string[]
    fields: Record<string, BlockFieldInput>
+   layout?: CmsLayoutBlock[]
    validate?: CmsBlockValidate
 }
 
@@ -1143,6 +1289,7 @@ export type CmsFieldInput =
    | JsonFieldInput
    | MediaFieldInput
    | RelationFieldInput
+   | LinkFieldInput
    | BlocksFieldInput
 
 interface CmsEntryInputBase {
@@ -1192,6 +1339,7 @@ export interface CmsContentInput {
    layout?: CmsLayoutBlock[]
    list?: CmsListInput
    preview?: CmsPreviewOptions
+   route?: string | Readonly<Record<string, string>>
    validate?: CmsValidate
    titleField?: never
    drafts?: never
@@ -1209,5 +1357,21 @@ export function defineCmsBlocks<T extends Record<string, BlockInput>>(blocks: T)
    return blocks
 }
 
+export * from './block-paths'
+export * from './conditions'
+export * from './content-routes'
+export * from './seo'
+export * from './redirects'
 export * from './layout'
+export * from './media-focal'
 export * from './users'
+export * from './preview-links'
+export * from './links'
+export type {
+   CmsAccess,
+   CmsRole,
+   CmsRoleInput,
+   CmsRoleOption,
+   CmsRoles,
+   CmsRolesInput,
+} from './roles'

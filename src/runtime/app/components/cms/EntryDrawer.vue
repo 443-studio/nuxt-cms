@@ -1,114 +1,120 @@
 <template>
-   <KDrawer v-model:open="open" :title="title" size="lg" :before-close="confirmClose">
+   <KFormDrawer
+      v-model:open="open"
+      size="lg"
+      :title="title"
+      :tabs="drawerTabs"
+      :tab-route="CMS_ENTRY_TAB_ROUTE_KEY"
+      :form="form"
+      :loading="loading"
+      :creating="isNew"
+      :readonly="!!lock"
+      :deletable="!isNew && canDelete"
+      @delete="remove"
+   >
       <template v-if="drafts && !loading" #title-trailing>
-         <KBadge
-            dot
-            :tone="published ? 'success' : 'neutral'"
-            :variant="published ? 'soft' : 'outline'"
-            :label="published ? 'Published' : 'Draft'"
+         <CmsStatusBadge :published="savedStatus === 'published'" />
+      </template>
+
+      <template v-if="!loading" #actions>
+         <CmsTranslationMenu
+            v-model="formState"
+            :fields="config.fields"
+            :disabled="!!lock"
+            size="sm"
+         />
+         <KButton
+            v-if="!isNew && canCreate"
+            variant="soft"
+            tone="neutral"
+            size="sm"
+            :icon="cmsIcon('document-duplicate')"
+            :disabled="form.dirty.value"
+            disabled-reason="Save the changes first"
+            @click="emit('duplicate', String(entryId))"
+         >
+            Duplicate
+         </KButton>
+         <KButton
+            v-if="drafts && !lock && canPublish"
+            variant="soft"
+            tone="neutral"
+            size="sm"
+            :icon="cmsIcon(published ? 'pencil-square' : 'check-circle')"
+            :loading="form.submitting.value"
+            @click="togglePublished"
+         >
+            {{ published ? 'Make draft' : 'Publish' }}
+         </KButton>
+      </template>
+
+      <template #default="{ tab }">
+         <CmsEntryForm
+            ref="formRef"
+            v-model="formState"
+            :form="form"
+            :tab="tab === undefined ? undefined : String(tab)"
+            :fields="config.fields"
+            :tabs="config.tabs"
+            :entry-name="collection"
+            :lock="lock"
+            :locked="locked"
+            :focus="focus"
+            @update:tab="selectTab"
          />
       </template>
-
-      <KStack v-if="loading" align="center" justify="center" class="cms-drawer-loading">
-         <KSpinner size="lg" label="Loading" />
-      </KStack>
-
-      <CmsEntryForm
-         v-else
-         v-model="formState"
-         :fields="config.fields"
-         :tabs="config.tabs"
-         :entry-name="collection"
-         :drafts="drafts"
-         :form-id="FORM_ID"
-         :loading="saving"
-         :footer="false"
-         @submit="save"
-         @error="revertStatus"
-      />
-
-      <template #footer>
-         <KStack direction="row" justify="between" gap="sm" wrap class="cms-drawer-actions">
-            <KStack v-if="!isNew" direction="row" gap="sm">
-               <KButton
-                  label="Delete"
-                  icon="trash"
-                  variant="ghost"
-                  tone="danger"
-                  :disabled="saving || loading"
-                  @click="remove"
-               />
-               <KButton
-                  label="Duplicate"
-                  :icon="cmsIcon('document-duplicate')"
-                  variant="ghost"
-                  tone="neutral"
-                  :disabled="saving || loading"
-                  @click="duplicate"
-               />
-            </KStack>
-            <span v-else />
-            <KStack direction="row" gap="sm">
-               <KButton
-                  v-if="drafts"
-                  type="submit"
-                  :form="FORM_ID"
-                  :label="published ? 'Make draft' : 'Publish'"
-                  variant="soft"
-                  :loading="saving"
-                  :disabled="loading"
-                  @click="togglePublished"
-               />
-               <KButton
-                  type="submit"
-                  :form="FORM_ID"
-                  label="Save"
-                  :loading="saving"
-                  :disabled="loading"
-               />
-            </KStack>
-         </KStack>
-      </template>
-   </KDrawer>
+   </KFormDrawer>
 </template>
 
 <script setup lang="ts">
 import type { CmsEntry } from '#nuxt-cms'
-import { isTranslatableField, selectDisplayValue } from '#nuxt-cms'
+import { fieldTab, isTranslatableField, selectDisplayValue } from '#nuxt-cms'
+import type { FormDrawerTab } from '@xleddyl/443-components-vue'
 import {
-   Badge as KBadge,
    Button as KButton,
-   Drawer as KDrawer,
-   Spinner as KSpinner,
-   Stack as KStack,
+   FormDrawer as KFormDrawer,
+   toast,
+   useConfirm,
+   useRouteState,
 } from '@xleddyl/443-components-vue'
-import { computed, ref, watch } from '#imports'
+import { computed, nextTick, ref, watch } from '#imports'
 import { duplicateEntryValues } from '../../../shared/duplicate'
-import { useCmsConfirm } from '../../composables/cms-confirm'
+import { entryDefaults, lockedFieldKeys } from '../../../shared/field-options'
+import { cloneState, mergeSavedState } from '../../../shared/save-state'
+import type { CmsSearchFocus } from '../../../shared/search'
+import { CMS_ENTRY_TAB_ROUTE_KEY } from '../../../shared/search'
+import { useCmsEntryForm } from '../../composables/cms-entry-form'
+import { useCmsPermissions } from '../../composables/cms-permissions'
 import { useCmsRuntime } from '../../composables/cms-runtime'
-import { useCmsToast } from '../../composables/cms-toast'
 import { cmsApi } from '../../utils/api'
+import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon, errorMessage } from '../../utils/ui'
 
-const FORM_ID = 'cms-entry-drawer-form'
+type Row = Record<string, unknown>
 
-const props = defineProps<{
-   collection: string
-   config: CmsEntry
-   entryId: string | null
-   initial?: Record<string, unknown> | null
-}>()
+const props = withDefaults(
+   defineProps<{
+      collection: string
+      config: CmsEntry
+      entryId: string | null
+      duplicateId?: string | null
+      focus?: CmsSearchFocus | null
+   }>(),
+   { duplicateId: null, focus: null }
+)
 
 const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-   saved: []
+   saved: [id: string]
+   created: [id: string]
    deleted: []
-   duplicate: [values: Record<string, unknown>]
+   duplicate: [id: string]
+   missing: []
 }>()
 
-const toast = useCmsToast()
-const confirmAction = useCmsConfirm()
+const confirm = useConfirm()
+const routeTab = useRouteState(CMS_ENTRY_TAB_ROUTE_KEY, { location: 'hash', history: 'replace' })
 
 const endpoint = computed(() => `/api/cms/admin/${props.collection}`)
 const isNew = computed(() => props.entryId === null)
@@ -117,12 +123,51 @@ const formKeys = computed(() =>
    drafts.value ? [...Object.keys(props.config.fields), 'status'] : Object.keys(props.config.fields)
 )
 
-const { i18n: contentI18n } = useCmsRuntime()
+const { i18n } = useCmsRuntime()
 
 const loading = ref(false)
-const saving = ref(false)
-const formState = ref<Record<string, unknown>>({})
-const snapshot = ref('')
+const formState = ref<Row>({})
+const savedState = ref<Row>({})
+const loadedId = ref<string | null>(null)
+const formRef = ref<{
+   setIssues: (issues: CmsResponseIssue[]) => void
+   revealErrors: (errors: Record<string, string | undefined>) => void
+} | null>(null)
+
+const savedStatus = computed(() => savedState.value.status)
+
+function emptyState(): Row {
+   return Object.fromEntries(formKeys.value.map((key) => [key, null]))
+}
+
+function newState(): Row {
+   return { ...emptyState(), ...entryDefaults(props.config.fields, i18n, { local: true }) }
+}
+
+function pickFields(row: Row): Row {
+   return Object.fromEntries(formKeys.value.map((key) => [key, row[key] ?? null]))
+}
+
+const { can, entryLock } = useCmsPermissions()
+const canPublish = computed(() => can(`${props.collection}.publish`))
+const canCreate = computed(() => can(`${props.collection}.create`))
+const canDelete = computed(
+   () =>
+      can(`${props.collection}.delete`) &&
+      (!drafts.value || canPublish.value || savedStatus.value !== 'published')
+)
+const lock = computed(() =>
+   loading.value
+      ? null
+      : entryLock(props.collection, props.config, {
+           isNew: isNew.value,
+           status: savedStatus.value,
+        })
+)
+
+const locked = computed(() =>
+   isNew.value ? [] : lockedFieldKeys(props.config.fields, savedState.value)
+)
 
 const entryName = computed(() => {
    const key = props.config.titleField
@@ -131,46 +176,60 @@ const entryName = computed(() => {
    if (!field || value == null || value === '') return ''
    if (isTranslatableField(field)) {
       const record = value as Record<string, string>
-      return record[contentI18n.defaultLocale] ?? Object.values(record)[0] ?? ''
+      return record[i18n.defaultLocale] ?? Object.values(record)[0] ?? ''
    }
    if (field.type === 'select') return selectDisplayValue(field, value)
    return String(value)
 })
 
 const title = computed(() => {
-   if (isNew.value) return props.initial ? 'Duplicate entry' : 'Add entry'
+   if (isNew.value) return props.duplicateId ? 'Duplicate entry' : 'Add entry'
    return entryName.value || 'Untitled'
 })
 
-function emptyState() {
-   return Object.fromEntries(formKeys.value.map((key) => [key, null]))
+const drawerTabs = computed<FormDrawerTab[] | undefined>(() => {
+   const tabs = props.config.tabs ?? []
+   if (tabs.length < 2) return undefined
+   return tabs.map((tab) => ({
+      value: tab.id,
+      label: tab.label,
+      fields: Object.entries(props.config.fields)
+         .filter(([, field]) => fieldTab(field, tabs) === tab.id)
+         .map(([key]) => key),
+   }))
+})
+
+function selectTab(value: string) {
+   routeTab.value = value === drawerTabs.value?.[0]?.value ? undefined : value
 }
 
-function pickFields(row: Record<string, unknown>) {
-   return Object.fromEntries(formKeys.value.map((key) => [key, row[key] ?? null]))
+const published = computed(() => formState.value.status === 'published')
+
+function revertStatus() {
+   if (drafts.value) formState.value.status = savedState.value.status ?? null
 }
 
-function setState(state: Record<string, unknown>) {
-   formState.value = state
-   snapshot.value = JSON.stringify(state)
-}
-
-const dirty = computed(() => JSON.stringify(formState.value) !== snapshot.value)
-
-const published = computed({
-   get: () => formState.value.status === 'published',
-   set: (value: boolean) => {
-      formState.value.status = value ? 'published' : 'draft'
+const form = useCmsEntryForm({
+   state: formState,
+   fields: () => props.config.fields,
+   entryName: () => props.collection,
+   drafts,
+   onSubmit: save,
+   onInvalid: (errors) => {
+      revertStatus()
+      formRef.value?.revealErrors(errors)
    },
 })
 
 function togglePublished() {
-   published.value = !published.value
+   formState.value.status = published.value ? 'draft' : 'published'
+   void form.submit()
 }
 
-function revertStatus() {
-   if (!drafts.value) return
-   formState.value.status = (JSON.parse(snapshot.value) as Record<string, unknown>).status ?? null
+function applyState(saved: Row, current: Row = saved) {
+   savedState.value = saved
+   form.reset(saved)
+   if (current !== saved) formState.value = current
 }
 
 let loadRequest = 0
@@ -178,94 +237,89 @@ let loadRequest = 0
 async function load() {
    const request = ++loadRequest
    const id = props.entryId
-   if (id === null) {
+   const source = id === null ? props.duplicateId : id
+   const isStale = () => request !== loadRequest || props.entryId !== id || !open.value
+   loadedId.value = id
+   if (!source) {
       loading.value = false
-      setState(emptyState())
-      if (props.initial) formState.value = { ...emptyState(), ...pickFields(props.initial) }
+      applyState(newState())
       return
    }
-   const isStale = () => request !== loadRequest || props.entryId !== id || !open.value
    loading.value = true
    try {
-      const entry = await cmsApi<Record<string, unknown>>(`${endpoint.value}/${id}`)
+      const entry = await cmsApi<Row>(`${endpoint.value}/${source}`)
       if (isStale()) return
-      setState(pickFields(entry))
+      if (id === null) {
+         applyState(newState(), {
+            ...emptyState(),
+            ...pickFields(duplicateEntryValues(props.config, entry)),
+         })
+      } else {
+         applyState(pickFields(entry))
+      }
    } catch (error) {
       if (isStale()) return
-      toast.add({
-         title: 'Could not load entry',
-         description: errorMessage(error),
-         color: 'error',
-      })
-      open.value = false
+      toast.error('Could not load entry', { description: errorMessage(error) })
+      emit('missing')
    } finally {
       if (request === loadRequest) loading.value = false
    }
 }
 
 watch(
-   () => [open.value, props.entryId, props.initial] as const,
-   ([isOpen]) => {
-      if (isOpen) load()
+   () => [open.value, props.entryId, props.duplicateId] as const,
+   ([isOpen], previous) => {
+      if (!isOpen) return
+      if (previous?.[0] && props.entryId !== null && loadedId.value === props.entryId) return
+      void load()
    },
    { immediate: true }
 )
 
-function confirmClose() {
-   return !dirty.value || confirmAction('You have unsaved changes. Close anyway?')
-}
-
-async function save() {
-   if (saving.value) return
-   saving.value = true
+async function save(values: Row) {
+   const submitted = cloneState(values)
    try {
-      await (isNew.value
-         ? cmsApi(endpoint.value, { method: 'POST', body: formState.value })
-         : cmsApi(`${endpoint.value}/${props.entryId}`, {
-              method: 'PUT',
-              body: formState.value,
-           }))
-      snapshot.value = JSON.stringify(formState.value)
-      toast.add({ title: 'Saved', color: 'success' })
-      emit('saved')
-      open.value = false
+      const row = await (isNew.value
+         ? cmsApi<Row>(endpoint.value, { method: 'POST', body: submitted })
+         : cmsApi<Row>(`${endpoint.value}/${props.entryId}`, { method: 'PUT', body: submitted }))
+      const saved = pickFields(row ?? submitted)
+      const merged = mergeSavedState(submitted, formState.value, saved)
+      const id = row?.id != null ? String(row.id) : props.entryId
+      applyState(saved, merged.state)
+      loadedId.value = id
+      if (merged.clean) {
+         toast.success('Saved')
+         if (id) emit('saved', id)
+         open.value = false
+         return
+      }
+      toast.success('Saved', { description: 'Changes made while saving are not saved yet.' })
+      if (id && isNew.value) emit('created', id)
+      else if (id) emit('saved', id)
    } catch (error) {
       revertStatus()
-      toast.add({
-         title: 'Save failed',
-         description: errorMessage(error),
-         color: 'error',
-      })
-   } finally {
-      saving.value = false
+      throw error
    }
 }
 
-async function duplicate() {
+async function remove() {
    if (
-      dirty.value &&
-      !(await confirmAction('You have unsaved changes. Duplicate the saved entry anyway?'))
+      !(await confirm.delete('Delete this entry?', {
+         description: entryName.value
+            ? `"${entryName.value}" is deleted for good.`
+            : 'The entry is deleted for good.',
+      }))
    )
       return
-   emit('duplicate', duplicateEntryValues(props.config, JSON.parse(snapshot.value)))
-}
-
-async function remove() {
-   if (!(await confirmAction('Delete this row?'))) return
-   saving.value = true
    try {
       await cmsApi(`${endpoint.value}/${props.entryId}`, { method: 'DELETE' })
-      snapshot.value = JSON.stringify(formState.value)
+      form.markClean()
+      toast.success('Entry deleted')
       emit('deleted')
+      await nextTick()
       open.value = false
    } catch (error) {
-      toast.add({
-         title: 'Delete failed',
-         description: errorMessage(error),
-         color: 'error',
-      })
-   } finally {
-      saving.value = false
+      toast.error('Delete failed', { description: errorMessage(error) })
    }
 }
 </script>

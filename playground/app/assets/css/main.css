@@ -1,4 +1,9 @@
+@layer theme, base, k, components, utilities;
+
 @import 'tailwindcss';
+@import '@xleddyl/443-components-vue/style.css';
+@import '@fontsource-variable/geist/index.css';
+@import '@fontsource-variable/geist-mono/index.css';
 @source '../../';
 
 .site {

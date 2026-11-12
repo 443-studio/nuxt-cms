@@ -3,7 +3,7 @@ import { defineEventHandler, readValidatedBody } from 'h3'
 import { z } from 'zod'
 import { normalizeMediaFolder, slugify } from '../../shared/index'
 import { assertUploadContentType, assertUploadSize, useMediaStorage } from '../utils/media'
-import { requireAdmin } from '../utils/require-admin'
+import { requireCmsPermission } from '../utils/permissions'
 
 const MAX_BASE_LENGTH = 80
 const MAX_EXT_LENGTH = 10
@@ -31,7 +31,7 @@ function slugifyFilename(filename: string) {
 }
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   await requireCmsPermission(event, 'media.write')
    const { media, store, publicUrl } = useMediaStorage(event)
 
    const { filename, contentType, size, folder } = await readValidatedBody(event, bodySchema.parse)

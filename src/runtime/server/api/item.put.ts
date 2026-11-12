@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm'
-import { createError, defineEventHandler, readValidatedBody } from 'h3'
+import { createError, defineEventHandler } from 'h3'
 import { runBatch, useDb } from '#cms-db'
+import { assertImmutableValues, assertUniqueValues, readEntryBody } from '../utils/field-rules'
 import {
-   buildValidator,
    decodeRows,
    encodeColumnValues,
    getRegistryEntry,
@@ -12,20 +12,29 @@ import {
    withContentDefaults,
    withUpdatedAt,
 } from '../utils/registry'
-import { pageFields } from '../../shared/index'
+import { isRoutedContent, pageFields, rowAfterUpdate } from '../../shared/index'
 import { assertMediaExists } from '../utils/media-check'
 import { writePage } from '../utils/page-storage'
 import {
    assertRelationTargets,
-   attachManyToMany,
    manyToManyStatements,
+   readBackSaved,
+   savedReadBackError,
    splitRelationValues,
 } from '../utils/relations'
-import { requireAdmin } from '../utils/require-admin'
+import { assertCmsPermission, assertPublishAllowed, requireCmsAccess } from '../utils/permissions'
+import {
+   contentMovesOf,
+   invalidateRedirects,
+   planContentRedirects,
+   redirectPlanStatements,
+} from '../utils/redirects'
 import { mapConstraintErrors } from '../utils/db-errors'
+import { emitEntryChange } from '../utils/hooks'
+import { entryStatus, entryWriteAction } from '../../shared/hooks'
 
 export default defineEventHandler(async (event) => {
-   await requireAdmin(event)
+   const { user, access } = await requireCmsAccess(event)
    const { name, entry, table } = getRegistryEntry(event)
    if (entry.kind === 'single') {
       throw createError({
@@ -33,36 +42,49 @@ export default defineEventHandler(async (event) => {
          statusMessage: 'Single objects are updated with PUT without id',
       })
    }
+   assertCmsPermission(access, `${name}.update`)
 
    const id = parseId(event)
 
    if (entry.kind === 'page') {
       const route = requirePageRoute(entry, id)
-      const body = await readValidatedBody(event, buildValidator(entry, route.path).parse)
-      await assertMediaExists(pageFields(entry, route.path), body as Record<string, unknown>)
-      const values = encodeColumnValues(entry, body as Record<string, unknown>)
+      const body = await readEntryBody(event, entry, { path: route.path })
+      await assertMediaExists(pageFields(entry, route.path), body)
+      const values = encodeColumnValues(entry, body)
       const set = withUpdatedAt(table, values)
-      return mapConstraintErrors(
+      const page = await mapConstraintErrors(
          async () => decodeRows(entry, [await writePage(name, entry, table, route, set)])[0]
       )
+      emitEntryChange(event, user, {
+         entry: name,
+         kind: entry.kind,
+         action: 'update',
+         ids: [id],
+         path: route.path,
+         item: page ?? null,
+      })
+      return page
    }
 
-   const body = await readValidatedBody(event, buildValidator(entry).parse)
-   const { values, lists } = splitRelationValues(
-      entry,
-      encodeColumnValues(entry, body as Record<string, unknown>)
-   )
+   const body = await readEntryBody(event, entry)
+   const { values, lists } = splitRelationValues(entry, encodeColumnValues(entry, body))
    await assertRelationTargets(entry, lists)
    const set = withUpdatedAt(table, withContentDefaults(entry, values))
 
-   const [existing] = await useDb()
-      .select({ id: idColumn(table) })
+   const [existing] = (await useDb()
+      .select()
       .from(table)
       .where(eq(idColumn(table), id))
-      .limit(1)
+      .limit(1)) as Record<string, unknown>[]
    if (!existing) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
+   assertImmutableValues(entry, existing, body)
+   await assertUniqueValues(entry, table, body, id)
+   assertPublishAllowed(access, name, entry, existing.status, values.status ?? existing.status)
+   const redirects = isRoutedContent(entry)
+      ? await planContentRedirects(contentMovesOf(entry, existing, rowAfterUpdate(existing, set)))
+      : null
 
-   return mapConstraintErrors(async () => {
+   const saved = await mapConstraintErrors(async () => {
       const [updated] = await runBatch((db) => [
          db
             .update(table)
@@ -70,10 +92,24 @@ export default defineEventHandler(async (event) => {
             .where(eq(idColumn(table), id))
             .returning(),
          ...manyToManyStatements(db, name, id, lists),
+         ...(redirects ? redirectPlanStatements(db, redirects) : []),
       ])
+      if (redirects) invalidateRedirects()
       const [row] = updated as Record<string, unknown>[]
       if (!row) throw createError({ statusCode: 404, statusMessage: 'Row not found' })
-      const [attached] = await attachManyToMany(useDb(), name, entry, [row])
-      return decodeRows(entry, [attached!])[0]
+      return row
    })
+   const readBack = await readBackSaved(name, entry, saved)
+   const item = decodeRows(entry, [readBack.row])[0]
+   const status = entry.drafts ? entryStatus(item?.status) : null
+   emitEntryChange(event, user, {
+      entry: name,
+      kind: entry.kind,
+      action: entryWriteAction(false, entryStatus(existing.status), status),
+      ids: [id],
+      status,
+      item: item ?? null,
+   })
+   if (readBack.error) throw savedReadBackError(readBack.error)
+   return item
 })

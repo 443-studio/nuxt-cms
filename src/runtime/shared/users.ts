@@ -1,4 +1,4 @@
-export type CmsUserRole = 'superadmin' | 'admin'
+export type CmsUserRole = 'superadmin' | 'admin' | (string & {})
 
 export interface CmsSessionUser {
    id?: string

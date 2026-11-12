@@ -57,6 +57,8 @@
       v-else-if="field.type === 'number'"
       v-model="num"
       align="start"
+      :min="field.min"
+      :max="field.max"
       :placeholder="field.placeholder"
    />
    <KDateInput v-else-if="field.type === 'date'" v-model="plainText" />
@@ -68,16 +70,22 @@
    <CmsRelationField
       v-else-if="field.type === 'relation'"
       v-model="relationValue"
-      :to="field.to!"
+      :to="relationTarget(field)"
       :required="field.required"
       :multiple="field.cardinality === 'many-to-many'"
+   />
+   <CmsLinkField
+      v-else-if="field.type === 'link'"
+      v-model="model"
+      :field="field"
+      :locale="locale"
    />
    <CmsMediaField v-else v-model="strOrNull" :media-type="field.mediaType" :accept="field.accept" />
 </template>
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
-import { isTranslatableField, selectOptions } from '#nuxt-cms'
+import { isTranslatableField, relationTarget, selectOptions } from '#nuxt-cms'
 import {
    Combobox as KCombobox,
    DateInput as KDateInput,

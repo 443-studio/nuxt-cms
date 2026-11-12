@@ -1,63 +1,48 @@
 <template>
-   <div class="cms-settings-columns">
-      <p class="cms-settings-hint">
-         Choose the columns of the table. Drag the visible columns to change their order.
-      </p>
-      <ul class="cms-settings-list">
-         <li
-            v-for="(key, index) in model"
-            :key="key"
-            class="cms-settings-item is-draggable"
-            :class="{
-               'is-dragging': dragging === key,
-               'is-drop-before': dropIndex === index && dragging !== key,
-            }"
-            draggable="true"
-            @dragstart="onDragStart($event, key)"
-            @dragover.prevent="dropIndex = index"
-            @drop.prevent="onDrop(index)"
-            @dragend="onDragEnd"
-         >
-            <KIcon :name="cmsIcon('bars-2')" class="cms-settings-grip" />
-            <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
-            <span class="cms-settings-item-label">{{ labelOf(key) }}</span>
+   <KStack gap="sm">
+      <KFieldMessage
+         tone="neutral"
+         :icon="false"
+         message="Choose the columns of the table. Drag the visible columns to change their order."
+      />
+      <KSortableList v-model="visible" label="Visible columns" size="sm">
+         <template #trailing="{ item }">
             <KSwitch
                :model-value="true"
-               :aria-label="`Hide ${labelOf(key)}`"
+               :aria-label="`Hide ${item.label}`"
                :disabled="model.length === 1"
-               @update:model-value="hide(key)"
+               @update:model-value="hide(String(item.value))"
             />
-         </li>
-         <li
-            v-if="dragging"
-            class="cms-settings-drop-end"
-            :class="{ 'is-over': dropIndex === model.length }"
-            @dragover.prevent="dropIndex = model.length"
-            @drop.prevent="onDrop(model.length)"
-         />
-      </ul>
+         </template>
+      </KSortableList>
 
       <template v-if="hidden.length">
-         <p class="cms-settings-subtitle">Hidden</p>
-         <ul class="cms-settings-list">
-            <li v-for="key in hidden" :key="key" class="cms-settings-item is-muted">
-               <KIcon :name="cmsIcon(iconOf(key))" class="cms-settings-item-icon" />
-               <span class="cms-settings-item-label">{{ labelOf(key) }}</span>
+         <KSeparator variant="heading" label="Hidden" :level="3" />
+         <KSortableList :model-value="hidden" label="Hidden columns" size="sm" disabled>
+            <template #trailing="{ item }">
                <KSwitch
                   :model-value="false"
-                  :aria-label="`Show ${labelOf(key)}`"
-                  @update:model-value="show(key)"
+                  :aria-label="`Show ${item.label}`"
+                  @update:model-value="show(String(item.value))"
                />
-            </li>
-         </ul>
+            </template>
+         </KSortableList>
       </template>
-   </div>
+   </KStack>
 </template>
 
 <script setup lang="ts">
 import type { FieldConfig } from '#nuxt-cms'
-import { Icon as KIcon, Switch as KSwitch } from '@xleddyl/443-components-vue'
-import { computed, ref } from '#imports'
+import type { SortableListItem } from '@xleddyl/443-components-vue'
+import {
+   FieldMessage as KFieldMessage,
+   Separator as KSeparator,
+   SortableList as KSortableList,
+   Stack as KStack,
+   Switch as KSwitch,
+} from '@xleddyl/443-components-vue'
+import { computed } from '#imports'
+import { TRANSLATIONS_COLUMN } from '../../../shared/translations'
 import { cmsIcon, fieldIcon } from '../../utils/ui'
 
 const props = defineProps<{
@@ -68,15 +53,33 @@ const props = defineProps<{
 const model = defineModel<string[]>({ required: true })
 
 const available = computed(() => [...Object.keys(props.fields), ...props.extra])
-const hidden = computed(() => available.value.filter((key) => !model.value.includes(key)))
+function columnItem(key: string): SortableListItem {
+   return { value: key, label: labelOf(key), icon: cmsIcon(iconOf(key)) }
+}
+
+const hidden = computed(() =>
+   available.value.filter((key) => !model.value.includes(key)).map(columnItem)
+)
+
+const visible = computed<SortableListItem[]>({
+   get: () => model.value.map(columnItem),
+   set: (items) => {
+      model.value = items.map((item) => String(item.value))
+   },
+})
+
+const EXTRA_COLUMNS: Record<string, { label: string; icon: string }> = {
+   status: { label: 'Status', icon: 'check-circle' },
+   [TRANSLATIONS_COLUMN]: { label: 'Translations', icon: 'language' },
+}
 
 function labelOf(key: string) {
-   return props.fields[key]?.label ?? (key === 'status' ? 'Status' : key)
+   return props.fields[key]?.label ?? EXTRA_COLUMNS[key]?.label ?? key
 }
 
 function iconOf(key: string) {
    const field = props.fields[key]
-   return field ? fieldIcon(field) : 'check-circle'
+   return field ? fieldIcon(field) : EXTRA_COLUMNS[key]?.icon ?? 'check-circle'
 }
 
 function hide(key: string) {
@@ -86,30 +89,5 @@ function hide(key: string) {
 
 function show(key: string) {
    model.value = [...model.value, key]
-}
-
-const dragging = ref<string | null>(null)
-const dropIndex = ref<number | null>(null)
-
-function onDragStart(event: DragEvent, key: string) {
-   dragging.value = key
-   event.dataTransfer?.setData('text/plain', key)
-   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
-}
-
-function onDrop(index: number) {
-   const key = dragging.value
-   if (key) {
-      const next = model.value.filter((k) => k !== key)
-      const from = model.value.indexOf(key)
-      next.splice(from < index ? index - 1 : index, 0, key)
-      model.value = next
-   }
-   onDragEnd()
-}
-
-function onDragEnd() {
-   dragging.value = null
-   dropIndex.value = null
 }
 </script>
