@@ -1,6 +1,6 @@
 # nuxt-cms: LLM guide
 
-Nuxt module embedding a CMS in the app's Nitro server. Content types are declared in code (`cms.config.ts`); DB schema, migrations, TypeScript types and a read-only GraphQL API are generated from it. Admin panel at `/cms`. This guide covers: defining the data schema, querying content from the app, and server hooks/webhooks.
+Nuxt module embedding a CMS in the app's Nitro server. Content types are declared in code (`cms.config.ts`); DB schema, migrations, TypeScript types and a read-only GraphQL API are generated from it. Admin panel at `/cms`. This guide covers: defining the data schema, querying content from the app, server hooks/webhooks, and seeding content from a JSON snapshot (section 5).
 
 ## 1. Setup (nuxt.config.ts)
 
@@ -348,3 +348,41 @@ Behavior:
 - `/sitemap.xml`: routes of the page entry (`lastmod` from the row; dynamic paths, `/cms/**` and rows with a truthy `seoNoindex` skipped) and every published, non-scheduled, non-`seoNoindex` item of routed content entries (`lastmod` = `updatedAt`), one `<url>` per distinct path with `xhtml:link` hreflang alternates + `x-default` when the locales have different paths. Empty when the site is hidden. Read in batches of 1000, streamed; above 50,000 URLs it is a sitemap index of `/sitemap.xml?part=N` (each part one source). `Cache-Control: public, max-age=600, s-maxage=600` with a site URL, `private, no-store` without (same for robots.txt).
 - `/robots.txt`: `User-agent: *`, `Disallow: /cms/`, `Sitemap: <site>/sitemap.xml` (when a sitemap is served and the site is not hidden). A hidden site keeps robots.txt open (crawlers must fetch pages to see noindex), gets an empty sitemap, the `robots` meta tag from `useCmsSeo` and `X-Robots-Tag: noindex, nofollow` on every response except `/cms/**`, `/_nuxt/` and `/__nuxt*` (server middleware `hidden-site`, settings cached in memory for 30 s and cleared on save).
 - Redirects: admin **Settings → Redirects** (list, search, add, edit, delete, CSV/JSON import and export; roles with `redirects.manage`, checked by `requireCmsPermission(event, 'redirects.manage')`; manual writes fire no hook). Built-in table `cms_redirects` (`id`, `from` (`from_path`, unique), `to` (`to_path`), `status` 301|302|307|308 (default 301), `keepQuery` (default true), `source` `'manual'|'auto'`, `createdAt`, `updatedAt`), created by the generated migrations; `cms_redirects` is a reserved entry/table name. `from`: a path starting with `/`, no host/query/hash, not under `/cms`, `/api`, `/_nuxt`, unique after normalization (`normalizeRedirectPath`: trailing and repeated slashes, query and hash dropped, percent-encoding canonical; case-sensitive). `to`: a path or an absolute http(s) URL (no credentials). Self redirects and loops through internal targets are refused (`findRedirectLoop`). Admin API (`redirects.manage`, same-origin): `GET`/`POST /api/cms/redirects`, `PUT`/`DELETE /api/cms/redirects/:id`, `POST /api/cms/redirects/import` `{ redirects: [{ from, to, status?, keepQuery? }] }` (max 5000, all-or-nothing, a row with a stored `from` replaces it). Not in the public GraphQL API. Automatic: saving a live (published, `publishedAt` past) routed content item whose path changes (slug, or `publishedAt` with date placeholders) writes an `auto` 301 from each old locale path to the new one in the same batch, re-points redirects whose target was the old path (chains collapse to the newest path) and deletes redirects whose `from` is now a live path of the item (moving back never loops). An import upsert that changes the path of live items does the same for each of them, in the import batch. Drafts, scheduling, unpublishing, deleting and route pattern changes make none. Manual writes (create, update, import) check loops and write one at a time per server instance; two instances writing at the same moment are not serialized. Runtime: server middleware `redirects` for `GET`/`HEAD` outside `/cms`, `/api`, `/_nuxt`, `/__nuxt*`: looks up the normalized path in an in-memory map (30 s TTL, cleared on writes on the same instance), skips it when a static route of the page entry or a live routed content item answers there (a page wins over a redirect), else `sendRedirect` with the stored status, appending the request query after the target's own when `keepQuery`. Pure helpers in `#nuxt-cms`: `normalizeRedirectPath`, `redirectFromErrors`, `redirectToErrors`, `redirectErrors`, `redirectLocation`, `planRedirectMoves`, `contentItemMoves`, `redirectRowsFromTable`, `redirectsToTable`.
+
+## 5. Seeding content (`@xleddyl/nuxt-cms/seed`)
+
+One JSON object, the content snapshot, fills pages, singles, collections and content entries. Validated like the admin API (same field schemas, `validate` hooks, link targets) before anything is written; written in one transaction.
+
+```ts
+import { seedCmsContent } from '@xleddyl/nuxt-cms/seed'
+await seedCmsContent({ file: 'content/seed.json' })   // or { snapshot }, from the project root (or `root`)
+```
+
+```json
+{
+   "pages": { "/": { "title": { "en": "Home", "it": "Casa" }, "cover": "hero.webp" } },
+   "singles": {
+      "homepage": {
+         "heroTitle": { "en": "Fresh water, every weekend" },
+         "sections": [
+            { "type": "hero", "heading": { "en": "Welcome" }, "image": "team/boat.webp" },
+            { "type": "columns", "items": [{ "type": "card", "title": "Boats" }] }
+         ]
+      }
+   },
+   "collections": {
+      "categories": [{ "id": "cat_lake", "name": "Lake" }],
+      "events": [{ "title": "Spring fair", "date": "2026-04-12", "category": "cat_lake", "tags": ["cat_lake"] }]
+   },
+   "contents": { "news": [{ "title": { "en": "Season opens" }, "body": [{ "type": "text", "body": { "en": "<p>Hi</p>" } }] }] }
+}
+```
+
+- Sections (all optional): `pages` = `{ "<route path>": values }` of the page entry; `singles` = `{ "<single entry>": values }`; `collections` = `{ "<collection entry>": [values] }`; `contents` = `{ "<content entry>": [values] }`. An entry under the wrong section is an error.
+- Values use the admin API shape: text/richtext (HTML)/email/slug strings; translatable text, richtext and media `{ "<locale>": value }` with only `cms.i18n` locales; number; boolean; json any; date `yyyy-mm-dd`; datetime ISO with zone; select an option value (`multiple`: array); tags array of strings; media the library key (`local` mode: path relative to the `publicBaseUrl` folder, `hero.webp`, `team/boat.webp`; `s3`/`filesystem`: a key already in `cms_media`); relation an id, many-to-many an array of ids; link `{ "url": "/path" }` or `{ "entry": "<entry>", "id": "<id>" }` (+ `label`, `newTab`; a page id is the page key: `/` is `home`, `/about-us` is `aboutUs`); blocks an array of `{ "type": "<block>", ...fields }`, nested blocks inline, optional `"hidden": true`.
+- `id` optional on collection/content entries (letters, numbers, `_`, `-`, max 128), generated when missing; relations and links may point at ids declared anywhere in the snapshot (self relations too). Declare `id` on every entry you reference.
+- Entries with drafts and content entries default to `"status": "published"` (`"draft"` allowed); published content without `publishedAt` gets now. An empty slug is filled from its `from` field (default locale). Field `default`s fill missing keys. Never send `createdAt`, `updatedAt`, or `id`/`path` on pages and singles.
+- `mode: 'replace'` (default): clears the rows of every entry named in the snapshot (an empty list empties it, `pages` clears every page row), then inserts, so re-runs give the same content. `mode: 'merge'`: keeps other rows, upserts by id. System tables (users, settings, media, redirects) are never touched. `dryRun: true` validates only.
+- Errors: one `CmsContentError` listing every issue as `<path>: <message>`, paths like `pages./.title`, `singles.homepage.sections.1.heading`, `collections.events.0.category`. Checked: unknown sections, entries, page paths, fields (with "did you mean"), block types; types and formats (message names the expected shape); required; unknown locales; select options; link targets; min/max; validate hooks; duplicate or malformed ids; unresolved relation/link ids; duplicate unique values (slug, `unique`, one-to-one); media keys missing from the library (lists the available keys in `local` mode).
+- Needs `.nuxt/cms/schema.ts` (`nuxi prepare`) and the committed migrations; applies the migrations first. DB from `NUXT_CMS_DATABASE_*` env vars, else `cms.database`. No hooks or webhooks fire. D1 unsupported.
+- Lower level: `loadCmsProject({ root? })` returns `{ config, i18n, media, tables, database }`; `importCmsContent({ db, config, tables, snapshot, i18n?, media?, mode? })`; `validateCmsContent({ config, snapshot, i18n?, mode?, db?, tables?, media? })` returns the issues without throwing; `createCmsSeeder(database)` gives `{ db, migrate, close }`.

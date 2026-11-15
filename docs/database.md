@@ -187,6 +187,11 @@ it reads `NUXT_CMS_DATABASE_URL` and `NUXT_CMS_DATABASE_AUTH_TOKEN` from the env
 `drizzle-kit` process, with no fallback to the values in `nuxt.config.ts`, so set them before you run
 Studio, `push` or `migrate`. A local SQLite or libSQL file is written as its path.
 
+## Seeding
+
+`@xleddyl/nuxt-cms/seed` applies the migrations and fills the database from a JSON content snapshot
+from a plain Node script. See [Seeding content](seeding.md).
+
 ## Switching drivers
 
 Changing `driver` switches dialect and migration folder together. After switching, re-run

@@ -7,17 +7,14 @@ import { useDb } from '#cms-db'
 import * as cmsTables from '#cms-tables'
 import type { CmsEntry } from '../../shared/index'
 import { entryFieldsFor, relationTarget } from '../../shared/index'
+import { manyToManyKeys } from './entry-values'
 import { resolveTable, tableColumns } from './registry'
 import type { JoinTable, WriteDb } from './write-statements'
 import { joinWriteStatements } from './write-statements'
 
 type Row = Record<string, unknown>
 
-function manyToManyKeys(entry: CmsEntry): string[] {
-   return Object.entries(entryFieldsFor(entry))
-      .filter(([, field]) => field.type === 'relation' && field.cardinality === 'many-to-many')
-      .map(([key]) => key)
-}
+export { splitRelationValues } from './entry-values'
 
 function joinTable(name: string, key: string): JoinTable {
    const table = (cmsTables as Record<string, unknown>)[`${name}_${key}`] as SQLiteTable | undefined
@@ -35,17 +32,6 @@ function joinTable(name: string, key: string): JoinTable {
       targetId: columns.targetId,
       position: columns.position,
    }
-}
-
-export function splitRelationValues(entry: CmsEntry, body: Row) {
-   const keys = manyToManyKeys(entry)
-   const values = Object.fromEntries(Object.entries(body).filter(([key]) => !keys.includes(key)))
-   const lists: Record<string, string[]> = {}
-   for (const key of keys) {
-      const ids = (body[key] as string[] | null | undefined) ?? []
-      lists[key] = [...new Set(ids)]
-   }
-   return { values, lists }
 }
 
 export async function assertRelationTargets(entry: CmsEntry, lists: Record<string, string[]>) {

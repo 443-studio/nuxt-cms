@@ -99,6 +99,9 @@ const config = resolveCmsPages(await jiti.import('./cms.config.ts', { default: t
 config.pages.pages // [{ path: '/about', key: 'about', label: 'About' }, ...]
 ```
 
+To fill pages with content from a script, use `seedCmsContent` (see [Seeding content](seeding.md)),
+which loads the config and resolves the routes for you.
+
 **Limits.** One page entry per config. `titleField` and `drafts` do not apply. Rows are created
 when a page is saved for the first time, and they cannot be deleted from the admin.
 

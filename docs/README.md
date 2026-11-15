@@ -24,6 +24,8 @@ deploy.
    webhooks, `verifyCmsWebhook`.
 10. [Deployment](deployment.md): host and driver matrix, migrations on serverless, horizontal
     scaling, Cloudflare Workers.
+11. [Seeding content](seeding.md): fill pages, singles, collections and content entries from one
+    JSON snapshot, validated like the admin.
 
 ## How it works in one paragraph
 

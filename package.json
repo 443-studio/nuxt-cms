@@ -62,7 +62,8 @@
       }
    },
    "files": [
-      "dist"
+      "dist",
+      "llm.txt"
    ],
    "scripts": {
       "prepack": "nuxt-module-build build",

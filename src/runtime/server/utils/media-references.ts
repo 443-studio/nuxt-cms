@@ -1,60 +1,17 @@
-import { inArray } from 'drizzle-orm'
-import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
-import type {
-   CmsEntry,
-   CmsSiteSettings,
-   FieldConfig,
-   MediaUsage,
-   MediaUsageReport,
-} from '../../shared/index'
+import type { CmsEntry, CmsSiteSettings, MediaUsage, MediaUsageReport } from '../../shared/index'
 import {
    CMS_SITE_SETTINGS_KEY,
    PAGE_PATH_FIELD,
-   blockReferenceLabel,
    pageFields,
    pageRouteOf,
    selectOptionLabel,
-   walkBlocks,
 } from '../../shared/index'
+import type { MediaLookup, MediaReference } from './media-keys'
+import { mediaReferences } from './media-keys'
 
-export interface MediaReference {
-   field: string
-   key: string
-}
-
-export type MediaLookup = (keys: string[]) => Promise<Set<string>>
-
-const LOOKUP_CHUNK = 90
-
-function mediaKeysOf(value: unknown): string[] {
-   if (typeof value === 'string') return value ? [value] : []
-   if (!value || typeof value !== 'object') return []
-   return Object.values(value as Record<string, unknown>).filter(
-      (key): key is string => typeof key === 'string' && key !== ''
-   )
-}
-
-export function mediaReferences(
-   fields: Record<string, FieldConfig>,
-   values: Record<string, unknown>
-): MediaReference[] {
-   const references: MediaReference[] = []
-   for (const [key, field] of Object.entries(fields)) {
-      if (field.type !== 'media') continue
-      for (const mediaKey of mediaKeysOf(values[key]))
-         references.push({ field: key, key: mediaKey })
-   }
-   walkBlocks(fields, values, ({ item, block, path }) => {
-      for (const [blockFieldKey, blockField] of Object.entries(block.fields)) {
-         if (blockField.type !== 'media') continue
-         for (const mediaKey of mediaKeysOf(item[blockFieldKey])) {
-            references.push({ field: blockReferenceLabel(path, blockFieldKey), key: mediaKey })
-         }
-      }
-   })
-   return references
-}
+export type { MediaLookup, MediaReference } from './media-keys'
+export { mediaKeysInTable, mediaReferences } from './media-keys'
 
 export interface MediaUsageSource {
    name: string
@@ -155,21 +112,4 @@ export async function assertKnownMedia(references: MediaReference[], lookup: Med
          .map((reference) => `'${reference.key}' (${reference.field})`)
          .join(', ')}`,
    })
-}
-
-export async function mediaKeysInTable(
-   db: Pick<BaseSQLiteDatabase<'sync' | 'async', unknown>, 'select'>,
-   table: SQLiteTable,
-   keys: string[]
-): Promise<Set<string>> {
-   const column = (table as unknown as Record<string, AnySQLiteColumn>).key!
-   const found = new Set<string>()
-   for (let index = 0; index < keys.length; index += LOOKUP_CHUNK) {
-      const rows = (await db
-         .select({ key: column })
-         .from(table)
-         .where(inArray(column, keys.slice(index, index + LOOKUP_CHUNK)))) as { key: string }[]
-      for (const row of rows) found.add(row.key)
-   }
-   return found
 }

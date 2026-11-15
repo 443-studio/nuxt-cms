@@ -93,9 +93,10 @@ The database is a local SQLite file (`data/cms.db`) by default. To use a differe
 | [Querying content](docs/querying.md) | GraphQL API, composables, `<CmsBlocks>` |
 | [Admin panel & security](docs/admin.md) | Admin pages, search, visual editor, accounts, sessions |
 | [Media](docs/media.md) | Storage modes, uploads, allowed file types, focal point, `<CmsImage>` |
+| [Seeding content](docs/seeding.md) | Fill pages, singles and collections from one JSON snapshot |
 | [Deployment](docs/deployment.md) | Hosts, migrations on serverless, scaling |
 
-[llm.txt](llm.txt) is a compact reference for LLMs: schema, composables and GraphQL API.
+[llm.txt](llm.txt) is a compact reference for LLMs: schema, composables, GraphQL API and the content snapshot format. It ships with the package (`node_modules/@xleddyl/nuxt-cms/llm.txt`).
 
 ## Development
 
