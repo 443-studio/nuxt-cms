@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.12.0
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.11.2...v0.12.0)
+
+### 🚀 Enhancements
+
+- **seed:** Import content snapshots ([91288f1](https://github.com/443-studio/nuxt-cms/commit/91288f1))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.11.2
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.11.1...v0.11.2)
