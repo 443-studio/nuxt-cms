@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.12.1
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.12.0...v0.12.1)
+
+### 🚀 Enhancements
+
+- **generate:** OpenStudio runs drizzle studio with the generated config ([edd47c2](https://github.com/443-studio/nuxt-cms/commit/edd47c2))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.12.0
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.11.2...v0.12.0)
