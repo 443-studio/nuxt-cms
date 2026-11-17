@@ -26,7 +26,8 @@ npx tsx scripts/seed-content.ts
 ```
 
 The migrations in `server/db/migrations/<driver>` must exist, as for the app (`nuxt dev` generates
-them, or `generateMigrations()` from `@xleddyl/nuxt-cms/generate`).
+them, or `generateMigrations()` from `@xleddyl/nuxt-cms/generate`). The same entry point exports
+`openStudio()`, which opens Drizzle Studio on the app database with the generated drizzle config.
 
 `seedCmsContent` runs from the project root (or `root`) and:
 

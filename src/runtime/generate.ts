@@ -21,7 +21,9 @@ export interface GenerateMigrationsOptions {
    configPath?: string
 }
 
-export async function generateMigrations(opts: GenerateMigrationsOptions = {}): Promise<void> {
+export type OpenStudioOptions = GenerateMigrationsOptions
+
+function drizzleConfig(opts: GenerateMigrationsOptions) {
    const root = opts.root ?? process.cwd()
    const configPath = opts.configPath ?? join(root, '.nuxt/cms/drizzle.config.ts')
    if (!existsSync(configPath)) {
@@ -29,18 +31,33 @@ export async function generateMigrations(opts: GenerateMigrationsOptions = {}): 
          `[nuxt-cms] drizzle config not found at ${configPath}. Run \`nuxi prepare\` first.`
       )
    }
-   const fixes = readMigrationFixes(configPath, root)
-   const before = fixes ? migrationSqlFiles(fixes.out) : []
+   return { root, configPath }
+}
+
+function runDrizzleKit(command: string, root: string, configPath: string) {
    const require = createRequire(import.meta.url)
    const bin = join(dirname(require.resolve('drizzle-kit')), 'bin.cjs')
-   const code = await new Promise<number>((done) => {
-      spawn(process.execPath, [bin, 'generate', `--config=${configPath}`], {
+   return new Promise<number>((done) => {
+      spawn(process.execPath, [bin, command, `--config=${configPath}`], {
          cwd: root,
          stdio: 'inherit',
       })
          .on('close', (c) => done(c ?? 1))
          .on('error', () => done(1))
    })
+}
+
+export async function generateMigrations(opts: GenerateMigrationsOptions = {}): Promise<void> {
+   const { root, configPath } = drizzleConfig(opts)
+   const fixes = readMigrationFixes(configPath, root)
+   const before = fixes ? migrationSqlFiles(fixes.out) : []
+   const code = await runDrizzleKit('generate', root, configPath)
    if (code !== 0) throw new Error(`[nuxt-cms] drizzle-kit generate failed (exit ${code})`)
    if (fixes) fixNewMigrations(fixes.out, before, fixes.uniqueTextColumns, fixes.dialect)
+}
+
+export async function openStudio(opts: OpenStudioOptions = {}): Promise<void> {
+   const { root, configPath } = drizzleConfig(opts)
+   const code = await runDrizzleKit('studio', root, configPath)
+   if (code !== 0) throw new Error(`[nuxt-cms] drizzle-kit studio failed (exit ${code})`)
 }
