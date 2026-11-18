@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.12.2
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.12.1...v0.12.2)
+
+### 🚀 Enhancements
+
+- MDC text view with AI guide, seed media files and site settings, blocks without fields, page tabs per path ([ccd27ac](https://github.com/443-studio/nuxt-cms/commit/ccd27ac))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.12.1
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.12.0...v0.12.1)
