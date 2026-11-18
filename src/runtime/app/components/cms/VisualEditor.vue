@@ -9,19 +9,8 @@
       :right="rightPane"
       panes-label="Editor panels"
    >
-      <template #start="{ compact, collapsed, toggle }">
+      <template #start="{ compact }">
          <slot name="start" />
-         <KButton
-            v-if="!compact && collapsed.left"
-            :icon="cmsIcon('sidebar-left')"
-            size="sm"
-            variant="ghost"
-            tone="neutral"
-            aria-label="Show blocks"
-            tooltip="Show blocks"
-            :aria-pressed="false"
-            @click="toggle('left')"
-         />
          <KPageHeader
             size="sm"
             :title="title"
@@ -90,6 +79,17 @@
             @redo="redo"
          />
          <slot name="actions" :compact="compact" />
+         <KButton
+            v-if="!compact && collapsed.left"
+            :icon="cmsIcon('sidebar-left')"
+            size="sm"
+            variant="ghost"
+            tone="neutral"
+            aria-label="Show blocks"
+            tooltip="Show blocks"
+            :aria-pressed="false"
+            @click="toggle('left')"
+         />
          <KButton
             v-if="!compact && collapsed.right"
             :icon="cmsIcon('sidebar-right')"

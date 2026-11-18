@@ -306,8 +306,8 @@ bar and three panels:
   layout and CSS apply. Every change is shown at once, before saving. The center of the top bar
   switches between the preview and the [text view](#text-view-and-ai-writing), sets the preview
   width (desktop, tablet 768 px or mobile 390 px), shows the current width in pixels and reloads
-  the preview. The header of each side panel has a sidebar button that hides the panel; the same
-  button at that edge of the top bar shows it again.
+  the preview. The header of each side panel has a sidebar button that hides the panel. When a
+  panel is hidden, its sidebar button sits at the right end of the top bar and shows it again.
 - **Inspector** (right). With a block selected, the form of that block (arranged by the
   [block `layout`](schema.md#block-layout)) under a header with its icon, label, summary and parent blocks, a
   `...` menu with the block actions and a close button that clears the selection. With no block
