@@ -9,8 +9,19 @@
       :right="rightPane"
       panes-label="Editor panels"
    >
-      <template #start="{ compact }">
+      <template #start="{ compact, collapsed, toggle }">
          <slot name="start" />
+         <KButton
+            v-if="!compact && collapsed.left"
+            :icon="cmsIcon('sidebar-left')"
+            size="sm"
+            variant="ghost"
+            tone="neutral"
+            aria-label="Show blocks"
+            tooltip="Show blocks"
+            :aria-pressed="false"
+            @click="toggle('left')"
+         />
          <KPageHeader
             size="sm"
             :title="title"
@@ -29,15 +40,38 @@
             :progress="translations"
             @update:model-value="switchLocale"
          />
-         <KSegmentedControl
-            v-if="!textMode"
-            v-model="device"
-            :options="deviceOptions"
-            size="sm"
-            icon-only
-            required
-            aria-label="Preview width"
-         />
+         <div class="cms-editor-canvas-tools">
+            <KSegmentedControl
+               v-model="view"
+               :options="viewOptions"
+               size="sm"
+               icon-only
+               required
+               aria-label="Canvas view"
+            />
+            <template v-if="!textMode">
+               <KSegmentedControl
+                  v-model="device"
+                  :options="deviceOptions"
+                  size="sm"
+                  icon-only
+                  required
+                  aria-label="Preview width"
+               />
+               <span v-if="canvasWidth && !compact" class="cms-editor-width" aria-live="polite">
+                  {{ canvasWidth }} px
+               </span>
+               <KButton
+                  :icon="cmsIcon('arrow-path')"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  aria-label="Reload preview"
+                  tooltip="Reload preview"
+                  @click="reloadPreview"
+               />
+            </template>
+         </div>
          <CmsEditorHistory
             v-if="!readonly && compact"
             :can-undo="canUndo"
@@ -47,7 +81,7 @@
          />
       </template>
 
-      <template #end="{ compact }">
+      <template #end="{ compact, collapsed, toggle }">
          <CmsEditorHistory
             v-if="!readonly && !compact"
             :can-undo="canUndo"
@@ -56,12 +90,35 @@
             @redo="redo"
          />
          <slot name="actions" :compact="compact" />
+         <KButton
+            v-if="!compact && collapsed.right"
+            :icon="cmsIcon('sidebar-right')"
+            size="sm"
+            variant="ghost"
+            tone="neutral"
+            aria-label="Show fields"
+            tooltip="Show fields"
+            :aria-pressed="false"
+            @click="toggle('right')"
+         />
       </template>
 
-      <template #left-header>
+      <template #left-header="{ compact, toggle }">
          <KPageHeader size="sm" :title="blocksField.label" :level="2" truncate>
             <template #badge>
                <KBadge size="sm" variant="outline" :label="blockCount" />
+            </template>
+            <template v-if="!compact" #actions>
+               <KButton
+                  :icon="cmsIcon('sidebar-left')"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  aria-label="Hide blocks"
+                  tooltip="Hide blocks"
+                  :aria-pressed="true"
+                  @click="toggle('left')"
+               />
             </template>
          </KPageHeader>
       </template>
@@ -107,57 +164,6 @@
          </div>
       </template>
 
-      <template #main-header="{ compact, collapsed, toggle }">
-         <div class="cms-editor-canvas-bar">
-            <KButton
-               v-if="!compact"
-               class="cms-editor-canvas-toggle"
-               :icon="cmsIcon('queue-list')"
-               size="sm"
-               :variant="collapsed.left ? 'ghost' : 'soft'"
-               tone="neutral"
-               aria-label="Blocks panel"
-               :tooltip="collapsed.left ? 'Show blocks' : 'Hide blocks'"
-               :aria-pressed="!collapsed.left"
-               @click="toggle('left')"
-            />
-            <div class="cms-editor-canvas-tools">
-               <KSegmentedControl
-                  v-model="view"
-                  :options="viewOptions"
-                  size="sm"
-                  icon-only
-                  required
-                  aria-label="Canvas view"
-               />
-               <span v-if="canvasWidth && !textMode" class="cms-editor-width" aria-live="polite">
-                  {{ canvasWidth }} px
-               </span>
-               <KButton
-                  v-if="!textMode"
-                  :icon="cmsIcon('arrow-path')"
-                  size="sm"
-                  variant="ghost"
-                  tone="neutral"
-                  aria-label="Reload preview"
-                  @click="reloadPreview"
-               />
-            </div>
-            <KButton
-               v-if="!compact"
-               class="cms-editor-canvas-toggle is-end"
-               :icon="cmsIcon('adjustments-horizontal')"
-               size="sm"
-               :variant="collapsed.right ? 'ghost' : 'soft'"
-               tone="neutral"
-               aria-label="Fields panel"
-               :tooltip="collapsed.right ? 'Show fields' : 'Hide fields'"
-               :aria-pressed="!collapsed.right"
-               @click="toggle('right')"
-            />
-         </div>
-      </template>
-
       <template #main="{ compact }">
          <CmsMdcTextView
             v-if="textOpened"
@@ -192,8 +198,9 @@
          </div>
       </template>
 
-      <template v-if="selectedItem && selected" #right-header>
+      <template #right-header="{ compact, toggle }">
          <KPageHeader
+            v-if="selectedItem && selected"
             size="sm"
             :title="selectedBlock?.label ?? String(selectedItem.type)"
             :description="selectedSummary || selectedPosition"
@@ -226,6 +233,31 @@
                      @click="select(null)"
                   />
                </KTooltip>
+               <KButton
+                  v-if="!compact"
+                  :icon="cmsIcon('sidebar-right')"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  aria-label="Hide fields"
+                  tooltip="Hide fields"
+                  :aria-pressed="true"
+                  @click="toggle('right')"
+               />
+            </template>
+         </KPageHeader>
+         <KPageHeader v-else size="sm" title="Fields" :level="2" truncate>
+            <template v-if="!compact" #actions>
+               <KButton
+                  :icon="cmsIcon('sidebar-right')"
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  aria-label="Hide fields"
+                  tooltip="Hide fields"
+                  :aria-pressed="true"
+                  @click="toggle('right')"
+               />
             </template>
          </KPageHeader>
       </template>

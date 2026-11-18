@@ -384,22 +384,7 @@
    padding: 0.5rem;
 }
 
-.cms-editor-canvas-bar {
-   display: grid;
-   flex: 1;
-   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-   align-items: center;
-   justify-items: start;
-   gap: 0.5rem;
-}
-
-.cms-editor-canvas-toggle.is-end {
-   grid-column: 3;
-   justify-self: end;
-}
-
 .cms-editor-canvas-tools {
-   grid-column: 2;
    display: flex;
    align-items: center;
    gap: 0.5rem;

@@ -303,10 +303,11 @@ bar and three panels:
   open while the pointer crosses other rows to reach it. On touch screens **+** and `...` are always
   visible. **Add a block** at the bottom adds one at the end.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
-  layout and CSS apply. Every change is shown at once, before saving. The bar above it shows or
-  hides each side panel, switches between the preview and the [text view](#text-view-and-ai-writing),
-  shows the current width in pixels and reloads the preview. The preview width (desktop, tablet
-  768 px or mobile 390 px) is set in the top bar.
+  layout and CSS apply. Every change is shown at once, before saving. The center of the top bar
+  switches between the preview and the [text view](#text-view-and-ai-writing), sets the preview
+  width (desktop, tablet 768 px or mobile 390 px), shows the current width in pixels and reloads
+  the preview. The header of each side panel has a sidebar button that hides the panel; the same
+  button at that edge of the top bar shows it again.
 - **Inspector** (right). With a block selected, the form of that block (arranged by the
   [block `layout`](schema.md#block-layout)) under a header with its icon, label, summary and parent blocks, a
   `...` menu with the block actions and a close button that clears the selection. With no block
@@ -485,7 +486,7 @@ webhook.
 
 ### Text view and AI writing
 
-The canvas bar switches the canvas between **Preview** and **Text** (`?view=text` in the URL). The
+The top bar switches the canvas between **Preview** and **Text** (`?view=text` in the URL). The
 text view shows the whole item in the active language as MDC text (Markdown with block components,
 the syntax of `@nuxt/content`): a YAML front matter with the item fields, then one section per
 block. Every `blocks` field of a form has **Edit as text** under its tiles: the same view in a
