@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.12.3
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.12.2...v0.12.3)
+
+### 🚀 Enhancements
+
+- **visual-editor:** View, device, width and reload in the top bar, sidebar toggles in the panel headers ([733ccf8](https://github.com/443-studio/nuxt-cms/commit/733ccf8))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.12.2
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.12.1...v0.12.2)
