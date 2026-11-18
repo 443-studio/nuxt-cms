@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v0.12.4
+
+[compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.12.3...v0.12.4)
+
+### 🚀 Enhancements
+
+- **visual-editor:** Show buttons of collapsed panels at the right end of the top bar ([793bccd](https://github.com/443-studio/nuxt-cms/commit/793bccd))
+
+### ❤️ Contributors
+
+- Edoardo Alberti <edoalberti99@gmail.com>
+
 ## v0.12.3
 
 [compare changes](https://github.com/443-studio/nuxt-cms/compare/v0.12.2...v0.12.3)
