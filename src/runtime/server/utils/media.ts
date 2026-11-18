@@ -1,21 +1,21 @@
 import type { H3Event } from 'h3'
-import { AwsClient } from 'aws4fetch'
 import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import type { MediaItem, MediaStorageMode } from '../../shared/index'
 import { formatFileSize, mediaPublicUrl, mediaTypeFor } from '../../shared/index'
 import { normalizeTimestamp } from '../../shared/timestamps'
 import { removeMediaFile, writeMediaFile } from './media-fs'
+import { isAllowedUploadType } from './media-rules'
+import type { S3MediaConfig } from './media-s3'
+import { putS3Object, s3BucketUrl, s3Client, s3ObjectUrl } from './media-s3'
 
-interface MediaConfig {
+export { baseContentType, isAllowedUploadType } from './media-rules'
+export { encodeKey } from './media-s3'
+
+interface MediaConfig extends S3MediaConfig {
    storage: MediaStorageMode
-   endpoint: string
-   region: string
-   bucket: string
    presignExpiry: number
    maxFileSize: number
-   accessKeyId: string
-   secretAccessKey: string
    dir?: string
 }
 
@@ -28,36 +28,6 @@ export interface MediaStore {
    uploadTarget: (key: string, contentType: string, size: number) => Promise<MediaUploadTarget>
    write: (key: string, body: Uint8Array<ArrayBuffer>, contentType: string) => Promise<void>
    remove: (key: string) => Promise<void>
-}
-
-const UPLOAD_TYPE_PREFIXES = ['image/', 'video/', 'audio/', 'font/']
-const UPLOAD_TYPE_BLOCKLIST = new Set(['image/svg+xml'])
-const UPLOAD_TYPES = new Set([
-   'application/pdf',
-   'application/zip',
-   'application/gzip',
-   'application/json',
-   'text/plain',
-   'text/csv',
-   'text/markdown',
-   'application/msword',
-   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-   'application/vnd.ms-excel',
-   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-   'application/vnd.ms-powerpoint',
-   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-])
-
-export function baseContentType(contentType: string) {
-   return contentType.split(';')[0]!.trim().toLowerCase()
-}
-
-export function isAllowedUploadType(contentType: string) {
-   const type = baseContentType(contentType)
-   return (
-      !UPLOAD_TYPE_BLOCKLIST.has(type) &&
-      (UPLOAD_TYPES.has(type) || UPLOAD_TYPE_PREFIXES.some((prefix) => type.startsWith(prefix)))
-   )
 }
 
 export function assertUploadContentType(contentType: string) {
@@ -76,10 +46,6 @@ export function assertUploadSize(size: number, maxFileSize: number) {
          statusMessage: `File exceeds the maximum size of ${formatFileSize(maxFileSize)}`,
       })
    }
-}
-
-export function encodeKey(key: string) {
-   return key.split('/').map(encodeURIComponent).join('/')
 }
 
 export function assertMediaConfigured(media: MediaConfig) {
@@ -134,21 +100,8 @@ function filesystemStore(dir: string): MediaStore {
    }
 }
 
-function s3Client(media: MediaConfig) {
-   return new AwsClient({
-      accessKeyId: media.accessKeyId,
-      secretAccessKey: media.secretAccessKey,
-      region: media.region,
-      service: 's3',
-   })
-}
-
-function s3BucketUrl(media: MediaConfig) {
-   return `${media.endpoint.replace(/\/+$/, '')}/${media.bucket}`
-}
-
 export async function presignedDownloadUrl(media: MediaConfig, key: string, disposition: string) {
-   const url = new URL(`${s3BucketUrl(media)}/${encodeKey(key)}`)
+   const url = new URL(s3ObjectUrl(media, key))
    url.searchParams.set('X-Amz-Expires', String(media.presignExpiry))
    url.searchParams.set('response-content-disposition', disposition)
    const signed = await s3Client(media).sign(new Request(url, { method: 'GET' }), {
@@ -175,11 +128,7 @@ function s3Store(media: MediaConfig): MediaStore {
          return { url: signed.url, headers: { 'content-type': contentType } }
       },
       async write(key, body, contentType) {
-         const res = await client.fetch(`${bucketUrl}/${encodeKey(key)}`, {
-            method: 'PUT',
-            body,
-            headers: { 'content-type': contentType, 'content-length': String(body.byteLength) },
-         })
+         const res = await putS3Object(client, s3ObjectUrl(media, key), body, contentType)
          if (!res.ok) {
             throw createError({
                statusCode: 502,
@@ -188,7 +137,7 @@ function s3Store(media: MediaConfig): MediaStore {
          }
       },
       async remove(key) {
-         const res = await client.fetch(`${bucketUrl}/${encodeKey(key)}`, { method: 'DELETE' })
+         const res = await client.fetch(s3ObjectUrl(media, key), { method: 'DELETE' })
          if (!res.ok && res.status !== 404) {
             throw createError({
                statusCode: 502,

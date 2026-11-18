@@ -1,8 +1,9 @@
 import { eq, is, sql } from 'drizzle-orm'
 import { PgDatabase } from 'drizzle-orm/pg-core'
 import type { AnySQLiteColumn, BaseSQLiteDatabase, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import type { CmsConfig, CmsEntry } from '../../shared/index'
+import type { CmsConfig, CmsEntry, CmsSiteSettings } from '../../shared/index'
 import {
+   CMS_SITE_SETTINGS_KEY,
    encodeEntryTranslatableMedia,
    entryFieldsFor,
    isCollectionKind,
@@ -18,6 +19,8 @@ import type {
    ValidateCmsContentOptions,
 } from './content-snapshot'
 import { CmsContentError, prepareCmsContent } from './content-snapshot'
+import type { CmsMediaImportResult } from './content-media'
+import { mediaRowStatements, requireMediaTable, uploadMediaFiles } from './content-media'
 import {
    manyToManyKeys,
    splitRelationValues,
@@ -33,6 +36,7 @@ import { joinWriteStatements } from './write-statements'
 export interface ImportCmsContentOptions extends ValidateCmsContentOptions {
    db: CmsSeedDatabase
    tables: Record<string, unknown>
+   forceMediaUpload?: boolean
 }
 
 export interface CmsContentImportResult {
@@ -42,6 +46,8 @@ export interface CmsContentImportResult {
    singles: string[]
    collections: Record<string, string[]>
    contents: Record<string, string[]>
+   media: CmsMediaImportResult
+   site: boolean
 }
 
 type Row = Record<string, unknown>
@@ -255,6 +261,27 @@ function pageStatements(
    )
 }
 
+function siteStatements(
+   db: SeedDb,
+   tables: Record<string, unknown>,
+   site: CmsSiteSettings | null
+): Statements {
+   if (!site) return []
+   const table = tables.cms_settings as SQLiteTable | undefined
+   if (!table)
+      throw new Error('[nuxt-cms] No cms_settings table in the schema. Run `nuxi prepare` first.')
+   const value = JSON.stringify(site)
+   return [
+      db
+         .insert(table)
+         .values(withTimestamps(table, { key: CMS_SITE_SETTINGS_KEY, value }))
+         .onConflictDoUpdate({
+            target: columnsOf(table).key!,
+            set: withUpdatedAt(table, { value }),
+         }),
+   ]
+}
+
 function writeStatements(
    db: SeedDb,
    dialect: PageDialect,
@@ -314,7 +341,8 @@ async function runInTransaction(
 export function contentImportResult(
    config: CmsConfig,
    prepared: PreparedContent,
-   dryRun: boolean
+   dryRun: boolean,
+   media?: CmsMediaImportResult
 ): CmsContentImportResult {
    const result: CmsContentImportResult = {
       mode: prepared.mode,
@@ -323,6 +351,8 @@ export function contentImportResult(
       singles: [],
       collections: {},
       contents: {},
+      media: media ?? { keys: prepared.media.map((file) => file.key), uploaded: [], skipped: [] },
+      site: !!prepared.site,
    }
    for (const name of prepared.names) {
       const kind = config[name]?.kind
@@ -342,9 +372,15 @@ export async function importCmsContent(
 ): Promise<CmsContentImportResult> {
    const prepared = await prepareCmsContent(options)
    if (prepared.issues.length) throw new CmsContentError(prepared.issues)
+   if (prepared.media.length) requireMediaTable(options.tables)
+   const media = await uploadMediaFiles(options.media, prepared.media, {
+      force: options.forceMediaUpload,
+   })
    const dialect: PageDialect = is(options.db, PgDatabase) ? 'postgres' : 'sqlite'
-   await runInTransaction(options.db, dialect, (db) =>
-      writeStatements(db, dialect, options, prepared)
-   )
-   return contentImportResult(options.config, prepared, false)
+   await runInTransaction(options.db, dialect, (db) => [
+      ...mediaRowStatements(db, options.tables, prepared.media),
+      ...writeStatements(db, dialect, options, prepared),
+      ...siteStatements(db, options.tables, prepared.site),
+   ])
+   return contentImportResult(options.config, prepared, false, media)
 }

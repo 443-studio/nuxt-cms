@@ -665,6 +665,10 @@ blocks: {
 - A block with a `component` cannot have fields named `key`, `ref`, `class` or `style`.
 - When every block of a field has a `component`, the admin edits that field in the
   [visual editor](admin.md#visual-editor) as well; other `blocks` fields keep the tile grid.
+- A block rendered only by its component, like a divider, can have no fields: write
+  `fields: {}` or leave `fields` out. Its items are `{ type }` (plus `hidden`), its GraphQL type
+  holds only `type`, its props interface is empty and the admin shows its label on the tile and
+  "This block has no fields" in the block form.
 
 Render a blocks value with [`<CmsBlocks>`](querying.md#rendering-blocks). Each component receives
 the fields of its block as props; mark the element of each field with `<CmsField>` or
@@ -795,7 +799,11 @@ pages: {
 - An entry with no `tabs`, or with one tab, renders as a single form with no tab strip.
 - A field that points at a tab the entry does not declare fails the build, and so does a duplicate
   tab id or a tab with no label.
-- On a page entry, a field added by `overrides` takes `tab` the same way.
+- On a page entry, a field added by `overrides` takes `tab` the same way. Each path shows only the
+  tabs that hold one of its fields (a field hidden by `showIf` still counts, so tabs never jump
+  while editing); a `?tab=` naming a tab that is empty on that path opens the first one shown. The
+  admin search does the same, and a tab used by one path only links to that page.
+- A tab that holds no field at all is not shown.
 - `tab` is not supported inside `blocks`: a block's own fields always render together.
 - When a save fails validation, the form opens the tab that holds the first invalid field, so the
   error is never hidden behind another tab.

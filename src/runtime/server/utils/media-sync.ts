@@ -461,19 +461,25 @@ const VIDEO_SIZE_MIME_TYPES = new Set([
    'video/x-matroska',
 ])
 
+export async function readMediaDimensions(
+   path: string,
+   mime: string | null,
+   fileSize: number
+): Promise<ImageSize | null> {
+   if (mime && IMAGE_SIZE_MIME_TYPES.has(mime)) {
+      const header = await readHeader(path, fileSize)
+      return header ? imageSizeFromBuffer(header) : null
+   }
+   if (mime && VIDEO_SIZE_MIME_TYPES.has(mime)) return readVideoSize(path, fileSize)
+   return null
+}
+
 export async function readMediaFileMeta(
    root: string,
    file: ScannedMediaFile
 ): Promise<MediaFileMeta> {
    const mime = mediaMimeForKey(file.key)
-   const path = join(root, ...file.key.split('/'))
-   let size: ImageSize | null = null
-   if (mime && IMAGE_SIZE_MIME_TYPES.has(mime)) {
-      const header = await readHeader(path, file.size)
-      size = header ? imageSizeFromBuffer(header) : null
-   } else if (mime && VIDEO_SIZE_MIME_TYPES.has(mime)) {
-      size = await readVideoSize(path, file.size)
-   }
+   const size = await readMediaDimensions(join(root, ...file.key.split('/')), mime, file.size)
    return {
       key: file.key,
       folder: mediaSyncFolder(file.key),

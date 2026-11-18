@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { CmsTab, FieldConfig } from '../src/runtime/shared/index'
-import { entryTabs, fieldTab, fieldsByTab } from '../src/runtime/shared/index'
+import type { CmsEntry, CmsTab, FieldConfig } from '../src/runtime/shared/index'
+import {
+   entryTabs,
+   fieldTab,
+   fieldsByTab,
+   filledTabs,
+   pageFields,
+} from '../src/runtime/shared/index'
 import { validateConfig } from '../src/schema-codegen'
 import { I18N, sampleConfig } from './fixtures'
 
@@ -55,6 +61,60 @@ describe('fieldsByTab', () => {
 
    it('returns nothing when there are no tabs', () => {
       expect(fieldsByTab(FIELDS, [])).toEqual({})
+   })
+})
+
+describe('filledTabs', () => {
+   const PAGE_TABS: CmsTab[] = [
+      { id: 'main', label: 'Main' },
+      { id: 'gallery', label: 'Gallery' },
+      { id: 'seo', label: 'SEO' },
+   ]
+
+   const pages: CmsEntry = {
+      id: 'pages',
+      label: 'Pages',
+      kind: 'page',
+      tabs: PAGE_TABS,
+      fields: {
+         title: { label: 'Title', type: 'text' },
+         seoTitle: { label: 'SEO title', type: 'text', tab: 'seo' },
+      },
+      overrides: {
+         '/': {
+            photos: {
+               label: 'Photos',
+               type: 'media',
+               tab: 'gallery',
+               showIf: { field: 'title', empty: false },
+            },
+         },
+         '/about': { seoTitle: null },
+      },
+   }
+
+   it('keeps only the tabs that hold a field of the path', () => {
+      expect(filledTabs(pages.tabs, pageFields(pages, '/')).map((tab) => tab.id)).toEqual([
+         'main',
+         'gallery',
+         'seo',
+      ])
+      expect(filledTabs(pages.tabs, pageFields(pages, '/about')).map((tab) => tab.id)).toEqual([
+         'main',
+      ])
+   })
+
+   it('drops the first tab when no field lands in it', () => {
+      const fields: Record<string, FieldConfig> = {
+         cover: { label: 'Cover', type: 'media', tab: 'media' },
+      }
+      expect(filledTabs(TABS, fields)).toEqual([{ id: 'media', label: 'Media' }])
+      expect(fieldTab(fields.cover!, filledTabs(TABS, fields))).toBe('media')
+   })
+
+   it('returns nothing without tabs or fields', () => {
+      expect(filledTabs(undefined, FIELDS)).toEqual([])
+      expect(filledTabs(TABS, {})).toEqual([])
    })
 })
 

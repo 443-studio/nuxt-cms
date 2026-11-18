@@ -7,10 +7,12 @@ import type {
    CmsEntry,
    CmsI18n,
    CmsPageRoute,
+   CmsSiteSettings,
    FieldConfig,
 } from '../../shared/index'
 import {
    BLOCK_HIDDEN_KEY,
+   EMPTY_SITE_SETTINGS,
    declaresHiddenField,
    formatBlockPath,
    isTranslatableField,
@@ -31,21 +33,30 @@ import {
 } from '../../shared/field-options'
 import { IMPORT_ID_PATTERN } from '../../shared/transfer'
 import { buildEntrySchema, validationMessages } from '../../shared/validation'
+import type { CmsContentMediaFile, CmsSeedMedia, PreparedMediaFile } from './content-media'
+import { prepareMediaFiles } from './content-media'
 import { customId } from './custom-id'
 import { mediaKeysInTable, mediaKeysOf } from './media-keys'
 import { scanMediaDirectory } from './media-sync'
+import { siteSettingsLocales, siteSettingsSchema } from './site-schema'
 import { chunks, KEY_CHUNK } from './write-statements'
+
+export type { CmsContentMediaFile, CmsSeedMedia, PreparedMediaFile } from './content-media'
 
 export type CmsContentValues = Record<string, unknown>
 
+export type CmsContentSite = Partial<CmsSiteSettings>
+
 export interface CmsContentSnapshot {
+   media?: CmsContentMediaFile[]
+   site?: CmsContentSite
    pages?: Record<string, CmsContentValues>
    singles?: Record<string, CmsContentValues>
    collections?: Record<string, CmsContentValues[]>
    contents?: Record<string, CmsContentValues[]>
 }
 
-export type CmsContentSection = keyof CmsContentSnapshot
+export type CmsContentSection = Exclude<keyof CmsContentSnapshot, 'media' | 'site'>
 
 export type CmsContentImportMode = 'replace' | 'merge'
 
@@ -53,8 +64,6 @@ export interface CmsContentIssue {
    path: string
    message: string
 }
-
-export type CmsSeedMedia = { storage: 'local'; dir: string } | { storage: 's3' | 'filesystem' }
 
 export interface CmsSeedDatabase {
    select: unknown
@@ -71,6 +80,7 @@ export interface ValidateCmsContentOptions {
    db?: CmsSeedDatabase
    tables?: Record<string, unknown>
    media?: CmsSeedMedia | null
+   root?: string
 }
 
 export interface PreparedContentRow {
@@ -89,6 +99,8 @@ export interface PreparedContent {
    i18n: CmsI18n
    rows: PreparedContentRow[]
    names: string[]
+   media: PreparedMediaFile[]
+   site: CmsSiteSettings | null
    issues: CmsContentIssue[]
 }
 
@@ -115,6 +127,10 @@ const SECTION_KINDS: Record<CmsContentSection, CmsEntry['kind']> = {
    collections: 'collection',
    contents: 'content',
 }
+
+const SNAPSHOT_KEYS = ['media', 'site', ...CMS_CONTENT_SECTIONS]
+
+const SITE_KEYS = Object.keys(EMPTY_SITE_SETTINGS) as (keyof CmsSiteSettings)[]
 
 const IMPORT_MODES: CmsContentImportMode[] = ['replace', 'merge']
 
@@ -593,6 +609,50 @@ function collectRows(
    return { rows, names: [...names] }
 }
 
+function siteExpectation(key: keyof CmsSiteSettings, i18n: CmsI18n): string {
+   switch (key) {
+      case 'name':
+      case 'description': {
+         const locales = siteSettingsLocales(i18n)
+         return `an object of strings by locale, like { "${
+            locales[0]
+         }": "..." } (locales: ${locales.join(', ')}), or null`
+      }
+      case 'titleTemplate':
+         return 'a string with %s (and optionally %siteName), or null'
+      case 'image':
+         return 'a media library key string, or null'
+      default:
+         return 'true or false'
+   }
+}
+
+function parseSite(raw: unknown, i18n: CmsI18n, issues: IssueList): CmsSiteSettings | null {
+   if (raw === undefined) return null
+   if (!isRecord(raw)) {
+      issues.add('site', `expected an object with ${quoted(SITE_KEYS)}`)
+      return null
+   }
+   for (const key of Object.keys(raw)) {
+      if (!SITE_KEYS.includes(key as keyof CmsSiteSettings))
+         issues.add(`site.${key}`, unknownNameMessage('site setting', key, SITE_KEYS))
+   }
+   const input: Row = { ...EMPTY_SITE_SETTINGS }
+   for (const key of SITE_KEYS) if (raw[key] !== undefined) input[key] = raw[key]
+   const result = siteSettingsSchema(i18n).safeParse(input)
+   if (result.success) return result.data
+   for (const issue of result.error.issues) {
+      const key = issue.path[0] as keyof CmsSiteSettings | undefined
+      const path = joinPath('site', issue.path as (string | number)[])
+      const hinted = key && issue.code === 'invalid_type'
+      issues.add(
+         path,
+         hinted ? `${issue.message}; expected ${siteExpectation(key, i18n)}` : issue.message
+      )
+   }
+   return null
+}
+
 function visitValues(
    fields: Record<string, FieldConfig>,
    values: Row,
@@ -777,14 +837,19 @@ function availableMedia(listed: string[] | null, key: string): string {
 
 async function checkMedia(
    rows: PreparedContentRow[],
+   site: CmsSiteSettings | null,
    options: ValidateCmsContentOptions,
+   declared: Set<string>,
    issues: IssueList
 ) {
    const references: { path: string; key: string }[] = []
+   if (site?.image && !declared.has(site.image))
+      references.push({ path: 'site.image', key: site.image })
    for (const row of rows) {
       visitValues(row.fields, row.values, row.path, ({ path, field, value }) => {
          if (field.type !== 'media') return
-         for (const key of mediaKeysOf(value)) references.push({ path, key })
+         for (const key of mediaKeysOf(value))
+            if (!declared.has(key)) references.push({ path, key })
       })
    }
    if (!references.length) return
@@ -817,19 +882,23 @@ export async function prepareCmsContent(
    const issues = new IssueList()
    const snapshot = options.snapshot
    if (!isRecord(snapshot)) {
-      issues.add('snapshot', `expected an object with ${quoted(CMS_CONTENT_SECTIONS)}`)
-      return { mode, i18n, rows: [], names: [], issues: issues.items }
+      issues.add('snapshot', `expected an object with ${quoted(SNAPSHOT_KEYS)}`)
+      return { mode, i18n, rows: [], names: [], media: [], site: null, issues: issues.items }
    }
    for (const key of Object.keys(snapshot)) {
-      if (!CMS_CONTENT_SECTIONS.includes(key as CmsContentSection))
-         issues.add(key, unknownNameMessage('section', key, CMS_CONTENT_SECTIONS))
+      if (!SNAPSHOT_KEYS.includes(key))
+         issues.add(key, unknownNameMessage('section', key, SNAPSHOT_KEYS))
    }
+   const media = await prepareMediaFiles(snapshot.media, options, (path, message) =>
+      issues.add(path, message)
+   )
+   const site = parseSite(snapshot.site, i18n, issues)
    const { rows, names } = collectRows(snapshot, options.config, i18n, issues)
    const replaced = new Set(mode === 'replace' ? names : [])
    await checkReferences(rows, replaced, options, issues)
    await checkUnique(rows, options, mode, issues)
-   await checkMedia(rows, options, issues)
-   return { mode, i18n, rows, names, issues: issues.items }
+   await checkMedia(rows, site, options, media.declared, issues)
+   return { mode, i18n, rows, names, media: media.files, site, issues: issues.items }
 }
 
 export async function validateCmsContent(

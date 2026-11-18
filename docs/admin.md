@@ -38,6 +38,7 @@ example `/cms/events#entry/42&editblock/gallery.0`:
 | `#import/open` | import modal of a collection |
 | `#editblock/<field>.<index>` | block modal of a tile grid (`.<field>.<index>` for a nested one) |
 | `#visual/<field>` | full-screen visual editor of a blocks field |
+| `#text/<field>` | [text view](#text-view-and-ai-writing) of a blocks field |
 | `#media/<key>` | media detail drawer |
 | `#upload/open`, `#newfolder/open`, `#renamefolder/open`, `#move/open` | media library modals |
 | `#share/open` | share preview of a content item |
@@ -45,7 +46,8 @@ example `/cms/events#entry/42&editblock/gallery.0`:
 
 The state of a page stays in the query: filters (`?filter.<field>=`), the search of a list (`?q=`),
 the open media folder (`?folder=`), the open tab of a page or a single form and the **SEO** tab of
-the visual editor (`?tab=<tab>`; the first tab leaves it out).
+the visual editor (`?tab=<tab>`; the first tab leaves it out), and the text view of the visual
+editor of a content item (`?view=text`).
 
 A [`page` entry](schema.md#pages) gets its own section in the sidebar. The list is a tree that
 follows the routes of the site: a child path sits under its parent, indented. Each row is a link to
@@ -302,8 +304,9 @@ bar and three panels:
   visible. **Add a block** at the bottom adds one at the end.
 - **Canvas** (center): the [preview page](#preview-page) of the site in an iframe, so the site
   layout and CSS apply. Every change is shown at once, before saving. The bar above it shows or
-  hides each side panel, shows the current width in pixels and reloads the preview. The preview
-  width (desktop, tablet 768 px or mobile 390 px) is set in the top bar.
+  hides each side panel, switches between the preview and the [text view](#text-view-and-ai-writing),
+  shows the current width in pixels and reloads the preview. The preview width (desktop, tablet
+  768 px or mobile 390 px) is set in the top bar.
 - **Inspector** (right). With a block selected, the form of that block (arranged by the
   [block `layout`](schema.md#block-layout)) under a header with its icon, label, summary and parent blocks, a
   `...` menu with the block actions and a close button that clears the selection. With no block
@@ -479,6 +482,95 @@ rename or delete it. Presets live in the `cms_settings` table (one row per prese
 the **Presets** of the picker need `update` on the entry; **Settings → Block presets** (list,
 rename, delete) needs `settings.manage`. Saving, renaming and deleting a preset fires no hook or
 webhook.
+
+### Text view and AI writing
+
+The canvas bar switches the canvas between **Preview** and **Text** (`?view=text` in the URL). The
+text view shows the whole item in the active language as MDC text (Markdown with block components,
+the syntax of `@nuxt/content`): a YAML front matter with the item fields, then one section per
+block. Every `blocks` field of a form has **Edit as text** under its tiles: the same view in a
+dialog (`#text/<field>` in the URL), for the blocks of that field only, with no front matter and its
+own language switch. Use it to write with an AI and paste the answer, to copy a page into another
+one, or to fix many blocks at once.
+
+```mdc
+---
+title: New grinder MAR X500
+excerpt: Precision for inside and outside work
+publishedAt: '2026-03-09T09:00:00.000Z'
+cover: news/rettmar.webp
+---
+
+::text{heading="The machine"}
+Investing in technology is the base of our work.
+
+## MAR X500
+- Grind **inner** parts
+::
+
+::note{tone="warning"}
+A change of a few degrees is enough.
+::
+
+::cta{heading="Talk to us"}
+---
+link:
+  url: /#contact
+  label: Ask for information
+---
+::
+```
+
+The format:
+
+- **Front matter**: for a content item, the system fields (title, slug, publish date, excerpt,
+  cover, SEO fields) and the extra fields, except other `blocks` fields. A key you leave out keeps
+  its current value and `key: null` clears it; the slug, when missing, keeps the current one or is
+  made from the title. Relations are ids, many-to-many relations, tags and multi-selects are lists.
+- **Blocks**: `::<name>` on its own line opens a block (the block key of the config) and `::`
+  closes it. Short single line text (up to 60 characters, without double quotes), numbers,
+  booleans, select values and media keys go in braces after the name (`{key="value" count=3 flag}`;
+  a bare key is `true`, `flag=false` is `false`). Everything else (long or multi-line text, links,
+  JSON, lists) goes in a YAML block between `---` lines right after the opening line. Empty values
+  are left out. `hidden` hides the block.
+- **Rich text**: Markdown limited to what the rich text editor allows: paragraphs, `##` and `###`
+  headings, bold, italic, strike, bullet and numbered lists, quotes and links. A block with exactly
+  one rich text field writes it as the body of the block. With several rich text fields each one
+  goes after a `#field` line inside the block (a named slot), and so does a list of nested blocks
+  when the block also has a rich text body or more than one list. In the front matter a rich text
+  field is a Markdown string.
+- **Nested blocks** use one more colon per level (`:::column` inside `::columns`, `::::text` inside
+  `:::column`), up to the nesting limit.
+- **Media** is the key of the file in the library, a **link** is `{ url, label?, newTab? }` or
+  `{ entry, id, label? }`, a **select** is the option value.
+- **Languages**: translatable values are shown and written in the active language only. Applying
+  keeps the other languages: each block of the text is matched to a block of the same type in the
+  current list (in order, preferring blocks whose text did not change), so a translated text keeps
+  the other languages of its blocks, while a new block gets only the active language. Moving blocks
+  around in a translation can move other-language values with them, so translate without changing
+  the order. Values that are not translatable are always shown.
+
+The bar of the text view has **Apply**, **Revert**, **Copy text** and **Copy AI guide**. **Apply**
+(Cmd/Ctrl+Enter, and Cmd/Ctrl+S applies before saving) checks the text: syntax, unknown blocks and
+fields, value types, select options, links, then the same rules as a save (required fields,
+`min`/`max`, formats, `validate` hooks). With an error nothing changes and the problems are listed
+with their line number (click one to select the line); otherwise the values are replaced as one
+undo step and media keys missing from the library are listed as warnings. **Revert** reloads the
+text from the current values. The text reloads by itself when the values change elsewhere and it
+has no edits; with edits it shows "Changed outside the text". Switching the language, leaving the
+page or closing the dialog asks before dropping edits that are not applied. A read-only editor
+shows the text and lets you copy it.
+
+**Copy AI guide** copies a Markdown document made from the schema of the field (and of the item,
+for its front matter): the syntax rules, every block with its label, description and fields (type,
+required, options with labels, limits, which field is the body), nesting, an example per block, a
+full example, the media keys of the library (up to 100) and the instruction to answer with only the
+MDC text in the active language. Paste it in an AI chat with your request ("write an article about
+...") and paste the answer back into the text view; a code fence around the answer is ignored.
+
+The same functions are exported from `#nuxt-cms` for scripts: `entryToMdc`, `mdcToEntry`,
+`blocksToMdc`, `mdcToBlocks`, `entryMdcGuide`, `blocksMdcGuide`, `mdcFrontmatterKeys`,
+`hasMdcErrors`, `htmlToMarkdown` and `markdownToHtml`.
 
 ### Share preview
 

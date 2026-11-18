@@ -101,6 +101,8 @@ export function mediaPublicUrl(baseUrl: string | null | undefined, key: string):
 
 export const DEFAULT_MEDIA_MAX_FILE_SIZE = 10 * 1024 * 1024
 
+export const DEFAULT_FILESYSTEM_MEDIA_DIR = 'data/media'
+
 const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 
 export function formatFileSize(bytes: number): string {
@@ -869,6 +871,7 @@ function boundBlocksField(
    let changed = false
    const bounded: Record<string, BlockConfig> = {}
    for (const [name, block] of Object.entries(blocks)) {
+      if (block && typeof block === 'object' && block.fields === undefined) block.fields = {}
       if (!block?.fields || typeof block.fields !== 'object') {
          bounded[name] = block
          continue
@@ -984,6 +987,15 @@ export function fieldTab(field: FieldConfig, tabs: CmsTab[]): string | undefined
    const fallback = tabs[0]?.id
    if (!fallback) return undefined
    return tabs.some((tab) => tab.id === field.tab) ? field.tab : fallback
+}
+
+export function filledTabs(
+   tabs: CmsTab[] | undefined,
+   fields: Record<string, FieldConfig>
+): CmsTab[] {
+   const list = tabs?.length ? tabs : []
+   const used = new Set(Object.values(fields).map((field) => fieldTab(field, list)))
+   return list.filter((tab) => used.has(tab.id))
 }
 
 export function fieldsByTab(
@@ -1263,7 +1275,7 @@ export interface BlockInput {
    description?: string
    group?: string
    tags?: readonly string[]
-   fields: Record<string, BlockFieldInput>
+   fields?: Record<string, BlockFieldInput>
    layout?: CmsLayoutBlock[]
    validate?: CmsBlockValidate
 }
@@ -1367,6 +1379,8 @@ export * from './media-focal'
 export * from './users'
 export * from './preview-links'
 export * from './links'
+export * from './markdown'
+export * from './blocks-mdc'
 export type {
    CmsAccess,
    CmsRole,

@@ -13,6 +13,7 @@ nuxt-cms is a Nuxt module that adds a CMS to your Nuxt app. The CMS runs in the 
 - **Content types in code.** You declare collections, singles, pages and content types (news, blog) in `cms.config.ts`. The module generates the database schema, the migrations and the TypeScript types.
 - **Admin panel at `/cms`.** Editors manage entries, drafts and media, filter and duplicate entries, and import or export a collection as JSON or CSV. The panel has a light and a dark theme, a global search (⌘K) and admin accounts. It is built on [@xleddyl/443-components-vue](https://www.npmjs.com/package/@xleddyl/443-components-vue), installed for you; the module adds no Tailwind or other build plugins to your app.
 - **Visual editor.** Editors build content from your own site components, on a live preview of the site.
+- **Text view for AI writing.** Any item or blocks field can be edited as MDC text (Markdown with block components), and a generated AI guide describes your blocks so an assistant can write content you paste back in.
 - **GraphQL API.** A read-only, typed API with filters, sorting and pagination. Composables such as `useCmsCollection` and `useCmsContent` query it for you.
 - **Your database.** SQLite (default), Postgres, libSQL/Turso or Cloudflare D1.
 - **Your storage.** S3-compatible storage, a folder on the server disk, or your `public/` folder.
@@ -93,7 +94,7 @@ The database is a local SQLite file (`data/cms.db`) by default. To use a differe
 | [Querying content](docs/querying.md) | GraphQL API, composables, `<CmsBlocks>` |
 | [Admin panel & security](docs/admin.md) | Admin pages, search, visual editor, accounts, sessions |
 | [Media](docs/media.md) | Storage modes, uploads, allowed file types, focal point, `<CmsImage>` |
-| [Seeding content](docs/seeding.md) | Fill pages, singles and collections from one JSON snapshot |
+| [Seeding content](docs/seeding.md) | Fill pages, singles, collections and the media library from one JSON snapshot |
 | [Deployment](docs/deployment.md) | Hosts, migrations on serverless, scaling |
 
 [llm.txt](llm.txt) is a compact reference for LLMs: schema, composables, GraphQL API and the content snapshot format. It ships with the package (`node_modules/@xleddyl/nuxt-cms/llm.txt`).

@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import type { CmsEntry } from '#nuxt-cms'
-import { fieldTab, isTranslatableField, selectDisplayValue } from '#nuxt-cms'
+import { fieldTab, filledTabs, isTranslatableField, selectDisplayValue } from '#nuxt-cms'
 import type { FormDrawerTab } from '@xleddyl/443-components-vue'
 import {
    Button as KButton,
@@ -188,7 +188,7 @@ const title = computed(() => {
 })
 
 const drawerTabs = computed<FormDrawerTab[] | undefined>(() => {
-   const tabs = props.config.tabs ?? []
+   const tabs = filledTabs(props.config.tabs, props.config.fields)
    if (tabs.length < 2) return undefined
    return tabs.map((tab) => ({
       value: tab.id,

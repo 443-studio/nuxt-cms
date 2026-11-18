@@ -5,6 +5,7 @@ export default defineConfig({
    resolve: {
       alias: {
          '#imports': fileURLToPath(new URL('./test/stubs/imports.ts', import.meta.url)),
+         '#nuxt-cms': fileURLToPath(new URL('./src/runtime/shared/index.ts', import.meta.url)),
          '#cms-blocks': fileURLToPath(new URL('./test/stubs/cms-blocks.ts', import.meta.url)),
          '#cms-config': fileURLToPath(new URL('./test/stubs/cms-config.ts', import.meta.url)),
          '#cms-roles': fileURLToPath(new URL('./test/stubs/cms-roles.ts', import.meta.url)),

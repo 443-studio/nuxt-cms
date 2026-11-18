@@ -10,8 +10,8 @@ import {
 } from './index'
 import type { CmsLinkValue } from './links'
 import type { CmsBlockValue } from './preview'
+import { isObjectKey } from './object-key'
 import { CMS_CLIPBOARD_MAX_LENGTH } from './preview'
-import { objectKeySchema } from './validation'
 
 export const CMS_CLIPBOARD_KIND = 'blocks'
 
@@ -72,7 +72,7 @@ export function parseClipboardText(text: unknown): CmsBlockValue[] | null {
 }
 
 function isMediaKey(value: unknown): value is string {
-   return objectKeySchema.safeParse(value).success
+   return isObjectKey(value)
 }
 
 function localizedShape(

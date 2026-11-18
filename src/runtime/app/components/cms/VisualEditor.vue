@@ -25,10 +25,12 @@
       <template #center="{ compact }">
          <CmsLocaleSwitch
             v-if="i18n.locales.length > 1"
-            v-model="locale"
+            :model-value="locale"
             :progress="translations"
+            @update:model-value="switchLocale"
          />
          <KSegmentedControl
+            v-if="!textMode"
             v-model="device"
             :options="deviceOptions"
             size="sm"
@@ -120,10 +122,19 @@
                @click="toggle('left')"
             />
             <div class="cms-editor-canvas-tools">
-               <span v-if="canvasWidth" class="cms-editor-width" aria-live="polite">
+               <KSegmentedControl
+                  v-model="view"
+                  :options="viewOptions"
+                  size="sm"
+                  icon-only
+                  required
+                  aria-label="Canvas view"
+               />
+               <span v-if="canvasWidth && !textMode" class="cms-editor-width" aria-live="polite">
                   {{ canvasWidth }} px
                </span>
                <KButton
+                  v-if="!textMode"
                   :icon="cmsIcon('arrow-path')"
                   size="sm"
                   variant="ghost"
@@ -148,7 +159,22 @@
       </template>
 
       <template #main="{ compact }">
-         <div class="cms-editor-stage" :class="{ 'is-compact': compact }">
+         <CmsMdcTextView
+            v-if="textOpened"
+            v-show="textMode"
+            ref="textView"
+            :mode="content ? 'entry' : 'blocks'"
+            :fields="content ? fields : blocksFields"
+            :field-key="fieldKey"
+            :values="content ? state : blocksValues"
+            :locale="locale"
+            :title="content ? title : blocksField.label"
+            :readonly="readonly"
+            :validate="validateHook"
+            :class="{ 'is-compact': compact }"
+            @apply="applyText"
+         />
+         <div v-show="!textMode" class="cms-editor-stage" :class="{ 'is-compact': compact }">
             <div
                ref="frameBox"
                class="cms-editor-frame"
@@ -256,6 +282,14 @@
                      </KFormField>
                   </template>
                </CmsFormSections>
+               <KEmptyState
+                  v-if="selectedBlock && !Object.keys(selectedBlock.fields).length"
+                  :icon="cmsIcon(selectedBlock.icon ?? 'squares-2x2')"
+                  title="This block has no fields"
+                  description="Its component renders it as it is."
+                  variant="plain"
+                  size="sm"
+               />
             </div>
 
             <component
@@ -395,6 +429,7 @@ import {
    Tabs as KTabs,
    Tooltip as KTooltip,
    WorkspaceLayout as KWorkspaceLayout,
+   useConfirm,
    useFieldHighlight,
    useForm,
    useTheme,
@@ -473,6 +508,7 @@ import type { CmsResponseIssue } from '../../utils/ui'
 import { cmsIcon } from '../../utils/ui'
 
 type EntryTab = 'content' | 'seo'
+type CanvasView = 'preview' | 'text'
 type Values = Record<string, unknown>
 
 const SEO_KEYS = ['seoTitle', 'seoDescription', 'seoImage', 'seoNoindex']
@@ -493,6 +529,7 @@ const props = defineProps<{
    locked?: string[]
    readonly?: boolean
    tabQuery?: string
+   viewQuery?: string
    trail?: BreadcrumbItem[]
 }>()
 
@@ -524,6 +561,54 @@ const frameBox = ref<HTMLElement | null>(null)
 const library = shallowRef(new Map<string, MediaItem>())
 
 const deviceWidth = computed(() => CMS_PREVIEW_DEVICE_WIDTHS[device.value])
+
+const localView = ref<CanvasView>('preview')
+const routeView = props.viewQuery ? useCmsPageQuery(props.viewQuery) : null
+
+const view = computed<CanvasView>({
+   get: () => ((routeView ? routeView.value : localView.value) === 'text' ? 'text' : 'preview'),
+   set: (value) => {
+      if (routeView) routeView.value = value === 'text' ? 'text' : ''
+      else localView.value = value
+   },
+})
+
+const textMode = computed(() => view.value === 'text')
+const textOpened = ref(textMode.value)
+const textView = ref<{ dirty: boolean } | null>(null)
+
+watch(textMode, (on) => {
+   if (on) textOpened.value = true
+})
+
+const viewOptions = computed(() => [
+   { value: 'preview', label: 'Preview', icon: cmsIcon('eye') },
+   {
+      value: 'text',
+      label: 'Text',
+      icon: cmsIcon('document-text'),
+      dot: textView.value?.dirty || undefined,
+      dotTone: 'warning' as const,
+      dotLabel: 'Text not applied',
+   },
+])
+
+const confirm = useConfirm()
+
+async function switchLocale(next: string) {
+   if (next === locale.value) return
+   if (
+      textView.value?.dirty &&
+      !(await confirm.discard({
+         title: 'Discard the text edits?',
+         description:
+            'The text has edits that are not applied. Switching the language reloads the text in that language.',
+         confirmLabel: 'Switch language',
+      }))
+   )
+      return
+   locale.value = next
+}
 
 const blocksField = computed(() => props.fields[props.fieldKey]!)
 
@@ -1241,6 +1326,15 @@ const media = computed(() =>
 )
 
 const blocksFields = computed(() => ({ [props.fieldKey]: blocksField.value }))
+
+const blocksValues = computed(() => ({ [props.fieldKey]: state.value[props.fieldKey] ?? null }))
+
+function applyText(values: Values) {
+   if (props.readonly) return
+   applyChange(
+      props.content ? values : { ...state.value, [props.fieldKey]: values[props.fieldKey] ?? null }
+   )
+}
 
 const { resolved: adminTheme } = useTheme()
 

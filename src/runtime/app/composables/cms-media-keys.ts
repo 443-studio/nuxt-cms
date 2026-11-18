@@ -1,4 +1,4 @@
-import { ref } from '#imports'
+import { computed, ref } from '#imports'
 import type { MediaItem, MediaSourceInfo } from '../../shared/index'
 
 const known = ref<Set<string> | null>(null)
@@ -33,5 +33,7 @@ export function useCmsMediaKeys() {
       if (known.value) known.value = new Set([...known.value, key])
    }
 
-   return { isMissing, remember }
+   const keys = computed<ReadonlySet<string> | null>(() => known.value)
+
+   return { isMissing, remember, keys }
 }

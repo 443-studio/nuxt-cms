@@ -1,7 +1,7 @@
 import type { CmsBlockPath } from './block-paths'
 import { parseBlockPath } from './block-paths'
 import type { BlockConfig, CmsConfig, CmsEntry, CmsEntryKind, FieldConfig } from './index'
-import { entryTabs, fieldTab, pageAllFields, pageRoutes } from './index'
+import { entryTabs, fieldTab, filledTabs, pageAllFields, pageFields, pageRoutes } from './index'
 
 export const CMS_SEARCH_MIN_LENGTH = 2
 
@@ -129,6 +129,8 @@ export function searchFieldPath(...labels: string[]): string {
 
 export const CMS_TAB_QUERY = 'tab'
 
+export const CMS_VIEW_QUERY = 'view'
+
 export function cmsSearchLink(path: string, focus: CmsSearchLinkFocus = {}): string {
    const params = new URLSearchParams()
    if (focus.field) params.set('field', focus.field)
@@ -240,6 +242,27 @@ function fieldLink(
    return { to: entryPath(name), id: null, title: null }
 }
 
+function tabLink(
+   name: string,
+   entry: CmsEntry,
+   tab: string
+): { to: string; id?: string; title?: string } {
+   if (entry.kind === 'single') return { to: cmsSearchLink(entryPath(name), { tab }) }
+   if (entry.kind !== 'page') return { to: entryPath(name) }
+   const routes = pageRoutes(entry).filter((route) =>
+      filledTabs(entry.tabs, pageFields(entry, route.path)).some(
+         (candidate) => candidate.id === tab
+      )
+   )
+   const route = routes.length === 1 ? routes[0] : undefined
+   if (!route) return { to: entryPath(name) }
+   return {
+      to: cmsSearchLink(`${entryPath(name)}/${route.key}`, { tab }),
+      id: route.key,
+      title: route.label,
+   }
+}
+
 function overridePathsOf(entry: CmsEntry, key: string): string[] {
    return Object.entries(entry.overrides ?? {})
       .filter(([, fields]) => !!fields[key])
@@ -293,18 +316,15 @@ function labelCandidates(name: string, entry: CmsEntry): LabelCandidate[] {
          })
       }
    }
-   for (const tab of entryTabs(entry)) {
+   const fields = entry.kind === 'page' ? pageAllFields(entry) : entry.fields
+   for (const tab of filledTabs(entry.tabs, fields)) {
       candidates.push({
          type: 'tab',
          fieldLabel: tab.label,
          texts: [tab.label],
-         to:
-            entry.kind === 'single'
-               ? cmsSearchLink(entryPath(name), { tab: tab.id })
-               : entryPath(name),
+         ...tabLink(name, entry, tab.id),
       })
    }
-   const fields = entry.kind === 'page' ? pageAllFields(entry) : entry.fields
    const tabs = entryTabs(entry)
    for (const [key, field] of Object.entries(fields)) {
       const link = fieldLink(name, entry, key, overridePathsOf(entry, key))

@@ -1,20 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { mkdir, rename, rm, rmdir, unlink } from 'node:fs/promises'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { dirname, resolve, sep } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createError } from 'h3'
 import { formatFileSize } from '../../shared/index'
+import { mediaFilePath } from './media-rules'
 
-export function mediaFilePath(dir: string, key: string): string | null {
-   if (!dir || !key || key.startsWith('/') || /[\0\\]/.test(key)) return null
-   const root = resolve(dir)
-   const target = resolve(root, ...key.split('/'))
-   const rel = relative(root, target)
-   if (!rel || rel.startsWith('..') || isAbsolute(rel)) return null
-   return target
-}
+export { mediaFilePath } from './media-rules'
 
 export function requireMediaFilePath(dir: string, key: string): string {
    const path = mediaFilePath(dir, key)

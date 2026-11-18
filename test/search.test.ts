@@ -462,6 +462,32 @@ describe('label search', () => {
       })
    })
 
+   it('lists page tabs only where a path has fields in them', () => {
+      const pages: CmsEntry = {
+         id: 'pages',
+         label: 'Pages',
+         kind: 'page',
+         tabs: [
+            { id: 'main', label: 'Main' },
+            { id: 'gallery', label: 'Gallery' },
+            { id: 'archive', label: 'Archive' },
+         ],
+         fields: { title: { label: 'Title', type: 'text' } },
+         overrides: {
+            '/about': { photos: { label: 'Photos', type: 'media', tab: 'gallery' } },
+         },
+      }
+      pages.pages = resolvePageRoutes(pages, ['/', '/about'])
+      const hits = (query: string) => searchCmsLabels({ pages }, query).hits
+      expect(hits('gallery')[0]).toMatchObject({
+         type: 'tab',
+         id: 'about',
+         to: '/cms/pages/about?tab=gallery',
+      })
+      expect(hits('main')[0]).toMatchObject({ type: 'tab', to: '/cms/pages' })
+      expect(hits('archive')).toEqual([])
+   })
+
    it('ranks labels that start with the query first', () => {
       const hits = searchCmsLabels(searchConfig(), 'title').hits
       expect(hits[0]!.snippet.before).toBe('')

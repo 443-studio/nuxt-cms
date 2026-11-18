@@ -4,7 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { migrationsDirFor } from './shared/migrations-dir'
 import { resolvePageRoutes, routePathsFromDir } from './shared/page-routes'
 import type { CmsConfig, CmsI18n, CmsPageRoute } from './shared/index'
-import { normalizeCmsConfig } from './shared/index'
+import {
+   DEFAULT_FILESYSTEM_MEDIA_DIR,
+   DEFAULT_MEDIA_MAX_FILE_SIZE,
+   normalizeCmsConfig,
+} from './shared/index'
 import type {
    CmsContentImportMode,
    CmsContentSnapshot,
@@ -21,6 +25,8 @@ export type { CmsI18n, CmsPageRoute }
 export type {
    CmsContentImportMode,
    CmsContentIssue,
+   CmsContentMediaFile,
+   CmsContentSite,
    CmsContentSnapshot,
    CmsContentValues,
    CmsSeedDatabase,
@@ -33,6 +39,7 @@ export {
    validateCmsContent,
 } from './server/utils/content-snapshot'
 export type { CmsContentImportResult, ImportCmsContentOptions } from './server/utils/content-import'
+export type { CmsMediaImportResult } from './server/utils/content-media'
 export { importCmsContent } from './server/utils/content-import'
 
 export interface ResolveCmsPagesOptions {
@@ -167,7 +174,17 @@ export interface CmsProject {
 interface NuxtCmsOptions {
    configPath?: string
    i18n?: { locales?: string[]; defaultLocale?: string }
-   media?: { storage?: 's3' | 'local' | 'filesystem'; publicBaseUrl?: string }
+   media?: {
+      storage?: 's3' | 'local' | 'filesystem'
+      publicBaseUrl?: string
+      endpoint?: string
+      region?: string
+      bucket?: string
+      accessKeyId?: string
+      secretAccessKey?: string
+      maxFileSize?: number
+      dir?: string
+   }
    database?: { driver?: string; path?: string; url?: string; authToken?: string }
 }
 
@@ -203,13 +220,34 @@ function seedDatabase(cms: NuxtCmsOptions): CmsSeederOptions {
    return options
 }
 
-function seedMedia(cms: NuxtCmsOptions, publicDir: string): CmsSeedMedia {
-   const storage = cms.media?.storage ?? 's3'
-   if (storage !== 'local') return { storage }
-   const base = cms.media?.publicBaseUrl ?? ''
+function seedMedia(cms: NuxtCmsOptions, root: string, publicDir: string): CmsSeedMedia {
+   const env = process.env
+   const media = cms.media ?? {}
+   const storage = media.storage ?? 's3'
+   if (storage === 'local') {
+      const base = media.publicBaseUrl ?? ''
+      return {
+         storage,
+         dir: base.startsWith('/') ? join(publicDir, ...base.split('/').filter(Boolean)) : '',
+      }
+   }
+   const envMaxFileSize = env.NUXT_CMS_MEDIA_MAX_FILE_SIZE
+   const maxFileSize =
+      envMaxFileSize !== undefined
+         ? Number(envMaxFileSize)
+         : media.maxFileSize ?? DEFAULT_MEDIA_MAX_FILE_SIZE
+   if (storage === 'filesystem') {
+      const dir = env.NUXT_CMS_MEDIA_DIR ?? media.dir ?? DEFAULT_FILESYSTEM_MEDIA_DIR
+      return { storage, dir: isAbsolute(dir) ? dir : resolve(root, dir), maxFileSize }
+   }
    return {
       storage,
-      dir: base.startsWith('/') ? join(publicDir, ...base.split('/').filter(Boolean)) : '',
+      endpoint: env.NUXT_CMS_MEDIA_ENDPOINT ?? media.endpoint ?? '',
+      region: env.NUXT_CMS_MEDIA_REGION ?? media.region ?? 'auto',
+      bucket: env.NUXT_CMS_MEDIA_BUCKET ?? media.bucket ?? '',
+      accessKeyId: env.NUXT_CMS_MEDIA_ACCESS_KEY_ID ?? media.accessKeyId ?? '',
+      secretAccessKey: env.NUXT_CMS_MEDIA_SECRET_ACCESS_KEY ?? media.secretAccessKey ?? '',
+      maxFileSize,
    }
 }
 
@@ -257,7 +295,7 @@ export async function loadCmsProject(options: LoadCmsProjectOptions = {}): Promi
       root,
       config,
       i18n,
-      media: seedMedia(cms, publicDir),
+      media: seedMedia(cms, root, publicDir),
       tables,
       database: seedDatabase(cms),
    }
@@ -268,6 +306,7 @@ export interface SeedCmsContentOptions extends LoadCmsProjectOptions {
    file?: string
    mode?: CmsContentImportMode
    dryRun?: boolean
+   forceMediaUpload?: boolean
    database?: CmsSeederOptions
 }
 
@@ -301,8 +340,10 @@ export async function seedCmsContent(
          tables: project.tables,
          i18n: project.i18n,
          media: project.media,
+         root: project.root,
          snapshot,
          mode: options.mode,
+         forceMediaUpload: options.forceMediaUpload,
       }
       if (!options.dryRun) return await importCmsContent(run)
       const prepared = await prepareCmsContent(run)

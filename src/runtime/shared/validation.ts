@@ -26,12 +26,13 @@ import {
    walkBlocks,
 } from './index'
 import type { CmsLinkValue } from './links'
+import { OBJECT_KEY_MAX_LENGTH, isSafeObjectKeyPath } from './object-key'
 
 export const objectKeySchema = z
    .string()
    .min(1)
-   .max(1024)
-   .refine((k) => !k.includes('..') && !k.startsWith('/'), 'Invalid object key')
+   .max(OBJECT_KEY_MAX_LENGTH)
+   .refine(isSafeObjectKeyPath, 'Invalid object key')
 
 const focalCoordinateSchema = z.number().min(0).max(1).nullish()
 

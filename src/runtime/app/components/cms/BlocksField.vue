@@ -141,8 +141,9 @@
 
       <KFieldMessage v-if="countHint" tone="neutral" :icon="false" :message="countHint" />
 
-      <div v-if="visual">
+      <KStack v-if="!mediaOnly" direction="row" gap="sm" wrap>
          <KButton
+            v-if="visual"
             label="Open visual editor"
             :icon="cmsIcon('window')"
             size="sm"
@@ -150,7 +151,41 @@
             tone="neutral"
             @click="visualOpen = true"
          />
-      </div>
+         <KButton
+            label="Edit as text"
+            :icon="cmsIcon('document-text')"
+            size="sm"
+            variant="soft"
+            tone="neutral"
+            @click="textOpen = true"
+         />
+      </KStack>
+
+      <KModal
+         v-if="!mediaOnly"
+         v-model:open="textOpen"
+         :title="`${field.label} as text`"
+         description="One block per ::name ... :: section. Apply checks the text and replaces the blocks."
+         size="xl"
+         height="85vh"
+         fill
+      >
+         <template v-if="i18n.locales.length > 1 && localizedBlocks" #actions>
+            <CmsLocaleSwitch :model-value="textLocale" @update:model-value="switchTextLocale" />
+         </template>
+         <CmsMdcTextView
+            ref="textView"
+            mode="blocks"
+            :fields="{ [textKey]: field }"
+            :field-key="textKey"
+            :values="{ [textKey]: model }"
+            :locale="textLocale"
+            :title="field.label"
+            :readonly="disabled"
+            inset
+            @apply="onTextApply"
+         />
+      </KModal>
 
       <KModal
          v-if="visual"
@@ -240,6 +275,14 @@
                   </KFormField>
                </template>
             </CmsFormSections>
+            <KEmptyState
+               v-if="editorBlock && !Object.keys(editorBlock.fields).length"
+               :icon="cmsIcon(editorBlock.icon ?? 'squares-2x2')"
+               title="This block has no fields"
+               description="Its component renders it as it is."
+               variant="plain"
+               size="sm"
+            />
          </CmsBlockEditorProvider>
 
          <template #footer>
@@ -322,6 +365,7 @@ import {
    resolveBlockPath,
    updateBlockAt,
    declaresHiddenField,
+   hasTranslatableBlockFields,
    isFieldVisible,
    isHiddenBlock,
    isTranslatableMediaField,
@@ -337,6 +381,7 @@ import {
    Button as KButton,
    Card as KCard,
    DropdownMenu as KDropdownMenu,
+   EmptyState as KEmptyState,
    FieldMessage as KFieldMessage,
    FormField as KFormField,
    Icon as KIcon,
@@ -345,6 +390,7 @@ import {
    Thumbnail as KThumbnail,
    TileGrid as KTileGrid,
    Tooltip as KTooltip,
+   useConfirm,
    useFieldControl,
    useFormContext,
    useRouteState,
@@ -457,6 +503,43 @@ const visual = computed(() => {
 
 const visualOpen = useCmsOverlayFlag('visual', !!props.fieldKey, props.fieldKey)
 
+const textKey = computed(() => props.fieldKey ?? 'blocks')
+
+const textOpen = useCmsOverlayFlag('text', !!props.fieldKey && !parentEditor, props.fieldKey)
+
+const textLocale = ref(props.locale ?? i18n.defaultLocale)
+
+const textView = ref<{ dirty: boolean } | null>(null)
+
+const localizedBlocks = computed(() => hasTranslatableBlockFields(props.field))
+
+const confirm = useConfirm()
+
+watch(textOpen, (open) => {
+   if (open) textLocale.value = props.locale ?? i18n.defaultLocale
+})
+
+async function switchTextLocale(next: string) {
+   if (next === textLocale.value) return
+   if (
+      textView.value?.dirty &&
+      !(await confirm.discard({
+         title: 'Discard the text edits?',
+         description:
+            'The text has edits that are not applied. Switching the language reloads the text in that language.',
+         confirmLabel: 'Switch language',
+      }))
+   )
+      return
+   textLocale.value = next
+}
+
+function onTextApply(values: Record<string, unknown>) {
+   if (disabled.value) return
+   const value = values[textKey.value]
+   model.value = Array.isArray(value) && value.length ? (value as Record<string, unknown>[]) : null
+}
+
 function onVisualUpdate(state: Record<string, unknown>) {
    if (disabled.value) return
    const value = props.fieldKey ? state[props.fieldKey] : null
@@ -559,6 +642,7 @@ function summaryOf(item: Record<string, unknown>) {
       if (text) return text.length > 80 ? `${text.slice(0, 77)}…` : text
    }
    const block = blockOf(item)
+   if (block && !Object.keys(block.fields).length) return block.label
    const hasNested = Object.values(block?.fields ?? {}).some((field) => field.type === 'blocks')
    return hasNested ? blockSummary(block, item as CmsBlockValue, locale, i18n.defaultLocale) : ''
 }
@@ -572,7 +656,7 @@ function add(type: string) {
    if (!block || !canAdd.value || disabled.value) return
    const index = items.value.length
    model.value = [...items.value, emptyBlock(type, block)]
-   openEditor(index)
+   if (Object.keys(block.fields).length) openEditor(index)
 }
 
 function onReorder(next: Record<string, unknown>[]) {

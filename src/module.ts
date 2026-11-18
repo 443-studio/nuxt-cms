@@ -36,7 +36,11 @@ import {
    migrationsDirFor,
 } from './runtime/shared/migrations-dir'
 import type { CmsConfig, CmsPageRoute, MediaStorageMode } from './runtime/shared/index'
-import { DEFAULT_MEDIA_MAX_FILE_SIZE, normalizeCmsConfig } from './runtime/shared/index'
+import {
+   DEFAULT_FILESYSTEM_MEDIA_DIR,
+   DEFAULT_MEDIA_MAX_FILE_SIZE,
+   normalizeCmsConfig,
+} from './runtime/shared/index'
 import {
    collectBlockComponents,
    collectPreviewComponents,
@@ -223,7 +227,6 @@ const MODULE_VERSION: string = JSON.parse(
    readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 ).version
 
-const DEFAULT_FILESYSTEM_MEDIA_DIR = 'data/media'
 const DEFAULT_FILESYSTEM_MEDIA_BASE_URL = '/media'
 
 function resolveMediaOptions(media: ModuleOptions['media']): ResolvedModuleOptions['media'] {

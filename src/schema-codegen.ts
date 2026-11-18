@@ -383,8 +383,11 @@ function blocksFieldErrors(
    for (const [blockName, block] of Object.entries(field.blocks ?? {})) {
       const bat = `${fat}, block '${blockName}'`
       if (!IDENTIFIER.test(blockName)) errors.push(`${bat}: key must be a valid identifier`)
-      if (!block.fields || !Object.keys(block.fields).length)
-         errors.push(`${bat}: fields must not be empty`)
+      if (
+         block.fields !== undefined &&
+         (!block.fields || typeof block.fields !== 'object' || Array.isArray(block.fields))
+      )
+         errors.push(`${bat}: fields must be an object of fields ({} for a block without fields)`)
       errors.push(...blockMetaErrors(bat, block))
       errors.push(...layoutErrors(bat, block.fields ?? {}, block.layout))
       for (const [blockFieldKey, blockField] of Object.entries(block.fields ?? {})) {

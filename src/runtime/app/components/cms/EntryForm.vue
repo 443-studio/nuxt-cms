@@ -48,6 +48,7 @@
 import type { CmsEntry, CmsFormLayout, CmsTab, FieldConfig } from '#nuxt-cms'
 import {
    fieldTab,
+   filledTabs,
    hasTranslatableBlockFields,
    isFieldVisible,
    isLocalizedLinkField,
@@ -108,7 +109,7 @@ const { i18n } = useCmsRuntime()
 
 const activeLocale = ref<Record<string, string>>({})
 
-const tabList = computed(() => props.tabs ?? [])
+const tabList = computed(() => filledTabs(props.tabs, props.fields))
 
 const localTab = ref('')
 

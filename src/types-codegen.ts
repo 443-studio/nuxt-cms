@@ -112,7 +112,11 @@ function blockTypesTs(
                ...blockTypesTs(entryName, [...schemaPath, blockName, blockFieldKey], blockField)
             )
       }
-      defs.push(`export interface ${props} {\n${lines.join('\n')}\n}`)
+      defs.push(
+         lines.length
+            ? `export interface ${props} {\n${lines.join('\n')}\n}`
+            : `export interface ${props} {}`
+      )
       defs.push(
          `export interface ${name} extends ${props} {\n  __typename?: '${name}'\n  type: '${blockName}'\n}`
       )
